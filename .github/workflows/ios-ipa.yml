@@ -33,11 +33,29 @@ jobs:
       - name: Select Xcode
         shell: bash
         run: |
+          set -euo pipefail
+
+          SELECTED_DEVELOPER_DIR=""
+
           if [ -d "/Applications/Xcode_16.4.app/Contents/Developer" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+            SELECTED_DEVELOPER_DIR="/Applications/Xcode_16.4.app/Contents/Developer"
           else
-            echo "Xcode_16.4.app not found, using runner default Xcode"
+            mapfile -t VERSIONED_XCODES < <(find /Applications -maxdepth 1 -type d -name 'Xcode_*.app' | sort -V)
+            if [ "${#VERSIONED_XCODES[@]}" -gt 0 ]; then
+              LAST_INDEX=$(( ${#VERSIONED_XCODES[@]} - 1 ))
+              SELECTED_DEVELOPER_DIR="${VERSIONED_XCODES[$LAST_INDEX]}/Contents/Developer"
+            elif [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
+              SELECTED_DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+            fi
           fi
+
+          if [ -n "$SELECTED_DEVELOPER_DIR" ] && [ -d "$SELECTED_DEVELOPER_DIR" ]; then
+            echo "Selecting Xcode at: $SELECTED_DEVELOPER_DIR"
+            sudo xcode-select -s "$SELECTED_DEVELOPER_DIR"
+          else
+            echo "No explicit Xcode app found in /Applications, using runner default Xcode"
+          fi
+
           xcode-select -p
           xcodebuild -version
 
@@ -91,6 +109,12 @@ jobs:
           if [ -z "$PROJECT_PATH" ]; then
             echo "No .xcodeproj found under src-tauri/gen/apple"
             exit 1
+          fi
+
+          PBXPROJ_PATH="$PROJECT_PATH/project.pbxproj"
+          if [ -f "$PBXPROJ_PATH" ]; then
+            echo "Detected objectVersion in pbxproj:"
+            grep -E '^[[:space:]]*objectVersion[[:space:]]*=' "$PBXPROJ_PATH" || true
           fi
 
           SCHEME=$(xcodebuild -list -project "$PROJECT_PATH" \
