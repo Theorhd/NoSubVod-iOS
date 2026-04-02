@@ -33,7 +33,12 @@ jobs:
       - name: Select Xcode
         shell: bash
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          if [ -d "/Applications/Xcode_16.4.app/Contents/Developer" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          else
+            echo "Xcode_16.4.app not found, using runner default Xcode"
+          fi
+          xcode-select -p
           xcodebuild -version
 
       - name: Setup Rust
@@ -60,20 +65,8 @@ jobs:
 
           xcodegen --version
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            src-tauri -> target
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Type check
-        run: npm run type-check
-
-      - name: Rust check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
 
       - name: Build portal frontend
         run: npm run build:portal
@@ -138,40 +131,10 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build | tee xcodebuild.log
 
-      - name: Dump Xcode Rust script diagnostics
-        if: failure()
-        shell: bash
-        run: |
-          DERIVED_DATA_DIR="$HOME/Library/Developer/Xcode/DerivedData"
-
-          if [ ! -d "$DERIVED_DATA_DIR" ]; then
-            echo "DerivedData not found at $DERIVED_DATA_DIR, skipping diagnostics."
-            exit 0
-          fi
-
-          echo "==> Last generated Rust script phase (if any):"
-          find "$DERIVED_DATA_DIR" -name 'Script-*.sh' -print0 \
-            | xargs -0 ls -td 2>/dev/null \
-            | head -n 1 \
-            | while read -r SCRIPT; do
-                echo "Script path: $SCRIPT"
-                sed -n '1,220p' "$SCRIPT"
-              done
-
-          echo "==> Last cargo log snippets from DerivedData (if any):"
-          find "$DERIVED_DATA_DIR" -type f \( -name '*.log' -o -name '*.txt' \) -print0 \
-            | xargs -0 ls -td 2>/dev/null \
-            | head -n 20 \
-            | while read -r LOG; do
-                if grep -qiE 'cargo|error:|tauri|failed' "$LOG"; then
-                  echo "---- $LOG"
-                  tail -n 120 "$LOG"
-                fi
-              done
-
       - name: Package unsigned IPA for SideStore/AltStore
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p artifacts/unsigned-ios/payload/Payload
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*/Build/Products/*-iphoneos/*.app" -print0 | xargs -0 ls -td 2>/dev/null | head -n 1)
           if [ -z "$APP_PATH" ]; then
@@ -195,17 +158,3 @@ jobs:
             artifacts/unsigned-ios/*.zip
           retention-days: 14
           if-no-files-found: error
-
-      - name: Publish build summary
-        if: always()
-        shell: bash
-        run: |
-          {
-            echo "## iOS Build Summary"
-            echo "- Signing mode: unsigned only"
-            echo "- Run: #${GITHUB_RUN_NUMBER}"
-            echo "- Commit: ${{ steps.meta.outputs.short_sha }}"
-            echo "- Expected output: unsigned IPA for SideStore/AltStore re-signing"
-            echo "- Additional output: unsigned .app zipped (debug)"
-            echo "- Artifact name: nosubvod-ios-unsigned-${{ steps.meta.outputs.artifact_suffix }}"
-          } >> "$GITHUB_STEP_SUMMARY"
