@@ -180,7 +180,12 @@ jobs:
           fi
           
           echo "Tauri packaging into IPA failed or didn't run. Searching for .app directory to manually package..."
-          APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -type d -name "nosubvod-ios.app" | head -n 1)
+          APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -type d -name "NoSubVOD.app" | head -n 1)
+          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+            echo "NoSubVOD.app not found. Trying any .app in release-iphoneos..."
+            APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -type d -name "*.app" -path "*/release-iphoneos/*" | head -n 1)
+          fi
+          
           if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
             echo "No .app directory found. The build completely failed."
             exit 1
