@@ -144,7 +144,7 @@ Résultat: démarrage plus rapide, binaire bien plus léger et meilleure stabili
 
 ## 🛠 Développement
 
-### Prérequis
+### Prérequis SideStore/AltStore
 
 - Node.js 20+
 - Rust stable
@@ -183,6 +183,31 @@ npm run type-check
 ```bash
 npm run build
 ```
+
+### Build iOS (local)
+
+```bash
+npm run build:portal
+npx tauri ios init
+npx tauri ios build --export-method ad-hoc
+```
+
+## 🍎 iOS IPA (CI) — modes de build
+
+Le workflow [NoSubVod-IOS/.github/workflows/ios-ipa.yml](.github/workflows/ios-ipa.yml) produit une **IPA non signée** (unsigned) destinée a etre re-signee par SideStore/AltStore.
+
+### Prérequis
+
+- Aucun compte Apple Developer payant requis pour generer l'artefact CI.
+- Pour installation sur iPhone/iPad, la signature finale est faite via SideStore/AltStore avec ton compte Apple personnel.
+
+### Artefacts CI
+
+- Unsigned IPA: `NoSubVOD-iOS-unsigned.ipa` (pour SideStore/AltStore)
+- Unsigned app zip: `NoSubVOD-iOS-unsigned-app.zip` (debug)
+- Artifact GitHub: `nosubvod-ios-unsigned-<run>-<sha>`
+
+Avec un compte Apple gratuit, la signature doit etre renouvelee periodiquement (limitation Apple).
 
 ---
 

@@ -3,18 +3,30 @@ import { DownloadedFile, ActiveDownload } from "../../../shared/types";
 import { useInterval } from "../../../shared/hooks/useInterval";
 
 const DEBUG_DOWNLOADS = false;
+const MAX_POLLING_DELAY_MS = 60000;
+const OFFLINE_POLLING_DELAY_MS = 30000;
+const HIDDEN_POLLING_DELAY_MS = 15000;
+const ACTIVE_DOWNLOAD_POLLING_DELAY_MS = 3000;
+const DEFAULT_VISIBLE_POLLING_DELAY_MS = 6000;
+const MAX_BACKOFF_EXPONENT = 4;
 
 export function useDownloadsData() {
   const [files, setFiles] = useState<DownloadedFile[]>([]);
   const [activeDownloads, setActiveDownloads] = useState<ActiveDownload[]>([]);
   const [loading, setLoading] = useState(true);
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
   const [isPageVisible, setIsPageVisible] = useState(() =>
     typeof document === "undefined"
       ? true
       : document.visibilityState === "visible",
   );
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
 
   const fetchDownloads = useCallback(async () => {
+    let requestSucceeded = false;
+
     try {
       const [filesRes, activeRes] = await Promise.all([
         fetch("/api/downloads"),
@@ -35,10 +47,12 @@ export function useDownloadsData() {
       if (filesRes.ok) {
         const data = (await filesRes.json()) as DownloadedFile[];
         setFiles(data);
+        requestSucceeded = true;
       }
 
       if (activeRes.ok) {
         setActiveDownloads((await activeRes.json()) as ActiveDownload[]);
+        requestSucceeded = true;
       }
     } catch (error) {
       if (DEBUG_DOWNLOADS) {
@@ -46,6 +60,12 @@ export function useDownloadsData() {
       }
     } finally {
       setLoading(false);
+      setConsecutiveFailures((prev) => {
+        if (requestSucceeded) {
+          return 0;
+        }
+        return Math.min(prev + 1, MAX_BACKOFF_EXPONENT);
+      });
     }
   }, []);
 
@@ -58,17 +78,45 @@ export function useDownloadsData() {
       setIsPageVisible(document.visibilityState === "visible");
     };
 
+    const onOnline = () => {
+      setIsOnline(true);
+    };
+
+    const onOffline = () => {
+      setIsOnline(false);
+    };
+
     document.addEventListener("visibilitychange", onVisibilityChange);
-    return () =>
+    globalThis.addEventListener("online", onOnline);
+    globalThis.addEventListener("offline", onOffline);
+    return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      globalThis.removeEventListener("online", onOnline);
+      globalThis.removeEventListener("offline", onOffline);
+    };
   }, []);
 
-  let downloadsPollingDelay = 5000;
-  if (isPageVisible === false) {
-    downloadsPollingDelay = 12000;
+  useEffect(() => {
+    if (isOnline && isPageVisible) {
+      void fetchDownloads();
+    }
+  }, [fetchDownloads, isOnline, isPageVisible]);
+
+  let baseDelay = DEFAULT_VISIBLE_POLLING_DELAY_MS;
+  if (!isOnline) {
+    baseDelay = OFFLINE_POLLING_DELAY_MS;
+  } else if (isPageVisible === false) {
+    baseDelay = HIDDEN_POLLING_DELAY_MS;
   } else if (activeDownloads.length > 0) {
-    downloadsPollingDelay = 2000;
+    baseDelay = ACTIVE_DOWNLOAD_POLLING_DELAY_MS;
   }
+
+  const backoffMultiplier =
+    consecutiveFailures > 0 ? 2 ** consecutiveFailures : 1;
+  const downloadsPollingDelay = Math.min(
+    baseDelay * backoffMultiplier,
+    MAX_POLLING_DELAY_MS,
+  );
 
   useInterval(fetchDownloads, downloadsPollingDelay);
 

@@ -74,21 +74,16 @@ jobs:
 
       - name: Init Tauri iOS project
         run: npx tauri ios init --ci
-        env:
-          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
 
-      - name: Detect signing mode
-        id: signing
+      - name: Build metadata
+        id: meta
         shell: bash
         run: |
-          if [ -n "${{ secrets.APPLE_DEVELOPMENT_TEAM }}" ]; then
-            echo "mode=signed" >> "$GITHUB_OUTPUT"
-          else
-            echo "mode=unsigned" >> "$GITHUB_OUTPUT"
-          fi
+          SHORT_SHA="${GITHUB_SHA::8}"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "artifact_suffix=${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build iOS app (unsigned)
-        if: steps.signing.outputs.mode == 'unsigned'
         shell: bash
         run: |
           PROJECT_PATH=$(find src-tauri/gen/apple -name '*.xcodeproj' -print -quit)
@@ -113,41 +108,43 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
 
-      - name: Archive unsigned iOS app bundle
-        if: steps.signing.outputs.mode == 'unsigned'
+      - name: Package unsigned IPA for SideStore/AltStore
         shell: bash
         run: |
-          mkdir -p artifacts/unsigned-ios
+          mkdir -p artifacts/unsigned-ios/payload/Payload
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*/Build/Products/Release-iphoneos/*.app" -print -quit)
           if [ -z "$APP_PATH" ]; then
             echo "Unsigned .app not found in DerivedData"
             exit 1
           fi
+          cp -R "$APP_PATH" artifacts/unsigned-ios/payload/Payload/
+          (
+            cd artifacts/unsigned-ios/payload
+            /usr/bin/zip -qry ../NoSubVOD-iOS-unsigned.ipa Payload
+          )
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" artifacts/unsigned-ios/NoSubVOD-iOS-unsigned-app.zip
+          echo "Built unsigned IPA for SideStore/AltStore re-signing and unsigned .app zip for debugging."
 
-      - name: Build IPA (ad-hoc)
-        if: steps.signing.outputs.mode == 'signed'
-        run: npx tauri ios build --export-method ad-hoc
-        env:
-          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
-
-      - name: Upload signed IPA artifact
-        if: steps.signing.outputs.mode == 'signed'
+      - name: Upload unsigned iOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nosubvod-ios-ipa
+          name: nosubvod-ios-unsigned-${{ steps.meta.outputs.artifact_suffix }}
           path: |
-            src-tauri/gen/apple/build/**/*.ipa
-            src-tauri/gen/apple/build/**/*.dSYM
-          retention-days: 14
-          if-no-files-found: error
-
-      - name: Upload unsigned iOS bundle artifact
-        if: steps.signing.outputs.mode == 'unsigned'
-        uses: actions/upload-artifact@v4
-        with:
-          name: nosubvod-ios-unsigned
-          path: |
+            artifacts/unsigned-ios/*.ipa
             artifacts/unsigned-ios/*.zip
           retention-days: 14
           if-no-files-found: error
+
+      - name: Publish build summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## iOS Build Summary"
+            echo "- Signing mode: unsigned only"
+            echo "- Run: #${GITHUB_RUN_NUMBER}"
+            echo "- Commit: ${{ steps.meta.outputs.short_sha }}"
+            echo "- Expected output: unsigned IPA for SideStore/AltStore re-signing"
+            echo "- Additional output: unsigned .app zipped (debug)"
+            echo "- Artifact name: nosubvod-ios-unsigned-${{ steps.meta.outputs.artifact_suffix }}"
+          } >> "$GITHUB_STEP_SUMMARY"
