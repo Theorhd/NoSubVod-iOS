@@ -71,14 +71,6 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init());
 
-    #[cfg(not(mobile))]
-    {
-        builder = builder.plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ));
-    }
-
     builder = builder.setup(|app| {
         // Shared state is initialized on every platform so frontend can use
         // invoke-based APIs even when no HTTP server is running.

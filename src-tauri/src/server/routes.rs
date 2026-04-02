@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tauri::Emitter;
-use tauri_plugin_autostart::ManagerExt;
 use tower::ServiceExt;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
@@ -391,15 +390,6 @@ async fn handle_update_settings(
     State(state): State<ApiState>,
     Json(patch): Json<SettingsPatch>,
 ) -> AppResult<Response> {
-    if let (Some(handle), Some(launch)) = (state.app_handle.as_ref(), patch.launch_at_login) {
-        let manager = handle.autolaunch();
-        if launch {
-            let _ = manager.enable();
-        } else {
-            let _ = manager.disable();
-        }
-    }
-
     Ok(Json(
         state
             .history
