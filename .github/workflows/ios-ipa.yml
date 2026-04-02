@@ -142,8 +142,15 @@ jobs:
         if: failure()
         shell: bash
         run: |
+          DERIVED_DATA_DIR="$HOME/Library/Developer/Xcode/DerivedData"
+
+          if [ ! -d "$DERIVED_DATA_DIR" ]; then
+            echo "DerivedData not found at $DERIVED_DATA_DIR, skipping diagnostics."
+            exit 0
+          fi
+
           echo "==> Last generated Rust script phase (if any):"
-          find ~/Library/Developer/Xcode/DerivedData -name 'Script-*.sh' -print0 \
+          find "$DERIVED_DATA_DIR" -name 'Script-*.sh' -print0 \
             | xargs -0 ls -td 2>/dev/null \
             | head -n 1 \
             | while read -r SCRIPT; do
@@ -152,7 +159,7 @@ jobs:
               done
 
           echo "==> Last cargo log snippets from DerivedData (if any):"
-          find ~/Library/Developer/Xcode/DerivedData -type f \( -name '*.log' -o -name '*.txt' \) -print0 \
+          find "$DERIVED_DATA_DIR" -type f \( -name '*.log' -o -name '*.txt' \) -print0 \
             | xargs -0 ls -td 2>/dev/null \
             | head -n 20 \
             | while read -r LOG; do
