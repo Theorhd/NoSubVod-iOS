@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { HistoryEntry, LiveStream, LiveStreamsPage, VOD } from '../../../shared/types';
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import {
+  HistoryEntry,
+  LiveStream,
+  LiveStreamsPage,
+  VOD,
+} from "../../../shared/types";
 
 type CategoryVodPage = {
   items: VOD[];
@@ -18,12 +23,16 @@ type UseChannelDataParams = Readonly<{
   categoryId: string | null;
 }>;
 
-export function useChannelData({ user, category, categoryId }: UseChannelDataParams) {
+export function useChannelData({
+  user,
+  category,
+  categoryId,
+}: UseChannelDataParams) {
   const [vods, setVods] = useState<VOD[]>([]);
   const [liveStream, setLiveStream] = useState<LiveStream | null>(null);
   const [history, setHistory] = useState<Record<string, HistoryEntry>>({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const [catLiveStreams, setCatLiveStreams] = useState<LiveStream[]>([]);
   const [catLiveCursor, setCatLiveCursor] = useState<string | null>(null);
@@ -41,12 +50,12 @@ export function useChannelData({ user, category, categoryId }: UseChannelDataPar
   const title = useMemo(() => {
     if (category) return category;
     if (user) return user;
-    return 'VODs';
+    return "VODs";
   }, [category, user]);
 
   const fetchHistory = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch('/api/history', { signal });
+      const res = await fetch("/api/history", { signal });
       return res.ok ? ((await res.json()) as Record<string, HistoryEntry>) : {};
     } catch {
       return {};
@@ -56,8 +65,10 @@ export function useChannelData({ user, category, categoryId }: UseChannelDataPar
   const fetchUserData = useCallback(
     async (targetUser: string, signal: AbortSignal) => {
       const [vodsData, liveData, historyData] = await Promise.all([
-        fetch(`/api/user/${encodeURIComponent(targetUser)}/vods`, { signal }).then((res) => {
-          if (!res.ok) throw new Error('Failed to fetch VODs');
+        fetch(`/api/user/${encodeURIComponent(targetUser)}/vods`, {
+          signal,
+        }).then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch VODs");
           return res.json() as Promise<VOD[]>;
         }),
         fetch(`/api/user/${encodeURIComponent(targetUser)}/live`, { signal })
@@ -77,23 +88,31 @@ export function useChannelData({ user, category, categoryId }: UseChannelDataPar
       setCatVodCursor(null);
       setCatVodHasMore(false);
     },
-    [fetchHistory]
+    [fetchHistory],
   );
 
   const fetchCategoryData = useCallback(
     async (targetCategory: string, signal: AbortSignal) => {
-      const categoryVodParams = new URLSearchParams({ name: targetCategory, limit: '24' });
-      if (categoryId) categoryVodParams.set('id', categoryId);
+      const categoryVodParams = new URLSearchParams({
+        name: targetCategory,
+        limit: "24",
+      });
+      if (categoryId) categoryVodParams.set("id", categoryId);
 
       const [vodPage, livePage, historyData] = await Promise.all([
-        fetch(`/api/search/category-vods?${categoryVodParams.toString()}`, { signal }).then(
-          (res) => {
-            if (!res.ok) throw new Error('Failed to fetch VODs');
-            return res.json() as Promise<CategoryVodPage>;
-          }
-        ),
-        fetch(`/api/live/category?name=${encodeURIComponent(targetCategory)}&limit=12`, { signal })
-          .then((res) => (res.ok ? (res.json() as Promise<LiveStreamsPage>) : null))
+        fetch(`/api/search/category-vods?${categoryVodParams.toString()}`, {
+          signal,
+        }).then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch VODs");
+          return res.json() as Promise<CategoryVodPage>;
+        }),
+        fetch(
+          `/api/live/category?name=${encodeURIComponent(targetCategory)}&limit=12`,
+          { signal },
+        )
+          .then((res) =>
+            res.ok ? (res.json() as Promise<LiveStreamsPage>) : null,
+          )
           .catch(() => null),
         fetchHistory(signal),
       ]);
@@ -109,12 +128,12 @@ export function useChannelData({ user, category, categoryId }: UseChannelDataPar
       setLiveStream(null);
       setHistory(historyData);
     },
-    [categoryId, fetchHistory]
+    [categoryId, fetchHistory],
   );
 
   const fetchData = useCallback(async () => {
     if (!isUserMode && !isCategoryMode) {
-      setError('No channel or category specified');
+      setError("No channel or category specified");
       setLoading(false);
       return;
     }
@@ -124,7 +143,7 @@ export function useChannelData({ user, category, categoryId }: UseChannelDataPar
     const signal = abortControllerRef.current.signal;
 
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       if (isUserMode && user) {
@@ -133,12 +152,19 @@ export function useChannelData({ user, category, categoryId }: UseChannelDataPar
         await fetchCategoryData(category, signal);
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') return;
-      setError(err.message || 'An unknown error occurred');
+      if (err.name === "AbortError") return;
+      setError(err.message || "An unknown error occurred");
     } finally {
       if (!signal.aborted) setLoading(false);
     }
-  }, [category, fetchCategoryData, fetchUserData, isCategoryMode, isUserMode, user]);
+  }, [
+    category,
+    fetchCategoryData,
+    fetchUserData,
+    isCategoryMode,
+    isUserMode,
+    user,
+  ]);
 
   useEffect(() => {
     void fetchData();
@@ -151,16 +177,21 @@ export function useChannelData({ user, category, categoryId }: UseChannelDataPar
     if (!category || catVodLoading || !catVodHasMore) return;
     setCatVodLoading(true);
     try {
-      const params = new URLSearchParams({ name: category, limit: '24' });
-      if (categoryId) params.set('id', categoryId);
-      if (catVodCursor) params.set('cursor', catVodCursor);
+      const params = new URLSearchParams({ name: category, limit: "24" });
+      if (categoryId) params.set("id", categoryId);
+      if (catVodCursor) params.set("cursor", catVodCursor);
       const res = await fetch(`/api/search/category-vods?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to load more VODs');
+      if (!res.ok) throw new Error("Failed to load more VODs");
       const page = (await res.json()) as CategoryVodPage;
       if (page.items && page.items.length > 0) {
         setVods((prev) => {
           const existingIds = new Set(prev.map((v) => v.id));
-          return [...prev, ...filterShortVods(page.items).filter((v) => !existingIds.has(v.id))];
+          return [
+            ...prev,
+            ...filterShortVods(page.items).filter(
+              (v) => !existingIds.has(v.id),
+            ),
+          ];
         });
       }
       setCatVodCursor(page.nextCursor || null);
@@ -176,10 +207,10 @@ export function useChannelData({ user, category, categoryId }: UseChannelDataPar
     if (!category || catLiveLoading || !catLiveHasMore) return;
     setCatLiveLoading(true);
     try {
-      const params = new URLSearchParams({ name: category, limit: '12' });
-      if (catLiveCursor) params.set('cursor', catLiveCursor);
+      const params = new URLSearchParams({ name: category, limit: "12" });
+      if (catLiveCursor) params.set("cursor", catLiveCursor);
       const res = await fetch(`/api/live/category?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to load more lives');
+      if (!res.ok) throw new Error("Failed to load more lives");
       const page = (await res.json()) as LiveStreamsPage;
       if (page.items && page.items.length > 0) {
         setCatLiveStreams((prev) => {
@@ -198,9 +229,9 @@ export function useChannelData({ user, category, categoryId }: UseChannelDataPar
 
   const addToWatchlist = useCallback(async (vod: VOD) => {
     try {
-      await fetch('/api/watchlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vodId: vod.id,
           title: vod.title,

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from "react";
 
 interface LiveChatComponentProps {
   liveId: string;
@@ -21,17 +21,22 @@ type LiveChatBatch = {
 const MAX_LIVE_CHAT_MESSAGES = 300;
 
 function isTauriRuntime(): boolean {
-  return Boolean((globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+  return Boolean(
+    (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
+  );
 }
 
-async function invokeTauri<T>(command: string, payload?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import('@tauri-apps/api/core');
+async function invokeTauri<T>(
+  command: string,
+  payload?: Record<string, unknown>,
+): Promise<T> {
+  const { invoke } = await import("@tauri-apps/api/core");
   return invoke<T>(command, payload);
 }
 
 function buildAuthQueryFromStorage(): string {
-  const token = localStorage.getItem('nsv_token');
-  const deviceId = localStorage.getItem('nsv_device_id');
+  const token = localStorage.getItem("nsv_token");
+  const deviceId = localStorage.getItem("nsv_device_id");
   const parts: string[] = [];
 
   if (token) {
@@ -41,28 +46,31 @@ function buildAuthQueryFromStorage(): string {
     parts.push(`d=${encodeURIComponent(deviceId)}`);
   }
 
-  return parts.join('&');
+  return parts.join("&");
 }
 
-const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrollRef }) => {
+const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
+  liveId,
+  chatScrollRef,
+}) => {
   const [messages, setMessages] = useState<LiveChatMessage[]>([]);
   const [twitchLinked, setTwitchLinked] = useState(false);
-  const [twitchDisplayName, setTwitchDisplayName] = useState('');
-  const [chatInput, setChatInput] = useState('');
+  const [twitchDisplayName, setTwitchDisplayName] = useState("");
+  const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState('');
-  const [connectionLabel, setConnectionLabel] = useState('Connected');
+  const [sendError, setSendError] = useState("");
+  const [connectionLabel, setConnectionLabel] = useState("Connected");
   const pollingSessionIdRef = React.useRef<string | null>(null);
 
   const tauriRuntime = isTauriRuntime();
 
   useEffect(() => {
-    fetch('/api/auth/twitch/status')
+    fetch("/api/auth/twitch/status")
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (data?.linked) {
           setTwitchLinked(true);
-          setTwitchDisplayName(data.userDisplayName || data.userLogin || '');
+          setTwitchDisplayName(data.userDisplayName || data.userLogin || "");
         }
       })
       .catch(() => {
@@ -75,12 +83,12 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
       setMessages((prev) => {
         let next = prev;
         for (const data of incoming) {
-          if (data.type === 'clear_chat') {
+          if (data.type === "clear_chat") {
             next = [];
             continue;
           }
 
-          if (data.type === 'clear_msg' && data.id) {
+          if (data.type === "clear_msg" && data.id) {
             next = next.filter((msg) => msg.id !== data.id);
             continue;
           }
@@ -90,7 +98,9 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
           }
 
           next = [...next, data];
-          globalThis.dispatchEvent(new CustomEvent('nsv-chat-message', { detail: data }));
+          globalThis.dispatchEvent(
+            new CustomEvent("nsv-chat-message", { detail: data }),
+          );
         }
 
         if (next.length > MAX_LIVE_CHAT_MESSAGES) {
@@ -108,12 +118,13 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
       if (scrollHeight - scrollTop - clientHeight < 150) {
         globalThis.setTimeout(() => {
           if (chatScrollRef.current) {
-            chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+            chatScrollRef.current.scrollTop =
+              chatScrollRef.current.scrollHeight;
           }
         }, 50);
       }
     },
-    [chatScrollRef]
+    [chatScrollRef],
   );
 
   const sendMessage = async () => {
@@ -121,23 +132,26 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
     if (!message || sending) return;
 
     setSending(true);
-    setSendError('');
+    setSendError("");
     try {
-      const response = await fetch(`/api/live/${encodeURIComponent(liveId)}/chat/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-      });
+      const response = await fetch(
+        `/api/live/${encodeURIComponent(liveId)}/chat/send`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        },
+      );
 
       if (response.ok) {
-        setChatInput('');
+        setChatInput("");
       } else {
         const payload = await response.json().catch(() => null);
-        setSendError(payload?.error || 'Message send failed.');
+        setSendError(payload?.error || "Message send failed.");
       }
     } catch (error) {
-      console.error('Failed to send chat message', error);
-      setSendError('Network error while sending message.');
+      console.error("Failed to send chat message", error);
+      setSendError("Network error while sending message.");
     } finally {
       setSending(false);
     }
@@ -146,51 +160,63 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
   const handleWsMessage = useCallback(
     (event: MessageEvent) => {
       try {
-        const payload = JSON.parse(event.data) as LiveChatMessage | LiveChatBatch;
+        const payload = JSON.parse(event.data) as
+          | LiveChatMessage
+          | LiveChatBatch;
         const maybeBatch = payload as LiveChatBatch;
         const incoming =
-          payload?.type === 'batch' && Array.isArray(maybeBatch.messages)
+          payload?.type === "batch" && Array.isArray(maybeBatch.messages)
             ? maybeBatch.messages
             : [payload as LiveChatMessage];
         applyIncomingMessages(incoming);
       } catch (error) {
-        console.error('Failed to parse chat message', error);
+        console.error("Failed to parse chat message", error);
       }
     },
-    [applyIncomingMessages]
+    [applyIncomingMessages],
   );
 
   useEffect(() => {
     if (tauriRuntime) {
-      setConnectionLabel('Connecting...');
+      setConnectionLabel("Connecting...");
 
       let disposed = false;
       let pollTimer: ReturnType<typeof setInterval> | undefined;
 
       const connectPolling = async () => {
         try {
-          const sessionId = await invokeTauri<string>('start_live_chat_polling', { liveId });
+          const sessionId = await invokeTauri<string>(
+            "start_live_chat_polling",
+            { liveId },
+          );
           if (disposed) {
-            await invokeTauri('stop_live_chat_polling', { sessionId }).catch(() => undefined);
+            await invokeTauri("stop_live_chat_polling", { sessionId }).catch(
+              () => undefined,
+            );
             return;
           }
 
           pollingSessionIdRef.current = sessionId;
-          setConnectionLabel('Connected');
+          setConnectionLabel("Connected");
 
           const poll = async () => {
             const currentSession = pollingSessionIdRef.current;
             if (!currentSession) return;
             try {
-              const payload = await invokeTauri<LiveChatBatch>('poll_live_chat', {
-                sessionId: currentSession,
-              });
-              const incoming = Array.isArray(payload?.messages) ? payload.messages : [];
+              const payload = await invokeTauri<LiveChatBatch>(
+                "poll_live_chat",
+                {
+                  sessionId: currentSession,
+                },
+              );
+              const incoming = Array.isArray(payload?.messages)
+                ? payload.messages
+                : [];
               if (incoming.length > 0) {
                 applyIncomingMessages(incoming);
               }
             } catch {
-              setConnectionLabel('Reconnecting...');
+              setConnectionLabel("Reconnecting...");
             }
           };
 
@@ -198,8 +224,8 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
             void poll();
           }, 900);
         } catch (error) {
-          console.error('Failed to start live chat polling', error);
-          setConnectionLabel('Unavailable');
+          console.error("Failed to start live chat polling", error);
+          setConnectionLabel("Unavailable");
         }
       };
 
@@ -213,11 +239,9 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
         const sessionId = pollingSessionIdRef.current;
         pollingSessionIdRef.current = null;
         if (sessionId) {
-          void invokeTauri('stop_live_chat_polling', { sessionId });
+          void invokeTauri("stop_live_chat_polling", { sessionId });
         }
       };
-
-      return;
     }
 
     let ws: WebSocket;
@@ -229,17 +253,18 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
         return;
       }
 
-      const protocol = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const protocol =
+        globalThis.location.protocol === "https:" ? "wss:" : "ws:";
       const host = globalThis.location.host;
       const authQuery = buildAuthQueryFromStorage();
-      const query = authQuery ? `?${authQuery}` : '';
+      const query = authQuery ? `?${authQuery}` : "";
       const wsUrl = `${protocol}//${host}/api/live/${encodeURIComponent(liveId)}/chat/ws${query}`;
 
       ws = new WebSocket(wsUrl);
-      ws.onopen = () => setConnectionLabel('Connected');
+      ws.onopen = () => setConnectionLabel("Connected");
       ws.onmessage = handleWsMessage;
       ws.onclose = () => {
-        setConnectionLabel('Reconnecting...');
+        setConnectionLabel("Reconnecting...");
         if (!disposed) {
           reconnectTimeout = globalThis.setTimeout(connect, 3000);
         }
@@ -260,41 +285,46 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
     <>
       <div
         style={{
-          padding: '15px',
-          borderBottom: '1px solid #3a3a3d',
-          fontWeight: 'bold',
-          color: '#efeff1',
-          fontSize: '0.9rem',
-          display: 'flex',
-          justifyContent: 'space-between',
+          padding: "15px",
+          borderBottom: "1px solid #3a3a3d",
+          fontWeight: "bold",
+          color: "#efeff1",
+          fontSize: "0.9rem",
+          display: "flex",
+          justifyContent: "space-between",
         }}
       >
         <span>LIVE CHAT</span>
         <span
           style={{
-            fontSize: '0.75rem',
-            color: connectionLabel === 'Connected' ? '#4ade80' : '#f59e0b',
+            fontSize: "0.75rem",
+            color: connectionLabel === "Connected" ? "#4ade80" : "#f59e0b",
           }}
         >
           {connectionLabel}
         </span>
       </div>
 
-      <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
+      <div
+        ref={chatScrollRef}
+        style={{ flex: 1, overflowY: "auto", padding: "10px" }}
+      >
         {messages.map((message, index) => (
           <div
             key={message.id || index}
             style={{
-              marginBottom: '8px',
-              fontSize: '0.85rem',
-              lineHeight: '1.4',
-              wordWrap: 'break-word',
+              marginBottom: "8px",
+              fontSize: "0.85rem",
+              lineHeight: "1.4",
+              wordWrap: "break-word",
             }}
           >
-            <span style={{ fontWeight: 'bold', color: message.color || '#bf94ff' }}>
-              {message.displayName || 'Unknown'}:{' '}
+            <span
+              style={{ fontWeight: "bold", color: message.color || "#bf94ff" }}
+            >
+              {message.displayName || "Unknown"}:{" "}
             </span>
-            <span style={{ color: '#efeff1' }}>{message.message || ''}</span>
+            <span style={{ color: "#efeff1" }}>{message.message || ""}</span>
           </div>
         ))}
       </div>
@@ -302,10 +332,10 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
       {twitchLinked && (
         <div
           style={{
-            padding: '8px',
-            borderTop: '1px solid #3a3a3d',
-            display: 'flex',
-            gap: '6px',
+            padding: "8px",
+            borderTop: "1px solid #3a3a3d",
+            display: "flex",
+            gap: "6px",
             flexShrink: 0,
           }}
         >
@@ -315,11 +345,11 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
             onChange={(event) => {
               setChatInput(event.target.value);
               if (sendError) {
-                setSendError('');
+                setSendError("");
               }
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              if (event.key === "Enter") {
                 void sendMessage();
               }
             }}
@@ -327,13 +357,13 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
             maxLength={500}
             style={{
               flex: 1,
-              padding: '6px 10px',
-              background: '#1f1f23',
-              border: '1px solid #3a3a3d',
-              borderRadius: '4px',
-              color: '#efeff1',
-              fontSize: '0.85rem',
-              outline: 'none',
+              padding: "6px 10px",
+              background: "#1f1f23",
+              border: "1px solid #3a3a3d",
+              borderRadius: "4px",
+              color: "#efeff1",
+              fontSize: "0.85rem",
+              outline: "none",
             }}
           />
 
@@ -344,17 +374,17 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
             disabled={!chatInput.trim() || sending}
             type="button"
             style={{
-              padding: '6px 12px',
-              background: '#9146ff',
-              border: 'none',
-              borderRadius: '4px',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
+              padding: "6px 12px",
+              background: "#9146ff",
+              border: "none",
+              borderRadius: "4px",
+              color: "white",
+              cursor: "pointer",
+              fontSize: "0.85rem",
               opacity: !chatInput.trim() || sending ? 0.5 : 1,
             }}
           >
-            {sending ? '...' : 'Send'}
+            {sending ? "..." : "Send"}
           </button>
         </div>
       )}
@@ -362,11 +392,11 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({ liveId, chatScrol
       {sendError && (
         <div
           style={{
-            padding: '8px 10px',
-            color: '#f87171',
-            fontSize: '0.8rem',
-            borderTop: '1px solid #3a3a3d',
-            background: '#140f12',
+            padding: "8px 10px",
+            color: "#f87171",
+            fontSize: "0.8rem",
+            borderTop: "1px solid #3a3a3d",
+            background: "#140f12",
           }}
         >
           {sendError}

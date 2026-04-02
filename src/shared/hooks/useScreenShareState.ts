@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
-import { ScreenShareSessionState } from '../types';
-import { useInterval } from './useInterval';
+import { useState, useCallback, useEffect } from "react";
+import { ScreenShareSessionState } from "../types";
+import { useInterval } from "./useInterval";
 
 export const DEFAULT_SCREEN_SHARE_STATE: ScreenShareSessionState = {
   active: false,
@@ -15,7 +15,10 @@ export const DEFAULT_SCREEN_SHARE_STATE: ScreenShareSessionState = {
   streamMessage: null,
 };
 
-function isSameScreenShareState(a: ScreenShareSessionState, b: ScreenShareSessionState): boolean {
+function isSameScreenShareState(
+  a: ScreenShareSessionState,
+  b: ScreenShareSessionState,
+): boolean {
   return (
     a.active === b.active &&
     a.sessionId === b.sessionId &&
@@ -32,16 +35,22 @@ function isSameScreenShareState(a: ScreenShareSessionState, b: ScreenShareSessio
 
 export function useScreenShareState(
   fetcher: () => Promise<ScreenShareSessionState>,
-  pollingInterval: number | null = 3000
+  pollingInterval: number | null = 3000,
 ) {
-  const [state, setState] = useState<ScreenShareSessionState>(DEFAULT_SCREEN_SHARE_STATE);
+  const [state, setState] = useState<ScreenShareSessionState>(
+    DEFAULT_SCREEN_SHARE_STATE,
+  );
   const [loading, setLoading] = useState(true);
-  const [isVisible, setIsVisible] = useState(() => document.visibilityState === 'visible');
+  const [isVisible, setIsVisible] = useState(
+    () => document.visibilityState === "visible",
+  );
 
   const updateState = useCallback(async () => {
     try {
       const newState = await fetcher();
-      setState((prev) => (isSameScreenShareState(prev, newState) ? prev : newState));
+      setState((prev) =>
+        isSameScreenShareState(prev, newState) ? prev : newState,
+      );
     } catch {
       // In production, we might want to be less noisy or handle specific errors
       // console.warn('[useScreenShareState] Update failed:', err);
@@ -56,16 +65,16 @@ export function useScreenShareState(
 
   useEffect(() => {
     const onVisibilityChange = () => {
-      const visible = document.visibilityState === 'visible';
+      const visible = document.visibilityState === "visible";
       setIsVisible(visible);
       if (visible) {
         void updateState();
       }
     };
 
-    document.addEventListener('visibilitychange', onVisibilityChange);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [updateState]);
 

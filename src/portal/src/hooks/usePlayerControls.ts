@@ -1,16 +1,18 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 
 export function usePlayerControls(
   hasRemoteStream: boolean,
   remoteVideoRef: React.RefObject<HTMLVideoElement | null>,
-  playerFrameRef: React.RefObject<HTMLDivElement | null>
+  playerFrameRef: React.RefObject<HTMLDivElement | null>,
 ) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
 
-  const controlsHideTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const controlsHideTimerRef = useRef<ReturnType<
+    typeof globalThis.setTimeout
+  > | null>(null);
 
   useEffect(() => {
     const onFullScreenChanged = () => {
@@ -18,8 +20,9 @@ export function usePlayerControls(
       setIsFullscreen(Boolean(frame && document.fullscreenElement === frame));
     };
 
-    document.addEventListener('fullscreenchange', onFullScreenChanged);
-    return () => document.removeEventListener('fullscreenchange', onFullScreenChanged);
+    document.addEventListener("fullscreenchange", onFullScreenChanged);
+    return () =>
+      document.removeEventListener("fullscreenchange", onFullScreenChanged);
   }, [playerFrameRef]);
 
   useEffect(() => {
@@ -64,14 +67,17 @@ export function usePlayerControls(
     setIsMuted((prev) => !prev);
   }, []);
 
-  const handleVolumeChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const next = Number(event.target.value);
-    if (!Number.isFinite(next)) return;
-    setVolume(next);
-    if (next > 0) {
-      setIsMuted(false);
-    }
-  }, []);
+  const handleVolumeChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const next = Number(event.target.value);
+      if (!Number.isFinite(next)) return;
+      setVolume(next);
+      if (next > 0) {
+        setIsMuted(false);
+      }
+    },
+    [],
+  );
 
   const scheduleControlsHide = useCallback(() => {
     if (controlsHideTimerRef.current) {

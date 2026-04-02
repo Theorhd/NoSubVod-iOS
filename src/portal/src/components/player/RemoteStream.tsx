@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 interface RemoteStreamProps {
   useNativeMobilePlayer: boolean;
@@ -31,12 +31,12 @@ export const RemoteStream: React.FC<RemoteStreamProps> = ({
     return (
       <div
         style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#000',
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#000",
         }}
       >
         <video
@@ -48,10 +48,10 @@ export const RemoteStream: React.FC<RemoteStreamProps> = ({
           controls
           controlsList="nodownload noplaybackrate"
           style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
-            backgroundColor: '#000',
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            backgroundColor: "#000",
           }}
         >
           <track kind="captions" />
@@ -66,13 +66,13 @@ export const RemoteStream: React.FC<RemoteStreamProps> = ({
       type="button"
       className="screen-share-remote-surface"
       style={{
-        touchAction: 'none',
-        border: 'none',
+        touchAction: "none",
+        border: "none",
         padding: 0,
-        background: 'transparent',
-        width: '100%',
-        height: '100%',
-        display: 'block',
+        background: "transparent",
+        width: "100%",
+        height: "100%",
+        display: "block",
       }}
       aria-label="Interactive remote stream"
       onMouseMove={onMouseMove}
@@ -91,10 +91,10 @@ export const RemoteStream: React.FC<RemoteStreamProps> = ({
         autoPlay
         playsInline
         style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-          backgroundColor: '#000',
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          backgroundColor: "#000",
         }}
       >
         <track kind="captions" />

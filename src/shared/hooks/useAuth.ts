@@ -1,18 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
-import { safeStorageGet, safeStorageSet } from '../utils/storage';
+import { useState, useEffect, useCallback } from "react";
+import { safeStorageGet, safeStorageSet } from "../utils/storage";
 
 export function useAuth() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     const existingToken =
-      safeStorageGet(sessionStorage, 'nsv_token') || safeStorageGet(localStorage, 'nsv_token');
+      safeStorageGet(sessionStorage, "nsv_token") ||
+      safeStorageGet(localStorage, "nsv_token");
     if (existingToken) return true;
 
     try {
       const currentUrl = new URL(globalThis.location.href);
-      const queryToken = currentUrl.searchParams.get('t')?.trim();
+      const queryToken = currentUrl.searchParams.get("t")?.trim();
       if (queryToken) {
-        safeStorageSet(sessionStorage, 'nsv_token', queryToken);
-        safeStorageSet(localStorage, 'nsv_token', queryToken);
+        safeStorageSet(sessionStorage, "nsv_token", queryToken);
+        safeStorageSet(localStorage, "nsv_token", queryToken);
         return true;
       }
     } catch {
@@ -24,16 +25,17 @@ export function useAuth() {
   useEffect(() => {
     const handleStorageChange = () => {
       const token =
-        safeStorageGet(sessionStorage, 'nsv_token') || safeStorageGet(localStorage, 'nsv_token');
+        safeStorageGet(sessionStorage, "nsv_token") ||
+        safeStorageGet(localStorage, "nsv_token");
       setIsAuthenticated(!!token);
     };
-    globalThis.addEventListener('storage', handleStorageChange);
-    return () => globalThis.removeEventListener('storage', handleStorageChange);
+    globalThis.addEventListener("storage", handleStorageChange);
+    return () => globalThis.removeEventListener("storage", handleStorageChange);
   }, []);
 
   const logout = useCallback(() => {
-    sessionStorage.removeItem('nsv_token');
-    localStorage.removeItem('nsv_token');
+    sessionStorage.removeItem("nsv_token");
+    localStorage.removeItem("nsv_token");
     setIsAuthenticated(false);
   }, []);
 

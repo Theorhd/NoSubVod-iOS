@@ -1,20 +1,32 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Search, X } from 'lucide-react';
-import { ChatMessage, ExperienceSettings, LiveStream, VideoMarker, VOD } from '../../shared/types';
-import NSVPlayer from './components/NSVPlayer';
-import LiveChatComponent from './components/player/LiveChatComponent';
-import MarkerPanel from './components/player/MarkerPanel';
-import ClipMode from './components/player/ClipMode';
-import PlayerInfo from './components/player/PlayerInfo';
-import { formatSafeClock as formatClock } from '../../shared/utils/formatters';
-import PlayerRTC from './PlayerRTC';
-import { useResponsive } from './hooks/useResponsive';
-import { normalizeExperienceSettings } from './utils/experienceSettings';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Search, X } from "lucide-react";
+import {
+  ChatMessage,
+  ExperienceSettings,
+  LiveStream,
+  VideoMarker,
+  VOD,
+} from "../../shared/types";
+import NSVPlayer from "./components/NSVPlayer";
+import LiveChatComponent from "./components/player/LiveChatComponent";
+import MarkerPanel from "./components/player/MarkerPanel";
+import ClipMode from "./components/player/ClipMode";
+import PlayerInfo from "./components/player/PlayerInfo";
+import { formatSafeClock as formatClock } from "../../shared/utils/formatters";
+import PlayerRTC from "./PlayerRTC";
+import { useResponsive } from "./hooks/useResponsive";
+import { normalizeExperienceSettings } from "./utils/experienceSettings";
 
 const DEFAULT_SETTINGS: ExperienceSettings = {
   oneSync: false,
-  defaultVideoQuality: 'auto',
+  defaultVideoQuality: "auto",
 };
 
 const CHAT_MESSAGES_BEFORE = 100;
@@ -22,18 +34,24 @@ const CHAT_MESSAGES_AFTER = 170;
 const MAX_CHAT_MESSAGES = 700;
 const CHAT_HISTORY_SECONDS = 10 * 60;
 
-function resolvePlayerTitle(vodId: string | null, liveId: string | null): string {
+function resolvePlayerTitle(
+  vodId: string | null,
+  liveId: string | null,
+): string {
   if (vodId) return `VOD: ${vodId}`;
   if (liveId) return `Live: ${liveId}`;
-  return 'Player';
+  return "Player";
 }
 
-function buildAuthSuffix(token: string | null, deviceId: string | null): string {
+function buildAuthSuffix(
+  token: string | null,
+  deviceId: string | null,
+): string {
   const query = new URLSearchParams();
-  if (token) query.set('t', token);
-  if (deviceId) query.set('d', deviceId);
+  if (token) query.set("t", token);
+  if (deviceId) query.set("d", deviceId);
   const qs = query.toString();
-  return qs ? `?${qs}` : '';
+  return qs ? `?${qs}` : "";
 }
 
 function parseMarkersPayload(payload: unknown): VideoMarker[] {
@@ -41,7 +59,7 @@ function parseMarkersPayload(payload: unknown): VideoMarker[] {
     return payload as VideoMarker[];
   }
 
-  if (payload && typeof payload === 'object') {
+  if (payload && typeof payload === "object") {
     const maybeMarkers = (payload as { markers?: unknown }).markers;
     if (Array.isArray(maybeMarkers)) {
       return maybeMarkers as VideoMarker[];
@@ -60,7 +78,7 @@ const ChatSearch = ({
   onSeek: (time: number) => void;
   onClose: () => void;
 }) => {
-  const [keyword, setKeyword] = useState('');
+  const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
 
@@ -68,13 +86,15 @@ const ChatSearch = ({
     if (!keyword.trim()) return;
     setSearching(true);
     try {
-      const res = await fetch(`/api/vod/${vodId}/chat?keyword=${encodeURIComponent(keyword)}`);
+      const res = await fetch(
+        `/api/vod/${vodId}/chat?keyword=${encodeURIComponent(keyword)}`,
+      );
       if (res.ok) {
         const data = await res.json();
         setResults(data.results || []);
       }
     } catch (err) {
-      console.error('Search failed', err);
+      console.error("Search failed", err);
     } finally {
       setSearching(false);
     }
@@ -83,28 +103,28 @@ const ChatSearch = ({
   return (
     <div
       style={{
-        position: 'absolute',
-        top: '0',
-        right: '0',
-        width: '100%',
-        height: '100%',
+        position: "absolute",
+        top: "0",
+        right: "0",
+        width: "100%",
+        height: "100%",
         zIndex: 20,
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'rgba(7, 8, 15, 0.95)',
-        borderLeft: '1px solid var(--border)',
+        display: "flex",
+        flexDirection: "column",
+        background: "rgba(7, 8, 15, 0.95)",
+        borderLeft: "1px solid var(--border)",
       }}
     >
       <div
         style={{
-          padding: '16px',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          gap: '8px',
-          alignItems: 'center',
+          padding: "16px",
+          borderBottom: "1px solid var(--border)",
+          display: "flex",
+          gap: "8px",
+          alignItems: "center",
         }}
       >
-        <div style={{ position: 'relative', flex: 1 }}>
+        <div style={{ position: "relative", flex: 1 }}>
           <input
             autoFocus
             type="text"
@@ -112,32 +132,43 @@ const ChatSearch = ({
             placeholder="Rechercher dans le chat..."
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            style={{ width: '100%', margin: 0, paddingRight: '40px' }}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            style={{ width: "100%", margin: 0, paddingRight: "40px" }}
           />
           <Search
             size={18}
             style={{
-              position: 'absolute',
-              right: '12px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--text-muted)',
-              pointerEvents: 'none',
+              position: "absolute",
+              right: "12px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+              pointerEvents: "none",
             }}
           />
         </div>
         <button
           className="secondary-btn"
           onClick={onClose}
-          style={{ width: '40px', height: '40px', padding: 0, borderRadius: '50%' }}
+          style={{
+            width: "40px",
+            height: "40px",
+            padding: 0,
+            borderRadius: "50%",
+          }}
         >
           <X size={18} />
         </button>
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
         {results.length === 0 && !searching && keyword && (
-          <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '20px' }}>
+          <div
+            style={{
+              textAlign: "center",
+              color: "var(--text-muted)",
+              marginTop: "20px",
+            }}
+          >
             Aucun résultat trouvé pour &quot;{keyword}&quot;
           </div>
         )}
@@ -146,42 +177,60 @@ const ChatSearch = ({
             key={res.id}
             onClick={() => onSeek(res.contentOffsetSeconds)}
             style={{
-              width: '100%',
-              textAlign: 'left',
-              padding: '12px',
-              borderBottom: '1px solid var(--border)',
-              cursor: 'pointer',
-              borderRadius: '8px',
-              transition: '0.2s',
-              marginBottom: '4px',
-              background: 'transparent',
-              border: 'none',
-              display: 'block',
+              width: "100%",
+              textAlign: "left",
+              padding: "12px",
+              borderBottom: "1px solid var(--border)",
+              cursor: "pointer",
+              borderRadius: "8px",
+              transition: "0.2s",
+              marginBottom: "4px",
+              background: "transparent",
+              border: "none",
+              display: "block",
             }}
             className="hover-card"
           >
             <div
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: '4px',
-                alignItems: 'center',
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "4px",
+                alignItems: "center",
               }}
             >
-              <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.8rem' }}>
+              <span
+                style={{
+                  fontWeight: 800,
+                  color: "var(--primary)",
+                  fontSize: "0.8rem",
+                }}
+              >
                 {res.commenter?.displayName}
               </span>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+              <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
                 {formatClock(res.contentOffsetSeconds)}
               </span>
             </div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text)', lineHeight: '1.4' }}>
+            <div
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text)",
+                lineHeight: "1.4",
+              }}
+            >
               {res.message}
             </div>
           </button>
         ))}
         {searching && (
-          <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '20px' }}>
+          <div
+            style={{
+              textAlign: "center",
+              color: "var(--text-muted)",
+              marginTop: "20px",
+            }}
+          >
             Recherche en cours...
           </div>
         )}
@@ -192,17 +241,21 @@ const ChatSearch = ({
 
 export default function Player() {
   const [searchParams] = useSearchParams();
-  const vodId = searchParams.get('vod');
-  const liveId = searchParams.get('live');
-  const downloadMode = searchParams.get('downloadMode') === 'true';
-  const screenShareParam = searchParams.get('screenshare') ?? searchParams.get('screenShare');
-  const screenShareMode = screenShareParam === 'true' || screenShareParam === '1';
+  const vodId = searchParams.get("vod");
+  const liveId = searchParams.get("live");
+  const downloadMode = searchParams.get("downloadMode") === "true";
+  const screenShareParam =
+    searchParams.get("screenshare") ?? searchParams.get("screenShare");
+  const screenShareMode =
+    screenShareParam === "true" || screenShareParam === "1";
 
   if (screenShareMode) {
     return <PlayerRTC />;
   }
 
-  return <VodLivePlayer vodId={vodId} liveId={liveId} downloadMode={downloadMode} />;
+  return (
+    <VodLivePlayer vodId={vodId} liveId={liveId} downloadMode={downloadMode} />
+  );
 }
 
 type VodLivePlayerProps = {
@@ -217,7 +270,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
   const mediaKey = useMemo(() => {
     if (vodId) return `vod:${vodId}`;
     if (liveId) return `live:${liveId}`;
-    return 'none';
+    return "none";
   }, [vodId, liveId]);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -264,24 +317,28 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
   const [clipStart, setClipStart] = useState<number | null>(null);
   const [clipEnd, setClipEnd] = useState<number | null>(null);
-  const [settings, setSettings] = useState<ExperienceSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] =
+    useState<ExperienceSettings>(DEFAULT_SETTINGS);
 
-  const playerTitle = useMemo(() => resolvePlayerTitle(vodId, liveId), [vodId, liveId]);
+  const playerTitle = useMemo(
+    () => resolvePlayerTitle(vodId, liveId),
+    [vodId, liveId],
+  );
 
   const source = useMemo(() => {
     if (vodId) {
       return {
         src: `/api/vod/${vodId}/master.m3u8`,
-        type: 'application/x-mpegurl',
-        streamType: 'on-demand' as const,
+        type: "application/x-mpegurl",
+        streamType: "on-demand" as const,
       };
     }
 
     if (liveId) {
       return {
         src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8`,
-        type: 'application/x-mpegurl',
-        streamType: 'live' as const,
+        type: "application/x-mpegurl",
+        streamType: "live" as const,
       };
     }
 
@@ -290,7 +347,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
   const playerMediaSource = useMemo(
     () => (source ? { src: source.src, type: source.type } : null),
-    [source]
+    [source],
   );
 
   const shouldLoadChat = Boolean(vodId && showChat && !isFullscreen);
@@ -300,8 +357,11 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
     if (!shouldLoadChat) return [];
     if (chatMessages.length === 0) return [];
 
-    const firstFutureIndex = chatMessages.findIndex((m) => m.contentOffsetSeconds > currentTime);
-    const pivotIndex = firstFutureIndex === -1 ? chatMessages.length : firstFutureIndex;
+    const firstFutureIndex = chatMessages.findIndex(
+      (m) => m.contentOffsetSeconds > currentTime,
+    );
+    const pivotIndex =
+      firstFutureIndex === -1 ? chatMessages.length : firstFutureIndex;
     const start = Math.max(0, pivotIndex - CHAT_MESSAGES_BEFORE);
     const end = Math.min(chatMessages.length, pivotIndex + CHAT_MESSAGES_AFTER);
     return chatMessages.slice(start, end);
@@ -313,7 +373,9 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
     for (const msg of visibleChat) {
       if (!dispatchedChatIds.current.has(msg.id)) {
         dispatchedChatIds.current.add(msg.id);
-        globalThis.dispatchEvent(new CustomEvent('nsv-chat-message', { detail: msg }));
+        globalThis.dispatchEvent(
+          new CustomEvent("nsv-chat-message", { detail: msg }),
+        );
       }
     }
     // Bound memory without clearing everything (which would cause redispatch storms).
@@ -339,23 +401,29 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
       pendingChatOffsetsRef.current.add(offset);
 
       try {
-        const res = await fetch(`/api/vod/${vodId}/chat?offset=${offset}&limit=120`);
+        const res = await fetch(
+          `/api/vod/${vodId}/chat?offset=${offset}&limit=120`,
+        );
         if (!res.ok) return;
 
         const data = await res.json();
         setChatMessages((prev) => {
           const known = new Set(prev.map((m) => m.id));
-          const incoming = (data.messages || []).filter((m: ChatMessage) => !known.has(m.id));
+          const incoming = (data.messages || []).filter(
+            (m: ChatMessage) => !known.has(m.id),
+          );
           if (incoming.length === 0) return prev;
 
           const merged = [...prev, ...incoming].sort(
-            (a, b) => a.contentOffsetSeconds - b.contentOffsetSeconds
+            (a, b) => a.contentOffsetSeconds - b.contentOffsetSeconds,
           );
 
           // Keep a bounded chat window to avoid unbounded memory growth on long VOD sessions.
           const now = currentTimeRef.current || 0;
           const cutoff = Math.max(0, now - CHAT_HISTORY_SECONDS);
-          const recent = merged.filter((message) => message.contentOffsetSeconds >= cutoff);
+          const recent = merged.filter(
+            (message) => message.contentOffsetSeconds >= cutoff,
+          );
 
           if (recent.length <= MAX_CHAT_MESSAGES) return recent;
           return recent.slice(recent.length - MAX_CHAT_MESSAGES);
@@ -363,18 +431,21 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
         lastChatOffsetRef.current = offset;
       } catch (error) {
-        console.error('Failed to fetch chat', error);
+        console.error("Failed to fetch chat", error);
       } finally {
         pendingChatOffsetsRef.current.delete(offset);
       }
     },
-    [vodId]
+    [vodId],
   );
 
   const handlePlayerTimeUpdate = useCallback(
     (time: number) => {
       const roundedSecond = Math.floor(time);
-      if (shouldUpdateUiTime && roundedSecond !== lastRenderedSecondRef.current) {
+      if (
+        shouldUpdateUiTime &&
+        roundedSecond !== lastRenderedSecondRef.current
+      ) {
         lastRenderedSecondRef.current = roundedSecond;
         setCurrentTime(time);
       }
@@ -385,7 +456,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
       lastRequestedOffsetRef.current = offset;
       void fetchVodChatChunk(offset);
     },
-    [fetchVodChatChunk, shouldLoadChat, shouldUpdateUiTime]
+    [fetchVodChatChunk, shouldLoadChat, shouldUpdateUiTime],
   );
 
   useEffect(() => {
@@ -413,9 +484,11 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
   }, [visibleChat, shouldLoadChat]);
 
   useEffect(() => {
-    const onFullScreenChanged = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', onFullScreenChanged);
-    return () => document.removeEventListener('fullscreenchange', onFullScreenChanged);
+    const onFullScreenChanged = () =>
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFullScreenChanged);
+    return () =>
+      document.removeEventListener("fullscreenchange", onFullScreenChanged);
   }, []);
 
   useEffect(() => {
@@ -450,8 +523,10 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
       try {
         // On récupère les tokens pour l'auth
-        const token = localStorage.getItem('nsv_token') || sessionStorage.getItem('nsv_token');
-        const deviceId = localStorage.getItem('nsv_device_id');
+        const token =
+          localStorage.getItem("nsv_token") ||
+          sessionStorage.getItem("nsv_token");
+        const deviceId = localStorage.getItem("nsv_device_id");
         const authSuffix = buildAuthSuffix(token, deviceId);
 
         const [historyRes, infoRes, settingsRes] = await Promise.all([
@@ -473,13 +548,20 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
         if (!disposed) {
           if (settingsRes.ok) {
             try {
-              const remoteSettings = (await settingsRes.json()) as ExperienceSettings;
-              setSettings((prev) => ({ ...prev, ...normalizeExperienceSettings(remoteSettings) }));
+              const remoteSettings =
+                (await settingsRes.json()) as ExperienceSettings;
+              setSettings((prev) => ({
+                ...prev,
+                ...normalizeExperienceSettings(remoteSettings),
+              }));
             } catch (error) {
-              console.error('[Player] Failed to parse VOD settings payload', error);
+              console.error(
+                "[Player] Failed to parse VOD settings payload",
+                error,
+              );
             }
           } else {
-            console.warn('[Player] VOD settings request failed', {
+            console.warn("[Player] VOD settings request failed", {
               status: settingsRes.status,
               statusText: settingsRes.statusText,
               vodId,
@@ -487,7 +569,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch VOD player data', error);
+        console.error("Failed to fetch VOD player data", error);
       }
     };
 
@@ -508,17 +590,21 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
     const run = async () => {
       try {
-        const token = localStorage.getItem('nsv_token') || sessionStorage.getItem('nsv_token');
-        const deviceId = localStorage.getItem('nsv_device_id');
+        const token =
+          localStorage.getItem("nsv_token") ||
+          sessionStorage.getItem("nsv_token");
+        const deviceId = localStorage.getItem("nsv_device_id");
         const authSuffix = buildAuthSuffix(token, deviceId);
 
-        const markersRes = await fetch(`/api/vod/${vodId}/markers${authSuffix}`);
+        const markersRes = await fetch(
+          `/api/vod/${vodId}/markers${authSuffix}`,
+        );
         if (!disposed && markersRes.ok) {
           const data = await markersRes.json();
           setMarkers(parseMarkersPayload(data));
           markersLoadedVodRef.current = vodId;
         } else if (!disposed) {
-          console.warn('[Player] markers request failed', {
+          console.warn("[Player] markers request failed", {
             status: markersRes.status,
             statusText: markersRes.statusText,
             vodId,
@@ -526,7 +612,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
         }
       } catch (error) {
         if (!disposed) {
-          console.error('Failed to fetch markers', error);
+          console.error("Failed to fetch markers", error);
         }
       } finally {
         markersLoadingRef.current = false;
@@ -546,8 +632,10 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
       if (!liveId) return;
 
       try {
-        const token = localStorage.getItem('nsv_token') || sessionStorage.getItem('nsv_token');
-        const deviceId = localStorage.getItem('nsv_device_id');
+        const token =
+          localStorage.getItem("nsv_token") ||
+          sessionStorage.getItem("nsv_token");
+        const deviceId = localStorage.getItem("nsv_device_id");
         const authSuffix = buildAuthSuffix(token, deviceId);
 
         const [infoRes, settingsRes] = await Promise.all([
@@ -562,13 +650,20 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
         if (!disposed) {
           if (settingsRes.ok) {
             try {
-              const remoteSettings = (await settingsRes.json()) as ExperienceSettings;
-              setSettings((prev) => ({ ...prev, ...normalizeExperienceSettings(remoteSettings) }));
+              const remoteSettings =
+                (await settingsRes.json()) as ExperienceSettings;
+              setSettings((prev) => ({
+                ...prev,
+                ...normalizeExperienceSettings(remoteSettings),
+              }));
             } catch (error) {
-              console.error('[Player] Failed to parse live settings payload', error);
+              console.error(
+                "[Player] Failed to parse live settings payload",
+                error,
+              );
             }
           } else {
-            console.warn('[Player] Live settings request failed', {
+            console.warn("[Player] Live settings request failed", {
               status: settingsRes.status,
               statusText: settingsRes.statusText,
               liveId,
@@ -576,7 +671,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch live player data', error);
+        console.error("Failed to fetch live player data", error);
       }
     };
 
@@ -593,16 +688,16 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
       const current = currentTimeRef.current;
       const dur = durationRef.current;
       if (current <= 0) return;
-      fetch('/api/history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      fetch("/api/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vodId,
           timecode: current,
           duration: dur || 0,
         }),
       }).catch((error) => {
-        console.error('Failed to save history', error);
+        console.error("Failed to save history", error);
       });
     };
 
@@ -618,7 +713,10 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
   if (!source) {
     return (
-      <div className="container" style={{ textAlign: 'center', padding: '100px' }}>
+      <div
+        className="container"
+        style={{ textAlign: "center", padding: "100px" }}
+      >
         <div className="card glass">
           Missing player source. Please provide vod or live query parameter.
         </div>
@@ -631,43 +729,59 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
       {!isFullscreen && (
         <div
           className="top-bar"
-          style={{ position: 'relative', zIndex: 10, background: 'rgba(7, 8, 15, 0.8)' }}
+          style={{
+            position: "relative",
+            zIndex: 10,
+            background: "rgba(7, 8, 15, 0.8)",
+          }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              flex: 1,
+            }}
+          >
             <button
               onClick={() => navigate(-1)}
               className="secondary-btn"
-              style={{ width: '40px', height: '40px', padding: 0, borderRadius: '50%' }}
+              style={{
+                width: "40px",
+                height: "40px",
+                padding: 0,
+                borderRadius: "50%",
+              }}
             >
               <ArrowLeft size={20} />
             </button>
             <h2
               style={{
-                fontSize: '1rem',
+                fontSize: "1rem",
                 fontWeight: 800,
                 margin: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               {vodInfo?.title || liveInfo?.title || playerTitle}
             </h2>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: "flex", gap: "8px" }}>
             {!liveId && (
               <button
                 onClick={() => setShowChatSearch((v) => !v)}
                 className="secondary-btn"
                 style={{
-                  width: '40px',
-                  height: '40px',
+                  width: "40px",
+                  height: "40px",
                   padding: 0,
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
                 title="Rechercher dans le chat"
               >
@@ -679,7 +793,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
               <button
                 onClick={() => setShowMarkers((v) => !v)}
                 className="secondary-btn"
-                style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                style={{ fontSize: "0.8rem", padding: "6px 12px" }}
               >
                 Chapters ({markers.length})
               </button>
@@ -688,32 +802,32 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
             <button
               onClick={() => setShowChat((v) => !v)}
               className="action-btn"
-              style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+              style={{ fontSize: "0.8rem", padding: "6px 12px" }}
             >
-              {showChat ? 'Hide Chat' : 'Show Chat'}
+              {showChat ? "Hide Chat" : "Show Chat"}
             </button>
           </div>
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div
           style={{
             flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            overflowY: isFullscreen ? 'hidden' : 'auto',
-            background: '#000',
+            display: "flex",
+            flexDirection: "column",
+            overflowY: isFullscreen ? "hidden" : "auto",
+            background: "#000",
           }}
         >
           <div
             style={{
-              width: '100%',
-              position: 'relative',
-              aspectRatio: isFullscreen ? 'auto' : '16/9',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              width: "100%",
+              position: "relative",
+              aspectRatio: isFullscreen ? "auto" : "16/9",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             <NSVPlayer
@@ -745,7 +859,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
             )}
           </div>
 
-          <div className="container" style={{ paddingBottom: '100px' }}>
+          <div className="container" style={{ paddingBottom: "100px" }}>
             {downloadMode && vodId && (
               <ClipMode
                 duration={duration}
@@ -775,11 +889,11 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
             {playerError && (
               <div
                 style={{
-                  marginTop: '16px',
-                  color: 'var(--danger)',
-                  padding: '16px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'rgba(255,107,135,0.1)',
+                  marginTop: "16px",
+                  color: "var(--danger)",
+                  padding: "16px",
+                  borderRadius: "var(--radius-md)",
+                  background: "rgba(255,107,135,0.1)",
                 }}
               >
                 {playerError}
@@ -792,12 +906,12 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
           <div
             className="glass"
             style={{
-              width: '340px',
-              borderLeft: '1px solid var(--border)',
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              position: 'relative',
+              width: "340px",
+              borderLeft: "1px solid var(--border)",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+              position: "relative",
             }}
           >
             {!liveId && showChatSearch && vodId && (
@@ -811,42 +925,55 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
               />
             )}
             {liveId ? (
-              <LiveChatComponent liveId={liveId} chatScrollRef={chatScrollRef} />
+              <LiveChatComponent
+                liveId={liveId}
+                chatScrollRef={chatScrollRef}
+              />
             ) : (
               <>
                 <div
                   style={{
-                    padding: '16px',
-                    borderBottom: '1px solid var(--border)',
+                    padding: "16px",
+                    borderBottom: "1px solid var(--border)",
                     fontWeight: 800,
-                    color: 'var(--text)',
-                    fontSize: '0.85rem',
+                    color: "var(--text)",
+                    fontSize: "0.85rem",
                   }}
                 >
                   STREAM CHAT REPLAY
                 </div>
 
-                <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+                <div
+                  ref={chatScrollRef}
+                  style={{ flex: 1, overflowY: "auto", padding: "16px" }}
+                >
                   {visibleChat.map((message) => (
                     <div
                       key={message.id}
-                      style={{ marginBottom: '12px', fontSize: '0.85rem', lineHeight: '1.5' }}
+                      style={{
+                        marginBottom: "12px",
+                        fontSize: "0.85rem",
+                        lineHeight: "1.5",
+                      }}
                     >
                       <span
                         style={{
-                          color: 'var(--text-muted)',
-                          marginRight: '8px',
-                          fontSize: '0.75rem',
+                          color: "var(--text-muted)",
+                          marginRight: "8px",
+                          fontSize: "0.75rem",
                         }}
                       >
                         {formatClock(message.contentOffsetSeconds)}
                       </span>
-                      <span style={{ fontWeight: 800, color: 'var(--primary)' }}>
-                        {message.commenter?.displayName || 'Unknown'}:{' '}
+                      <span
+                        style={{ fontWeight: 800, color: "var(--primary)" }}
+                      >
+                        {message.commenter?.displayName || "Unknown"}:{" "}
                       </span>
-                      <span style={{ color: 'var(--text)' }}>
-                        {message.message?.fragments?.map((fragment) => fragment.text).join('') ||
-                          ''}
+                      <span style={{ color: "var(--text)" }}>
+                        {message.message?.fragments
+                          ?.map((fragment) => fragment.text)
+                          .join("") || ""}
                       </span>
                     </div>
                   ))}

@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 
 export function useResponsive() {
-  const [isMobileLayout, setIsMobileLayout] = useState(() => globalThis.innerWidth <= 900);
+  const [isMobileLayout, setIsMobileLayout] = useState(
+    () => globalThis.innerWidth <= 900,
+  );
   const [isTouchDevice, setIsTouchDevice] = useState(() =>
     Boolean(
-      'ontouchstart' in globalThis ||
+      "ontouchstart" in globalThis ||
       (globalThis.navigator?.maxTouchPoints ?? 0) > 0 ||
-      (globalThis.navigator as any)?.msMaxTouchPoints > 0
-    )
+      (globalThis.navigator as any)?.msMaxTouchPoints > 0,
+    ),
   );
 
   useEffect(() => {
@@ -15,16 +17,16 @@ export function useResponsive() {
       setIsMobileLayout(globalThis.innerWidth <= 900);
       setIsTouchDevice(
         Boolean(
-          'ontouchstart' in globalThis ||
+          "ontouchstart" in globalThis ||
           (globalThis.navigator?.maxTouchPoints ?? 0) > 0 ||
-          (globalThis.navigator as any)?.msMaxTouchPoints > 0
-        )
+          (globalThis.navigator as any)?.msMaxTouchPoints > 0,
+        ),
       );
     };
 
     updateLayoutMode();
-    globalThis.addEventListener('resize', updateLayoutMode);
-    return () => globalThis.removeEventListener('resize', updateLayoutMode);
+    globalThis.addEventListener("resize", updateLayoutMode);
+    return () => globalThis.removeEventListener("resize", updateLayoutMode);
   }, []);
 
   return { isMobileLayout, isTouchDevice };

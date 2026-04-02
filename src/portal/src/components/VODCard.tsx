@@ -1,8 +1,8 @@
-import React from 'react';
-import { VOD, HistoryEntry } from '../../../shared/types';
-import { formatTime, formatViews } from '../../../shared/utils/formatters';
-import { Download as DownloadIcon, Clock, Users, Play } from 'lucide-react';
-import DownloadMenu from './DownloadMenu';
+import React from "react";
+import { VOD, HistoryEntry } from "../../../shared/types";
+import { formatTime, formatViews } from "../../../shared/utils/formatters";
+import { Download as DownloadIcon, Clock, Users, Play } from "lucide-react";
+import DownloadMenu from "./DownloadMenu";
 
 export type VODCardProps = {
   vod: VOD;
@@ -14,7 +14,14 @@ export type VODCardProps = {
 };
 
 export const VODCard = React.memo<VODCardProps>(
-  ({ vod, onWatch, onAddToWatchlist, historyEntry, showOwner, hideDownload }) => {
+  ({
+    vod,
+    onWatch,
+    onAddToWatchlist,
+    historyEntry,
+    showOwner,
+    hideDownload,
+  }) => {
     const [menuOpen, setMenuOpen] = React.useState(false);
     const [anchorRect, setAnchorRect] = React.useState<DOMRect | null>(null);
 
@@ -24,7 +31,9 @@ export const VODCard = React.memo<VODCardProps>(
       if (menuOpen) {
         setMenuOpen(false);
       } else {
-        setAnchorRect((e.currentTarget as HTMLButtonElement).getBoundingClientRect());
+        setAnchorRect(
+          (e.currentTarget as HTMLButtonElement).getBoundingClientRect(),
+        );
         setMenuOpen(true);
       }
     };
@@ -37,8 +46,15 @@ export const VODCard = React.memo<VODCardProps>(
     return (
       <div className="vod-card glass-hover">
         <div className="vod-thumb-wrap">
-          <img src={vod.previewThumbnailURL} alt={vod.title} className="vod-thumb" />
-          <div className="vod-badge" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <img
+            src={vod.previewThumbnailURL}
+            alt={vod.title}
+            className="vod-thumb"
+          />
+          <div
+            className="vod-badge"
+            style={{ display: "flex", alignItems: "center", gap: "4px" }}
+          >
             <Clock size={12} />
             {formatTime(vod.lengthSeconds)}
           </div>
@@ -46,29 +62,29 @@ export const VODCard = React.memo<VODCardProps>(
           <div
             className="vod-play-overlay"
             style={{
-              position: 'absolute',
+              position: "absolute",
               inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(143, 87, 255, 0.2)',
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(143, 87, 255, 0.2)",
               opacity: 0,
-              transition: 'opacity 0.3s ease',
-              pointerEvents: 'none',
+              transition: "opacity 0.3s ease",
+              pointerEvents: "none",
               zIndex: 2,
             }}
           >
             <div
               style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                background: 'var(--primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#000',
-                boxShadow: '0 0 20px var(--primary-glow)',
+                width: "48px",
+                height: "48px",
+                borderRadius: "50%",
+                background: "var(--primary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#000",
+                boxShadow: "0 0 20px var(--primary-glow)",
               }}
             >
               <Play size={24} fill="currentColor" />
@@ -79,7 +95,7 @@ export const VODCard = React.memo<VODCardProps>(
             className="stretched-link"
             aria-label={`Regarder la VOD: ${vod.title}`}
             onClick={() => onWatch(vod.id)}
-            style={{ background: 'none', border: 'none', padding: 0 }}
+            style={{ background: "none", border: "none", padding: 0 }}
           />
 
           {onAddToWatchlist && (
@@ -91,15 +107,15 @@ export const VODCard = React.memo<VODCardProps>(
               }}
               className="secondary-btn"
               style={{
-                position: 'absolute',
+                position: "absolute",
                 zIndex: 5,
-                top: '8px',
-                right: '8px',
-                width: '32px',
-                height: '32px',
+                top: "8px",
+                right: "8px",
+                width: "32px",
+                height: "32px",
                 padding: 0,
-                borderRadius: '50%',
-                fontSize: '18px',
+                borderRadius: "50%",
+                fontSize: "18px",
               }}
               title="Add to watch later"
             >
@@ -111,34 +127,43 @@ export const VODCard = React.memo<VODCardProps>(
             <div
               className="progress-track"
               style={{
-                position: 'absolute',
+                position: "absolute",
                 bottom: 0,
                 left: 0,
                 right: 0,
-                height: '3px',
+                height: "3px",
                 borderRadius: 0,
-                background: 'rgba(255,255,255,0.1)',
+                background: "rgba(255,255,255,0.1)",
               }}
             >
               <div
                 className="progress-fill"
-                style={{ width: `${progress}%`, height: '100%', borderRadius: 0 }}
+                style={{
+                  width: `${progress}%`,
+                  height: "100%",
+                  borderRadius: 0,
+                }}
               />
             </div>
           )}
         </div>
 
-        <div className="vod-body" style={{ position: 'relative', zIndex: 3 }}>
+        <div className="vod-body" style={{ position: "relative", zIndex: 3 }}>
           {showOwner && vod.owner && (
-            <div className="vod-meta" style={{ marginBottom: '8px', color: 'var(--text)' }}>
+            <div
+              className="vod-meta"
+              style={{ marginBottom: "8px", color: "var(--text)" }}
+            >
               {vod.owner.profileImageURL && (
                 <img
                   src={vod.owner.profileImageURL}
                   alt={vod.owner.displayName}
-                  style={{ width: '20px', height: '20px', borderRadius: '50%' }}
+                  style={{ width: "20px", height: "20px", borderRadius: "50%" }}
                 />
               )}
-              <span style={{ fontWeight: 600 }}>{vod.owner.displayName || 'Unknown Streamer'}</span>
+              <span style={{ fontWeight: 600 }}>
+                {vod.owner.displayName || "Unknown Streamer"}
+              </span>
             </div>
           )}
 
@@ -146,24 +171,40 @@ export const VODCard = React.memo<VODCardProps>(
             {vod.title}
           </h3>
 
-          <div className="vod-meta" style={{ justifyContent: 'space-between', marginTop: '8px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <span style={{ color: 'var(--primary)', fontWeight: 600, fontSize: '0.75rem' }}>
-                {vod.game?.name || 'No Category'}
+          <div
+            className="vod-meta"
+            style={{ justifyContent: "space-between", marginTop: "8px" }}
+          >
+            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              <span
+                style={{
+                  color: "var(--primary)",
+                  fontWeight: 600,
+                  fontSize: "0.75rem",
+                }}
+              >
+                {vod.game?.name || "No Category"}
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span
+                style={{ display: "flex", alignItems: "center", gap: "4px" }}
+              >
                 <Users size={12} />
                 {formatViews(vod.viewCount)}
               </span>
             </div>
 
             {!hideDownload && (
-              <div style={{ position: 'relative', zIndex: 5 }}>
+              <div style={{ position: "relative", zIndex: 5 }}>
                 <button
                   type="button"
                   onClick={handleDownloadClick}
                   className="secondary-btn"
-                  style={{ width: '32px', height: '32px', padding: 0, borderRadius: '50%' }}
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    padding: 0,
+                    borderRadius: "50%",
+                  }}
                   title="Télécharger"
                 >
                   <DownloadIcon size={14} />
@@ -180,7 +221,13 @@ export const VODCard = React.memo<VODCardProps>(
               </div>
             )}
           </div>
-          <div style={{ marginTop: '8px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+          <div
+            style={{
+              marginTop: "8px",
+              fontSize: "0.7rem",
+              color: "var(--text-muted)",
+            }}
+          >
             {new Date(vod.createdAt).toLocaleDateString()}
           </div>
         </div>
@@ -190,7 +237,7 @@ export const VODCard = React.memo<VODCardProps>(
       `}</style>
       </div>
     );
-  }
+  },
 );
 
-VODCard.displayName = 'VODCard';
+VODCard.displayName = "VODCard";

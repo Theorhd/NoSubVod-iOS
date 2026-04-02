@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ExperienceSettings,
   HistoryVodEntry,
@@ -7,12 +7,12 @@ import {
   SubEntry,
   UserInfo,
   WatchlistEntry,
-} from '../../shared/types';
-import ChannelSearchCard from './components/home/ChannelSearchCard';
-import MySubsList from './components/home/MySubsList';
-import HistoryPreview from './components/home/HistoryPreview';
-import WatchlistPreview from './components/home/WatchlistPreview';
-import { TopBar } from './components/TopBar';
+} from "../../shared/types";
+import ChannelSearchCard from "./components/home/ChannelSearchCard";
+import MySubsList from "./components/home/MySubsList";
+import HistoryPreview from "./components/home/HistoryPreview";
+import WatchlistPreview from "./components/home/WatchlistPreview";
+import { TopBar } from "./components/TopBar";
 
 const defaultSettings: ExperienceSettings = {
   oneSync: false,
@@ -27,11 +27,11 @@ export default function Home() {
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
 
   const [showModal, setShowModal] = useState(false);
-  const [streamerInput, setStreamerInput] = useState('');
-  const [modalError, setModalError] = useState('');
+  const [streamerInput, setStreamerInput] = useState("");
+  const [modalError, setModalError] = useState("");
   const [isSearchingStreamer, setIsSearchingStreamer] = useState(false);
 
-  const [channelSearch, setChannelSearch] = useState('');
+  const [channelSearch, setChannelSearch] = useState("");
   const [searchResults, setSearchResults] = useState<UserInfo[]>([]);
   const [isSearchingChannels, setIsSearchingChannels] = useState(false);
 
@@ -39,9 +39,9 @@ export default function Home() {
     const loadData = async () => {
       try {
         const [watchlistRes, settingsRes, historyRes] = await Promise.all([
-          fetch('/api/watchlist'),
-          fetch('/api/settings'),
-          fetch('/api/history/list?limit=3'),
+          fetch("/api/watchlist"),
+          fetch("/api/settings"),
+          fetch("/api/history/list?limit=3"),
         ]);
 
         if (watchlistRes.ok) {
@@ -54,22 +54,23 @@ export default function Home() {
 
         let oneSyncEnabled = false;
         if (settingsRes.ok) {
-          const remoteSettings = (await settingsRes.json()) as ExperienceSettings;
+          const remoteSettings =
+            (await settingsRes.json()) as ExperienceSettings;
           oneSyncEnabled = Boolean(remoteSettings.oneSync);
           setSettings({ oneSync: oneSyncEnabled });
         }
 
         if (oneSyncEnabled) {
-          const subsRes = await fetch('/api/subs');
+          const subsRes = await fetch("/api/subs");
           if (subsRes.ok) {
             setSubs((await subsRes.json()) as SubEntry[]);
           }
         } else {
-          const saved = localStorage.getItem('nsv_subs');
+          const saved = localStorage.getItem("nsv_subs");
           setSubs(saved ? (JSON.parse(saved) as SubEntry[]) : []);
         }
       } catch (error) {
-        console.error('Failed to fetch initial home data', error);
+        console.error("Failed to fetch initial home data", error);
       }
     };
 
@@ -84,8 +85,10 @@ export default function Home() {
       }
 
       try {
-        const logins = subs.map((sub) => sub.login.toLowerCase()).join(',');
-        const res = await fetch(`/api/live/status?logins=${encodeURIComponent(logins)}`);
+        const logins = subs.map((sub) => sub.login.toLowerCase()).join(",");
+        const res = await fetch(
+          `/api/live/status?logins=${encodeURIComponent(logins)}`,
+        );
         if (!res.ok) {
           setLiveStatus({});
           return;
@@ -93,7 +96,7 @@ export default function Home() {
 
         setLiveStatus((await res.json()) as LiveStatusMap);
       } catch (error) {
-        console.error('Failed to fetch live status for subs', error);
+        console.error("Failed to fetch live status for subs", error);
         setLiveStatus({});
       }
     };
@@ -103,13 +106,13 @@ export default function Home() {
 
   const saveSubsLocal = (newSubs: SubEntry[]) => {
     setSubs(newSubs);
-    localStorage.setItem('nsv_subs', JSON.stringify(newSubs));
+    localStorage.setItem("nsv_subs", JSON.stringify(newSubs));
   };
 
   const saveSubServer = async (entry: SubEntry) => {
-    const res = await fetch('/api/subs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/subs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(entry),
     });
 
@@ -123,7 +126,7 @@ export default function Home() {
 
   const removeSubServer = async (login: string) => {
     const res = await fetch(`/api/subs/${encodeURIComponent(login)}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
 
     if (res.ok) {
@@ -133,7 +136,7 @@ export default function Home() {
 
   const removeFromWatchlist = async (vodId: string) => {
     try {
-      const res = await fetch(`/api/watchlist/${vodId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/watchlist/${vodId}`, { method: "DELETE" });
       if (res.ok) {
         setWatchlist((prev) => prev.filter((w) => w.vodId !== vodId));
       }
@@ -149,8 +152,10 @@ export default function Home() {
 
     setIsSearchingChannels(true);
     try {
-      const res = await fetch(`/api/search/channels?q=${encodeURIComponent(query)}`);
-      if (!res.ok) throw new Error('Failed to search channels');
+      const res = await fetch(
+        `/api/search/channels?q=${encodeURIComponent(query)}`,
+      );
+      if (!res.ok) throw new Error("Failed to search channels");
       const data = (await res.json()) as UserInfo[];
       setSearchResults(data);
     } catch (error) {
@@ -166,16 +171,16 @@ export default function Home() {
     if (!username) return;
 
     if (subs.some((sub) => sub.login === username)) {
-      setModalError('Already subbed to this user.');
+      setModalError("Already subbed to this user.");
       return;
     }
 
     setIsSearchingStreamer(true);
-    setModalError('');
+    setModalError("");
 
     try {
       const res = await fetch(`/api/user/${username}`);
-      if (!res.ok) throw new Error('User not found');
+      if (!res.ok) throw new Error("User not found");
       const user = (await res.json()) as UserInfo;
 
       const newSub: SubEntry = {
@@ -191,9 +196,9 @@ export default function Home() {
       }
 
       setShowModal(false);
-      setStreamerInput('');
+      setStreamerInput("");
     } catch (error: any) {
-      setModalError(error?.message || 'Error finding user.');
+      setModalError(error?.message || "Error finding user.");
     } finally {
       setIsSearchingStreamer(false);
     }
@@ -203,7 +208,7 @@ export default function Home() {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!globalThis.confirm('Remove this streamer?')) {
+    if (!globalThis.confirm("Remove this streamer?")) {
       return;
     }
 
@@ -221,10 +226,15 @@ export default function Home() {
         mode="logo"
         title="NoSubVod"
         actions={
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: "flex", gap: "8px" }}>
             <button
               className="action-btn"
-              style={{ width: '40px', height: '40px', padding: 0, borderRadius: '50%' }}
+              style={{
+                width: "40px",
+                height: "40px",
+                padding: 0,
+                borderRadius: "50%",
+              }}
               onClick={() => setShowModal(true)}
               aria-label="Add sub"
               type="button"
@@ -233,8 +243,13 @@ export default function Home() {
             </button>
             <button
               className="secondary-btn"
-              style={{ width: '40px', height: '40px', padding: 0, borderRadius: '50%' }}
-              onClick={() => navigate('/settings')}
+              style={{
+                width: "40px",
+                height: "40px",
+                padding: 0,
+                borderRadius: "50%",
+              }}
+              onClick={() => navigate("/settings")}
               aria-label="Open settings"
               title="Settings"
               type="button"
@@ -254,11 +269,18 @@ export default function Home() {
           handleChannelSearch={handleChannelSearch}
         />
 
-        <MySubsList subs={subs} liveStatus={liveStatus} handleDeleteSub={handleDeleteSub} />
+        <MySubsList
+          subs={subs}
+          liveStatus={liveStatus}
+          handleDeleteSub={handleDeleteSub}
+        />
 
         <HistoryPreview historyPreview={historyPreview} />
 
-        <WatchlistPreview watchlist={watchlist} removeFromWatchlist={removeFromWatchlist} />
+        <WatchlistPreview
+          watchlist={watchlist}
+          removeFromWatchlist={removeFromWatchlist}
+        />
       </div>
 
       {showModal && (
@@ -275,7 +297,7 @@ export default function Home() {
               autoComplete="off"
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === "Enter") {
                   void handleAddSub();
                 }
               }}
@@ -295,7 +317,7 @@ export default function Home() {
                 disabled={isSearchingStreamer}
                 type="button"
               >
-                {isSearchingStreamer ? 'Searching...' : 'Add'}
+                {isSearchingStreamer ? "Searching..." : "Add"}
               </button>
             </div>
           </div>

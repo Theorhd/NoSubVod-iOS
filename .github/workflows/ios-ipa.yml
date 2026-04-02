@@ -5,11 +5,11 @@ on:
   push:
     branches: [dev, main]
     paths:
-      - '.github/workflows/ios-ipa.yml'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'src/**'
-      - 'src-tauri/**'
+      - ".github/workflows/ios-ipa.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "src/**"
+      - "src-tauri/**"
 
 concurrency:
   group: ios-ipa-${{ github.ref }}

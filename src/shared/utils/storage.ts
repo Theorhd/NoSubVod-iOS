@@ -1,7 +1,7 @@
 export const safeStorageGet = (
   storage: Storage,
   key: string,
-  defaultValue: string = ''
+  defaultValue: string = "",
 ): string => {
   try {
     const item = storage.getItem(key);
@@ -12,7 +12,11 @@ export const safeStorageGet = (
   }
 };
 
-export const safeStorageSet = (storage: Storage, key: string, value: string): void => {
+export const safeStorageSet = (
+  storage: Storage,
+  key: string,
+  value: string,
+): void => {
   try {
     storage.setItem(key, value);
   } catch {

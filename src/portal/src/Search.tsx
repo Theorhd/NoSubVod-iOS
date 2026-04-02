@@ -1,18 +1,18 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { UserInfo } from '../../shared/types';
-import { formatViewers } from '../../shared/utils/formatters';
-import { TopBar } from './components/TopBar';
+import React, { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { UserInfo } from "../../shared/types";
+import { formatViewers } from "../../shared/utils/formatters";
+import { TopBar } from "./components/TopBar";
 
 type SearchGame = {
   id: string;
   name: string;
   boxArtURL: string;
-  __typename: 'Game';
+  __typename: "Game";
 };
 
 type SearchUser = UserInfo & {
-  __typename: 'User';
+  __typename: "User";
   stream?: {
     id: string;
     title: string;
@@ -27,19 +27,28 @@ export default function Search() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [query, setQuery] = useState(searchParams.get('q') || '');
+  const [query, setQuery] = useState(searchParams.get("q") || "");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
   const channels = useMemo(
-    () => results.filter((result): result is SearchUser => result.__typename === 'User'),
-    [results]
+    () =>
+      results.filter(
+        (result): result is SearchUser => result.__typename === "User",
+      ),
+    [results],
   );
-  const liveStreams = useMemo(() => channels.filter((user) => user.stream != null), [channels]);
+  const liveStreams = useMemo(
+    () => channels.filter((user) => user.stream != null),
+    [channels],
+  );
   const categories = useMemo(
-    () => results.filter((result): result is SearchGame => result.__typename === 'Game'),
-    [results]
+    () =>
+      results.filter(
+        (result): result is SearchGame => result.__typename === "Game",
+      ),
+    [results],
   );
 
   const handleSearch = async (e: React.SyntheticEvent) => {
@@ -52,12 +61,12 @@ export default function Search() {
 
     try {
       const res = await fetch(`/api/search/global?q=${encodeURIComponent(q)}`);
-      if (!res.ok) throw new Error('Failed to search');
+      if (!res.ok) throw new Error("Failed to search");
       const data = (await res.json()) as SearchResult[];
       setResults(data);
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
-        next.set('q', q);
+        next.set("q", q);
         return next;
       });
     } catch (error) {
@@ -86,8 +95,12 @@ export default function Search() {
                 autoComplete="off"
                 autoFocus
               />
-              <button type="submit" className="action-btn" disabled={isSearching}>
-                {isSearching ? '...' : 'Search'}
+              <button
+                type="submit"
+                className="action-btn"
+                disabled={isSearching}
+              >
+                {isSearching ? "..." : "Search"}
               </button>
             </div>
           </form>
@@ -108,7 +121,7 @@ export default function Search() {
                   className="category-card"
                   onClick={() =>
                     navigate(
-                      `/channel?category=${encodeURIComponent(game.name)}&categoryId=${encodeURIComponent(game.id)}`
+                      `/channel?category=${encodeURIComponent(game.name)}&categoryId=${encodeURIComponent(game.id)}`,
                     )
                   }
                 >
@@ -130,7 +143,7 @@ export default function Search() {
                     <img
                       src={
                         user.stream?.previewImageURL ||
-                        'https://static-cdn.jtvnw.net/ttv-static/404_preview-320x180.jpg'
+                        "https://static-cdn.jtvnw.net/ttv-static/404_preview-320x180.jpg"
                       }
                       alt={user.stream?.title}
                       className="vod-thumb"
@@ -140,7 +153,10 @@ export default function Search() {
                   <div className="vod-body">
                     <div className="vod-owner-row">
                       {user.profileImageURL && (
-                        <img src={user.profileImageURL} alt={user.displayName} />
+                        <img
+                          src={user.profileImageURL}
+                          alt={user.displayName}
+                        />
                       )}
                       <span>{user.displayName}</span>
                     </div>
@@ -149,15 +165,19 @@ export default function Search() {
                         type="button"
                         className="stretched-link"
                         style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'inherit',
-                          font: 'inherit',
+                          background: "none",
+                          border: "none",
+                          color: "inherit",
+                          font: "inherit",
                           padding: 0,
-                          textAlign: 'left',
-                          cursor: 'pointer',
+                          textAlign: "left",
+                          cursor: "pointer",
                         }}
-                        onClick={() => navigate(`/player?live=${encodeURIComponent(user.login)}`)}
+                        onClick={() =>
+                          navigate(
+                            `/player?live=${encodeURIComponent(user.login)}`,
+                          )
+                        }
                       >
                         {user.stream?.title}
                       </button>
@@ -183,7 +203,11 @@ export default function Search() {
                   <button
                     type="button"
                     className="sub-link"
-                    onClick={() => navigate(`/channel?user=${encodeURIComponent(user.login)}`)}
+                    onClick={() =>
+                      navigate(
+                        `/channel?user=${encodeURIComponent(user.login)}`,
+                      )
+                    }
                   >
                     <img src={user.profileImageURL} alt={user.displayName} />
                     <div className="name">{user.displayName}</div>

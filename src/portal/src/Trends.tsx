@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { VOD } from '../../shared/types';
-import { useInfiniteScroll } from './hooks/useInfiniteScroll';
-import { VODCard } from './components/VODCard';
-import { TopBar } from './components/TopBar';
+import React, { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { VOD } from "../../shared/types";
+import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
+import { VODCard } from "./components/VODCard";
+import { TopBar } from "./components/TopBar";
 
 const PAGE_SIZE = 24;
 
@@ -16,16 +16,16 @@ export default function Trends() {
   const [vods, setVods] = useState<VOD[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // ── Pagination state ──
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [allVods, setAllVods] = useState<VOD[]>([]);
 
   useEffect(() => {
-    fetch('/api/trends')
+    fetch("/api/trends")
       .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch trending VODs');
+        if (!res.ok) throw new Error("Failed to fetch trending VODs");
         return res.json();
       })
       .then((data: VOD[]) => {
@@ -64,7 +64,9 @@ export default function Trends() {
       <TopBar mode="back" title="Trending VODs" />
 
       <div className="container">
-        {isInitialLoading && <div className="status-line">Loading trending VODs...</div>}
+        {isInitialLoading && (
+          <div className="status-line">Loading trending VODs...</div>
+        )}
         {error && <div className="error-text">{error}</div>}
 
         {!isInitialLoading && !error && vods.length === 0 && (
@@ -84,7 +86,11 @@ export default function Trends() {
           </div>
         )}
 
-        <div ref={lastElementRef} style={{ height: '20px', width: '100%' }} aria-hidden="true" />
+        <div
+          ref={lastElementRef}
+          style={{ height: "20px", width: "100%" }}
+          aria-hidden="true"
+        />
         {isLoadingMore && <div className="status-line">Loading more...</div>}
       </div>
     </>

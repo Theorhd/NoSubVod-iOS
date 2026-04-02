@@ -80,21 +80,21 @@ pub fn run() {
     }
 
     builder = builder.setup(|app| {
-            // Shared state is initialized on every platform so frontend can use
-            // invoke-based APIs even when no HTTP server is running.
-            let app_data_dir = app
-                .path()
-                .app_data_dir()
-                .map_err(|e| tauri::Error::from(std::io::Error::other(e.to_string())))?;
+        // Shared state is initialized on every platform so frontend can use
+        // invoke-based APIs even when no HTTP server is running.
+        let app_data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| tauri::Error::from(std::io::Error::other(e.to_string())))?;
 
-            let state = Arc::new(
-                AppState::new(app_data_dir)
-                    .map_err(|e| tauri::Error::from(std::io::Error::other(e.to_string())))?,
-            );
-            app.manage(state.clone());
+        let state = Arc::new(
+            AppState::new(app_data_dir)
+                .map_err(|e| tauri::Error::from(std::io::Error::other(e.to_string())))?,
+        );
+        app.manage(state.clone());
 
-            #[cfg(not(mobile))]
-            {
+        #[cfg(not(mobile))]
+        {
             // ── Tray icon ──────────────────────────────────────────────────
             let show_item = MenuItem::with_id(app, "show", "Show App", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit NoSubVOD", true, None::<&str>)?;
@@ -144,10 +144,10 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 server::start_server(state, app_handle).await;
             });
-            }
+        }
 
-            Ok(())
-        });
+        Ok(())
+    });
 
     let builder = builder.invoke_handler(tauri::generate_handler![
         commands::internal_api_request,

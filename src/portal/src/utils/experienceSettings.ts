@@ -1,14 +1,14 @@
-import { ExperienceSettings } from '../../../shared/types';
+import { ExperienceSettings } from "../../../shared/types";
 
-const QUALITY_OPTIONS = new Set(['auto', '480', '720', '1080']);
+const QUALITY_OPTIONS = new Set(["auto", "480", "720", "1080"]);
 
 function sanitizeQuality(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
+  if (typeof value !== "string") return undefined;
   return QUALITY_OPTIONS.has(value) ? value : undefined;
 }
 
 export function normalizeExperienceSettings(
-  input: Partial<ExperienceSettings> | null | undefined
+  input: Partial<ExperienceSettings> | null | undefined,
 ): Partial<ExperienceSettings> {
   if (!input) return {};
 
@@ -16,7 +16,7 @@ export function normalizeExperienceSettings(
   const defaultQuality =
     sanitizeQuality(input.defaultVideoQuality) ??
     sanitizeQuality(input.preferredVideoQuality) ??
-    'auto';
+    "auto";
 
   normalized.defaultVideoQuality = defaultQuality;
   return normalized;

@@ -132,7 +132,10 @@ pub async fn internal_api_request(
         .await
         .map_err(|e| format!("Failed to read response body: {e}"))?;
 
-    let content_type_ref = content_type.as_deref().unwrap_or_default().to_ascii_lowercase();
+    let content_type_ref = content_type
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     let is_textual = content_type_ref.starts_with("text/")
         || content_type_ref.contains("json")
         || content_type_ref.contains("javascript")
@@ -329,4 +332,3 @@ async fn spawn_ffmpeg_download(job: FfmpegDownloadJob) {
         }
     }
 }
-

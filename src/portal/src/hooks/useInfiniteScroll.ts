@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef } from "react";
 
 type UseInfiniteScrollProps = {
   isLoading: boolean;
@@ -11,7 +11,7 @@ export const useInfiniteScroll = ({
   isLoading,
   hasMore,
   onLoadMore,
-  rootMargin = '400px',
+  rootMargin = "400px",
 }: UseInfiniteScrollProps) => {
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -30,12 +30,12 @@ export const useInfiniteScroll = ({
               onLoadMore();
             }
           },
-          { rootMargin }
+          { rootMargin },
         );
         observerRef.current.observe(node);
       }
     },
-    [isLoading, hasMore, onLoadMore, rootMargin]
+    [isLoading, hasMore, onLoadMore, rootMargin],
   );
 
   return { lastElementRef };

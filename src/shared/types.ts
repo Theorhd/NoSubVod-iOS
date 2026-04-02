@@ -42,7 +42,7 @@ export interface Extension {
 
 export interface ExtensionContribution {
   id: string;
-  type: 'nav' | 'route' | 'settings' | 'player-overlay';
+  type: "nav" | "route" | "settings" | "player-overlay";
   label?: string;
   path?: string;
   icon?: string;
@@ -102,7 +102,7 @@ export interface ExperienceSettings {
   oneSync: boolean;
   adblockEnabled?: boolean;
   adblockProxy?: string;
-  adblockProxyMode?: 'auto' | 'manual';
+  adblockProxyMode?: "auto" | "manual";
   defaultVideoQuality?: string;
   // Legacy fields kept for backward compatibility with older persisted settings.
   minVideoQuality?: string;
@@ -168,7 +168,7 @@ export interface LiveStreamsPage {
 
 export type LiveStatusMap = Record<string, LiveStream>;
 
-export type ScreenShareSourceType = 'browser' | 'application';
+export type ScreenShareSourceType = "browser" | "application";
 
 export type ScreenShareSessionState = {
   active: boolean;
@@ -194,7 +194,13 @@ export interface DownloadedFile {
 export interface ActiveDownload {
   vod_id: string;
   title: string;
-  status: 'pending' | 'downloading' | 'merging' | 'completed' | 'failed' | (string & {});
+  status:
+    | "pending"
+    | "downloading"
+    | "merging"
+    | "completed"
+    | "failed"
+    | (string & {});
   progress: number;
   current_time: string;
   total_duration: number;
@@ -206,18 +212,18 @@ export type SignalPayload = {
 };
 
 export type RemoteInputPayload = {
-  kind: 'pointer' | 'keyboard';
-  action: 'move' | 'down' | 'up' | 'wheel';
+  kind: "pointer" | "keyboard";
+  action: "move" | "down" | "up" | "wheel";
   x?: number;
   y?: number;
-  button?: 'left' | 'middle' | 'right';
+  button?: "left" | "middle" | "right";
   key?: string;
   deltaX?: number;
   deltaY?: number;
 };
 
 export type RemoteControlPayload = {
-  command: 'play' | 'pause' | 'seek' | 'volume' | 'mute';
+  command: "play" | "pause" | "seek" | "volume" | "mute";
   value?: number;
 };
 

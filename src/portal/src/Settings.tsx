@@ -1,27 +1,39 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { ExperienceSettings, ProxyInfo, TrustedDevice, TwitchStatus } from '../../shared/types';
-import { TopBar } from './components/TopBar';
-import { useExtensions } from './ExtensionContext';
-import { normalizeExperienceSettings } from './utils/experienceSettings';
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  ExperienceSettings,
+  ProxyInfo,
+  TrustedDevice,
+  TwitchStatus,
+} from "../../shared/types";
+import { TopBar } from "./components/TopBar";
+import { useExtensions } from "./ExtensionContext";
+import { normalizeExperienceSettings } from "./utils/experienceSettings";
 
 const defaultSettings: ExperienceSettings = {
   oneSync: false,
   adblockEnabled: false,
-  adblockProxy: '',
-  adblockProxyMode: 'auto',
-  defaultVideoQuality: 'auto',
+  adblockProxy: "",
+  adblockProxyMode: "auto",
+  defaultVideoQuality: "auto",
   launchAtLogin: false,
   enabledExtensions: [],
 };
 
 interface SectionProps {
   readonly settings: ExperienceSettings;
-  readonly setSettings: React.Dispatch<React.SetStateAction<ExperienceSettings>>;
+  readonly setSettings: React.Dispatch<
+    React.SetStateAction<ExperienceSettings>
+  >;
   readonly setSuccess: (val: string) => void;
 }
 
 const ServerExperienceSection = React.memo(
-  ({ settings, loading, setSettings, setSuccess }: SectionProps & { loading: boolean }) => (
+  ({
+    settings,
+    loading,
+    setSettings,
+    setSuccess,
+  }: SectionProps & { loading: boolean }) => (
     <div className="card settings-card">
       <h2>Server Experience</h2>
       <p className="settings-description">
@@ -38,7 +50,9 @@ const ServerExperienceSection = React.memo(
                   OneSync
                 </label>
               </strong>
-              <small>Synchronise les données entre devices (subs, historique)</small>
+              <small>
+                Synchronise les données entre devices (subs, historique)
+              </small>
             </span>
             <input
               id="oneSyncToggle"
@@ -46,7 +60,7 @@ const ServerExperienceSection = React.memo(
               checked={settings.oneSync}
               onChange={(e) => {
                 setSettings((prev) => ({ ...prev, oneSync: e.target.checked }));
-                setSuccess('');
+                setSuccess("");
               }}
             />
           </div>
@@ -58,33 +72,41 @@ const ServerExperienceSection = React.memo(
                   Lancer avec l&apos;OS
                 </label>
               </strong>
-              <small>Démarre NoSubVOD automatiquement à l&apos;ouverture de session</small>
+              <small>
+                Démarre NoSubVOD automatiquement à l&apos;ouverture de session
+              </small>
             </span>
             <input
               id="launchAtLoginToggle"
               type="checkbox"
               checked={settings.launchAtLogin}
               onChange={(e) => {
-                setSettings((prev) => ({ ...prev, launchAtLogin: e.target.checked }));
-                setSuccess('');
+                setSettings((prev) => ({
+                  ...prev,
+                  launchAtLogin: e.target.checked,
+                }));
+                setSuccess("");
               }}
             />
           </div>
         </>
       )}
     </div>
-  )
+  ),
 );
-ServerExperienceSection.displayName = 'ServerExperienceSection';
+ServerExperienceSection.displayName = "ServerExperienceSection";
 
 const ExtensionsSection = React.memo(() => {
-  const { extensions, enabledExtensions, toggleExtension, isLoading } = useExtensions();
+  const { extensions, enabledExtensions, toggleExtension, isLoading } =
+    useExtensions();
 
   if (isLoading) {
     return (
       <div className="card settings-card">
         <h2>Extensions</h2>
-        <div className="trusted-devices-empty">Chargement des extensions...</div>
+        <div className="trusted-devices-empty">
+          Chargement des extensions...
+        </div>
       </div>
     );
   }
@@ -92,10 +114,13 @@ const ExtensionsSection = React.memo(() => {
   return (
     <div className="card settings-card">
       <h2>Extensions</h2>
-      <p className="settings-description">Activez ou désactivez vos extensions installées.</p>
+      <p className="settings-description">
+        Activez ou désactivez vos extensions installées.
+      </p>
       {extensions.length === 0 ? (
         <div className="trusted-devices-empty">
-          Aucune extension installée. Ajoutez un dossier d&apos;extension valide pour la gérer ici.
+          Aucune extension installée. Ajoutez un dossier d&apos;extension valide
+          pour la gérer ici.
         </div>
       ) : (
         <>
@@ -107,71 +132,83 @@ const ExtensionsSection = React.memo(() => {
                   <div className="trusted-device-header">
                     <div className="trusted-device-id">
                       <strong>{ext.manifest.name}</strong>
-                      <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                        v{ext.manifest.version} par {ext.manifest.author || 'Inconnu'}
+                      <div style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+                        v{ext.manifest.version} par{" "}
+                        {ext.manifest.author || "Inconnu"}
                       </div>
                     </div>
                     <label className="trusted-device-toggle">
                       <span className="trusted-device-toggle-label">
-                        {isEnabled ? 'Active' : 'Inactive'}
+                        {isEnabled ? "Active" : "Inactive"}
                       </span>
                       <input
                         type="checkbox"
                         checked={isEnabled}
-                        onChange={(e) => toggleExtension(ext.manifest.id, e.target.checked)}
+                        onChange={(e) =>
+                          toggleExtension(ext.manifest.id, e.target.checked)
+                        }
                       />
                     </label>
                   </div>
                   {ext.manifest.description && (
-                    <div className="trusted-device-meta">{ext.manifest.description}</div>
+                    <div className="trusted-device-meta">
+                      {ext.manifest.description}
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
-          <p className="help-text mt-2" style={{ fontStyle: 'italic' }}>
-            Note: Désactiver une extension peut nécessiter un rechargement de l&apos;application.
+          <p className="help-text mt-2" style={{ fontStyle: "italic" }}>
+            Note: Désactiver une extension peut nécessiter un rechargement de
+            l&apos;application.
           </p>
         </>
       )}
     </div>
   );
 });
-ExtensionsSection.displayName = 'ExtensionsSection';
+ExtensionsSection.displayName = "ExtensionsSection";
 
-const VideoPlayerSection = React.memo(({ settings, setSettings, setSuccess }: SectionProps) => (
-  <div className="card settings-card">
-    <h2>Video Player</h2>
-    <p className="settings-description">
-      Configure la qualité demandée au démarrage. Le changement de qualité reste manuel dans le
-      player.
-    </p>
+const VideoPlayerSection = React.memo(
+  ({ settings, setSettings, setSuccess }: SectionProps) => (
+    <div className="card settings-card">
+      <h2>Video Player</h2>
+      <p className="settings-description">
+        Configure la qualité demandée au démarrage. Le changement de qualité
+        reste manuel dans le player.
+      </p>
 
-    <div className="settings-group">
-      <label htmlFor="defaultVideoQuality" className="settings-label">
-        Qualité Par Défaut
-      </label>
-      <select
-        id="defaultVideoQuality"
-        className="settings-select"
-        value={settings.defaultVideoQuality || 'auto'}
-        onChange={(e) => {
-          setSettings((prev) => ({ ...prev, defaultVideoQuality: e.target.value }));
-          setSuccess('');
-        }}
-      >
-        <option value="auto">Automatique</option>
-        <option value="480">480p</option>
-        <option value="720">720p</option>
-        <option value="1080">1080p</option>
-      </select>
-      <small className="help-text">
-        La vidéo tentera de démarrer avec cette résolution si elle est disponible.
-      </small>
+      <div className="settings-group">
+        <label htmlFor="defaultVideoQuality" className="settings-label">
+          Qualité Par Défaut
+        </label>
+        <select
+          id="defaultVideoQuality"
+          className="settings-select"
+          value={settings.defaultVideoQuality || "auto"}
+          onChange={(e) => {
+            setSettings((prev) => ({
+              ...prev,
+              defaultVideoQuality: e.target.value,
+            }));
+            setSuccess("");
+          }}
+        >
+          <option value="auto">Automatique</option>
+          <option value="480">480p</option>
+          <option value="720">720p</option>
+          <option value="1080">1080p</option>
+        </select>
+        <small className="help-text">
+          La vidéo tentera de démarrer avec cette résolution si elle est
+          disponible.
+        </small>
+      </div>
     </div>
-  </div>
-));
-VideoPlayerSection.displayName = 'VideoPlayerSection';
+  ),
+);
+VideoPlayerSection.displayName = "VideoPlayerSection";
 
 const AdblockSection = React.memo(
   ({
@@ -180,18 +217,22 @@ const AdblockSection = React.memo(
     setSuccess,
     proxies,
     activeProxy,
-  }: SectionProps & { proxies: ProxyInfo[]; activeProxy: ProxyInfo | null }) => {
+  }: SectionProps & {
+    proxies: ProxyInfo[];
+    activeProxy: ProxyInfo | null;
+  }) => {
     const getProxyStatusClass = (status?: string) => {
-      if (status === 'success') return ' status-success';
-      if (status === 'error') return ' status-error';
-      return '';
+      if (status === "success") return " status-success";
+      if (status === "error") return " status-error";
+      return "";
     };
 
     return (
       <div className="card settings-card">
         <h2>Adblock Proxies</h2>
         <p className="settings-description">
-          Utilise un proxy tiers pour contourner les pubs Twitch sur les lives et les VODs.
+          Utilise un proxy tiers pour contourner les pubs Twitch sur les lives
+          et les VODs.
         </p>
 
         <div className="toggle-row">
@@ -201,15 +242,20 @@ const AdblockSection = React.memo(
                 Activer le Proxy Adblock
               </label>
             </strong>
-            <small>Désactivé par défaut. Activez-le si vous avez trop de pubs.</small>
+            <small>
+              Désactivé par défaut. Activez-le si vous avez trop de pubs.
+            </small>
           </span>
           <input
             id="adblockEnabled"
             type="checkbox"
             checked={settings.adblockEnabled}
             onChange={(e) => {
-              setSettings((prev) => ({ ...prev, adblockEnabled: e.target.checked }));
-              setSuccess('');
+              setSettings((prev) => ({
+                ...prev,
+                adblockEnabled: e.target.checked,
+              }));
+              setSuccess("");
             }}
           />
         </div>
@@ -223,10 +269,13 @@ const AdblockSection = React.memo(
               <select
                 id="adblockProxyMode"
                 className="settings-select"
-                value={settings.adblockProxyMode || 'auto'}
+                value={settings.adblockProxyMode || "auto"}
                 onChange={(e) => {
-                  setSettings((prev) => ({ ...prev, adblockProxyMode: e.target.value as any }));
-                  setSuccess('');
+                  setSettings((prev) => ({
+                    ...prev,
+                    adblockProxyMode: e.target.value as any,
+                  }));
+                  setSuccess("");
                 }}
               >
                 <option value="auto">Automatique (recommandé)</option>
@@ -234,7 +283,7 @@ const AdblockSection = React.memo(
               </select>
             </div>
 
-            {settings.adblockProxyMode === 'manual' && (
+            {settings.adblockProxyMode === "manual" && (
               <div className="settings-group mt-2">
                 <label htmlFor="adblockProxy" className="settings-label">
                   Proxy Manuel
@@ -242,10 +291,13 @@ const AdblockSection = React.memo(
                 <select
                   id="adblockProxy"
                   className="settings-select"
-                  value={settings.adblockProxy || ''}
+                  value={settings.adblockProxy || ""}
                   onChange={(e) => {
-                    setSettings((prev) => ({ ...prev, adblockProxy: e.target.value }));
-                    setSuccess('');
+                    setSettings((prev) => ({
+                      ...prev,
+                      adblockProxy: e.target.value,
+                    }));
+                    setSuccess("");
                   }}
                 >
                   <option value="" disabled>
@@ -262,15 +314,21 @@ const AdblockSection = React.memo(
 
             {activeProxy && (
               <div className="settings-active-proxy">
-                <strong className="settings-active-proxy-title">Proxy Actif :</strong>
+                <strong className="settings-active-proxy-title">
+                  Proxy Actif :
+                </strong>
                 <div className="settings-active-proxy-row">
                   <span
                     className={`settings-active-proxy-dot${getProxyStatusClass((activeProxy as any).status)}`}
                   />
-                  <span className="settings-active-proxy-name">{activeProxy.url}</span>
+                  <span className="settings-active-proxy-name">
+                    {activeProxy.url}
+                  </span>
                 </div>
                 {activeProxy.ping !== undefined && (
-                  <div className="settings-active-proxy-meta">Ping: {activeProxy.ping}ms</div>
+                  <div className="settings-active-proxy-meta">
+                    Ping: {activeProxy.ping}ms
+                  </div>
                 )}
               </div>
             )}
@@ -278,9 +336,9 @@ const AdblockSection = React.memo(
         )}
       </div>
     );
-  }
+  },
 );
-AdblockSection.displayName = 'AdblockSection';
+AdblockSection.displayName = "AdblockSection";
 
 const DownloadsSection = React.memo(
   ({
@@ -301,17 +359,20 @@ const DownloadsSection = React.memo(
           <input
             id="downloadLocalPath"
             type="text"
-            value={settings.downloadLocalPath || ''}
+            value={settings.downloadLocalPath || ""}
             placeholder="ex: C:\Downloads\NoSubVOD"
             onChange={(e) => {
-              setSettings((prev) => ({ ...prev, downloadLocalPath: e.target.value }));
-              setSuccess('');
+              setSettings((prev) => ({
+                ...prev,
+                downloadLocalPath: e.target.value,
+              }));
+              setSuccess("");
             }}
             className="settings-select field-grow"
           />
           <button
             type="button"
-            onClick={() => selectFolder('downloadLocalPath')}
+            onClick={() => selectFolder("downloadLocalPath")}
             className="action-btn"
           >
             Parcourir
@@ -327,17 +388,20 @@ const DownloadsSection = React.memo(
           <input
             id="downloadNetworkSharedPath"
             type="text"
-            value={settings.downloadNetworkSharedPath || ''}
+            value={settings.downloadNetworkSharedPath || ""}
             placeholder="ex: \\NAS\Downloads\NoSubVOD"
             onChange={(e) => {
-              setSettings((prev) => ({ ...prev, downloadNetworkSharedPath: e.target.value }));
-              setSuccess('');
+              setSettings((prev) => ({
+                ...prev,
+                downloadNetworkSharedPath: e.target.value,
+              }));
+              setSuccess("");
             }}
             className="settings-select field-grow"
           />
           <button
             type="button"
-            onClick={() => selectFolder('downloadNetworkSharedPath')}
+            onClick={() => selectFolder("downloadNetworkSharedPath")}
             className="action-btn"
           >
             Parcourir
@@ -345,9 +409,9 @@ const DownloadsSection = React.memo(
         </div>
       </div>
     </div>
-  )
+  ),
 );
-DownloadsSection.displayName = 'DownloadsSection';
+DownloadsSection.displayName = "DownloadsSection";
 
 const TwitchAccountSection = React.memo(
   ({
@@ -366,14 +430,20 @@ const TwitchAccountSection = React.memo(
       </p>
 
       {!twitchStatus?.clientConfigured && (
-        <div className="twitch-warning">Configuration Twitch incomplète (.env).</div>
+        <div className="twitch-warning">
+          Configuration Twitch incomplète (.env).
+        </div>
       )}
 
       {twitchStatus?.linked ? (
         <div>
           <div className="twitch-user-row">
             {twitchStatus.userAvatar && (
-              <img src={twitchStatus.userAvatar} alt="Avatar" className="twitch-avatar" />
+              <img
+                src={twitchStatus.userAvatar}
+                alt="Avatar"
+                className="twitch-avatar"
+              />
             )}
             <div>
               <div className="twitch-display-name">
@@ -399,7 +469,9 @@ const TwitchAccountSection = React.memo(
                     Importer les chaînes suivies
                   </label>
                 </strong>
-                <small>Ajoute auto. tes follows Twitch dans tes Subs NoSubVOD</small>
+                <small>
+                  Ajoute auto. tes follows Twitch dans tes Subs NoSubVOD
+                </small>
               </span>
               <input
                 id="importFollowsToggle"
@@ -413,107 +485,125 @@ const TwitchAccountSection = React.memo(
               disabled={twitchImporting}
               className="action-btn secondary-btn soft-outline-btn"
             >
-              {twitchImporting ? 'Importation...' : 'Importer maintenant'}
+              {twitchImporting ? "Importation..." : "Importer maintenant"}
             </button>
           </div>
         </div>
       ) : (
         <button
           onClick={linkTwitch}
-          disabled={twitchPolling || (twitchStatus !== null && !twitchStatus.clientConfigured)}
+          disabled={
+            twitchPolling ||
+            (twitchStatus !== null && !twitchStatus.clientConfigured)
+          }
           className="action-btn twitch-connect-btn"
         >
-          {twitchPolling ? 'En attente...' : 'Lier mon compte Twitch'}
+          {twitchPolling ? "En attente..." : "Lier mon compte Twitch"}
         </button>
       )}
     </div>
-  )
+  ),
 );
-TwitchAccountSection.displayName = 'TwitchAccountSection';
+TwitchAccountSection.displayName = "TwitchAccountSection";
 
-const TrustedDevicesSection = React.memo(({ devices, pendingDeviceId, onToggleTrusted }: any) => (
-  <div className="card settings-card">
-    <h2>Trusted Devices</h2>
-    <p className="settings-description">Gérez l&apos;accès sans token pour vos appareils.</p>
+const TrustedDevicesSection = React.memo(
+  ({ devices, pendingDeviceId, onToggleTrusted }: any) => (
+    <div className="card settings-card">
+      <h2>Trusted Devices</h2>
+      <p className="settings-description">
+        Gérez l&apos;accès sans token pour vos appareils.
+      </p>
 
-    {devices.length === 0 ? (
-      <div className="trusted-devices-empty">Aucun appareil détecté.</div>
-    ) : (
-      <div className="trusted-devices-list">
-        {devices.map((device: TrustedDevice) => (
-          <div key={device.deviceId} className="trusted-device-item">
-            <div className="trusted-device-header">
-              <div className="trusted-device-id">{device.deviceId}</div>
-              <label className="trusted-device-toggle">
-                <span className="trusted-device-toggle-label">Trusted</span>
-                <input
-                  type="checkbox"
-                  checked={device.trusted}
-                  disabled={pendingDeviceId === device.deviceId}
-                  onChange={(e) => onToggleTrusted(device.deviceId, e.target.checked)}
-                />
-              </label>
+      {devices.length === 0 ? (
+        <div className="trusted-devices-empty">Aucun appareil détecté.</div>
+      ) : (
+        <div className="trusted-devices-list">
+          {devices.map((device: TrustedDevice) => (
+            <div key={device.deviceId} className="trusted-device-item">
+              <div className="trusted-device-header">
+                <div className="trusted-device-id">{device.deviceId}</div>
+                <label className="trusted-device-toggle">
+                  <span className="trusted-device-toggle-label">Trusted</span>
+                  <input
+                    type="checkbox"
+                    checked={device.trusted}
+                    disabled={pendingDeviceId === device.deviceId}
+                    onChange={(e) =>
+                      onToggleTrusted(device.deviceId, e.target.checked)
+                    }
+                  />
+                </label>
+              </div>
+              <div className="trusted-device-meta">
+                Dernier accès: {new Date(device.lastSeenAt).toLocaleString()}
+              </div>
             </div>
-            <div className="trusted-device-meta">
-              Dernier accès: {new Date(device.lastSeenAt).toLocaleString()}
-            </div>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-));
-TrustedDevicesSection.displayName = 'TrustedDevicesSection';
-
-const UpdaterSection = React.memo(({ settings, setSettings, setSuccess }: SectionProps) => (
-  <div className="card settings-card">
-    <h2>Mises à jour</h2>
-    <p className="settings-description">Contrôlez la façon dont NoSubVOD se met à jour.</p>
-    <div className="toggle-row">
-      <span>
-        <strong>
-          <label htmlFor="autoUpdateToggle" className="mb-0">
-            Mise à jour automatique
-          </label>
-        </strong>
-        <small>Vérifier, télécharger et installer automatiquement les nouvelles versions</small>
-      </span>
-      <input
-        id="autoUpdateToggle"
-        type="checkbox"
-        checked={settings.autoUpdate || false}
-        onChange={(e) => {
-          setSettings((prev) => ({ ...prev, autoUpdate: e.target.checked }));
-          setSuccess('');
-        }}
-      />
+          ))}
+        </div>
+      )}
     </div>
-  </div>
-));
-UpdaterSection.displayName = 'UpdaterSection';
+  ),
+);
+TrustedDevicesSection.displayName = "TrustedDevicesSection";
+
+const UpdaterSection = React.memo(
+  ({ settings, setSettings, setSuccess }: SectionProps) => (
+    <div className="card settings-card">
+      <h2>Mises à jour</h2>
+      <p className="settings-description">
+        Contrôlez la façon dont NoSubVOD se met à jour.
+      </p>
+      <div className="toggle-row">
+        <span>
+          <strong>
+            <label htmlFor="autoUpdateToggle" className="mb-0">
+              Mise à jour automatique
+            </label>
+          </strong>
+          <small>
+            Vérifier, télécharger et installer automatiquement les nouvelles
+            versions
+          </small>
+        </span>
+        <input
+          id="autoUpdateToggle"
+          type="checkbox"
+          checked={settings.autoUpdate || false}
+          onChange={(e) => {
+            setSettings((prev) => ({ ...prev, autoUpdate: e.target.checked }));
+            setSuccess("");
+          }}
+        />
+      </div>
+    </div>
+  ),
+);
+UpdaterSection.displayName = "UpdaterSection";
 
 export default function Settings() {
   const [settings, setSettings] = useState<ExperienceSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [proxies, setProxies] = useState<ProxyInfo[]>([]);
   const [activeProxy, setActiveProxy] = useState<ProxyInfo | null>(null);
   const [twitchStatus, setTwitchStatus] = useState<TwitchStatus | null>(null);
   const [twitchPolling, setTwitchPolling] = useState(false);
   const [twitchImporting, setTwitchImporting] = useState(false);
   const [trustedDevices, setTrustedDevices] = useState<TrustedDevice[]>([]);
-  const [trustedDevicePendingId, setTrustedDevicePendingId] = useState<string | null>(null);
+  const [trustedDevicePendingId, setTrustedDevicePendingId] = useState<
+    string | null
+  >(null);
 
   const fetchSettingsData = useCallback(async () => {
     try {
       const [sets, ads, pxs, tw, devs] = await Promise.all([
-        fetch('/api/settings').then((r) => (r.ok ? r.json() : defaultSettings)),
-        fetch('/api/adblock/status').then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/adblock/proxies').then((r) => (r.ok ? r.json() : [])),
-        fetch('/api/auth/twitch/status').then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/trusted-devices').then((r) => (r.ok ? r.json() : [])),
+        fetch("/api/settings").then((r) => (r.ok ? r.json() : defaultSettings)),
+        fetch("/api/adblock/status").then((r) => (r.ok ? r.json() : null)),
+        fetch("/api/adblock/proxies").then((r) => (r.ok ? r.json() : [])),
+        fetch("/api/auth/twitch/status").then((r) => (r.ok ? r.json() : null)),
+        fetch("/api/trusted-devices").then((r) => (r.ok ? r.json() : [])),
       ]);
       setSettings({ ...defaultSettings, ...normalizeExperienceSettings(sets) });
       setActiveProxy(ads);
@@ -530,11 +620,11 @@ export default function Settings() {
   useEffect(() => {
     void fetchSettingsData();
     const interval = setInterval(async () => {
-      if (document.visibilityState !== 'visible') return;
+      if (document.visibilityState !== "visible") return;
       try {
         const [ads, pxs] = await Promise.all([
-          fetch('/api/adblock/status').then((r) => (r.ok ? r.json() : null)),
-          fetch('/api/adblock/proxies').then((r) => (r.ok ? r.json() : [])),
+          fetch("/api/adblock/status").then((r) => (r.ok ? r.json() : null)),
+          fetch("/api/adblock/proxies").then((r) => (r.ok ? r.json() : [])),
         ]);
         setActiveProxy(ads);
         setProxies(pxs);
@@ -547,16 +637,16 @@ export default function Settings() {
 
   const saveSettings = useCallback(async () => {
     setSaving(true);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
     try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
       });
-      if (!res.ok) throw new Error('Failed to save settings');
-      setSuccess('Settings saved.');
+      if (!res.ok) throw new Error("Failed to save settings");
+      setSuccess("Settings saved.");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -566,26 +656,26 @@ export default function Settings() {
 
   const selectFolder = useCallback(async (field: keyof ExperienceSettings) => {
     try {
-      const res = await fetch('/api/system/dialog/folder');
+      const res = await fetch("/api/system/dialog/folder");
       if (!res.ok) return;
       const { path } = await res.json();
       if (path) setSettings((prev) => ({ ...prev, [field]: path }));
     } catch (e) {
-      console.error('Failed to open dialog', e);
+      console.error("Failed to open dialog", e);
     }
   }, []);
 
   const linkTwitch = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/twitch/start');
+      const res = await fetch("/api/auth/twitch/start");
       if (!res.ok) return;
       const { authUrl } = await res.json();
-      window.open(authUrl, '_blank', 'noopener,noreferrer');
+      window.open(authUrl, "_blank", "noopener,noreferrer");
       setTwitchPolling(true);
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
-        const r = await fetch('/api/auth/twitch/status');
+        const r = await fetch("/api/auth/twitch/status");
         if (!r.ok || attempts >= 60) {
           clearInterval(poll);
           setTwitchPolling(false);
@@ -599,26 +689,26 @@ export default function Settings() {
         }
       }, 2000);
     } catch (e) {
-      console.error('Failed to start Twitch auth', e);
+      console.error("Failed to start Twitch auth", e);
     }
   }, []);
 
   const unlinkTwitch = useCallback(async () => {
     try {
-      await fetch('/api/auth/twitch', { method: 'DELETE' });
-      const res = await fetch('/api/auth/twitch/status');
+      await fetch("/api/auth/twitch", { method: "DELETE" });
+      const res = await fetch("/api/auth/twitch/status");
       if (res.ok) setTwitchStatus(await res.json());
     } catch (e) {
-      console.error('Failed to unlink Twitch', e);
+      console.error("Failed to unlink Twitch", e);
     }
   }, []);
 
   const importFollows = useCallback(async () => {
     setTwitchImporting(true);
     try {
-      await fetch('/api/auth/twitch/import-follows', { method: 'POST' });
+      await fetch("/api/auth/twitch/import-follows", { method: "POST" });
     } catch (e) {
-      console.error('Failed to import follows', e);
+      console.error("Failed to import follows", e);
     } finally {
       setTwitchImporting(false);
     }
@@ -626,36 +716,42 @@ export default function Settings() {
 
   const setImportFollowsSetting = useCallback(async (value: boolean) => {
     try {
-      await fetch('/api/auth/twitch/import-follows-setting', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/auth/twitch/import-follows-setting", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: value }),
       });
-      const res = await fetch('/api/auth/twitch/status');
+      const res = await fetch("/api/auth/twitch/status");
       if (res.ok) setTwitchStatus(await res.json());
     } catch (e) {
-      console.error('Failed to update import follows setting', e);
+      console.error("Failed to update import follows setting", e);
     }
   }, []);
 
-  const onToggleTrusted = useCallback(async (deviceId: string, trusted: boolean) => {
-    setTrustedDevicePendingId(deviceId);
-    try {
-      const res = await fetch(`/api/trusted-devices/${encodeURIComponent(deviceId)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trusted }),
-      });
-      if (!res.ok) throw new Error('Failed to update trusted device');
-      const devsRes = await fetch('/api/trusted-devices');
-      if (devsRes.ok) setTrustedDevices(await devsRes.json());
-      setSuccess('Trusted devices mis à jour.');
-    } catch (e: any) {
-      setError(e?.message || 'Failed to update trusted device');
-    } finally {
-      setTrustedDevicePendingId(null);
-    }
-  }, []);
+  const onToggleTrusted = useCallback(
+    async (deviceId: string, trusted: boolean) => {
+      setTrustedDevicePendingId(deviceId);
+      try {
+        const res = await fetch(
+          `/api/trusted-devices/${encodeURIComponent(deviceId)}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ trusted }),
+          },
+        );
+        if (!res.ok) throw new Error("Failed to update trusted device");
+        const devsRes = await fetch("/api/trusted-devices");
+        if (devsRes.ok) setTrustedDevices(await devsRes.json());
+        setSuccess("Trusted devices mis à jour.");
+      } catch (e: any) {
+        setError(e?.message || "Failed to update trusted device");
+      } finally {
+        setTrustedDevicePendingId(null);
+      }
+    },
+    [],
+  );
 
   return (
     <>
@@ -668,7 +764,11 @@ export default function Settings() {
           setSuccess={setSuccess}
         />
         <ExtensionsSection />
-        <VideoPlayerSection settings={settings} setSettings={setSettings} setSuccess={setSuccess} />
+        <VideoPlayerSection
+          settings={settings}
+          setSettings={setSettings}
+          setSuccess={setSuccess}
+        />
         <AdblockSection
           settings={settings}
           setSettings={setSettings}
@@ -696,13 +796,21 @@ export default function Settings() {
           pendingDeviceId={trustedDevicePendingId}
           onToggleTrusted={onToggleTrusted}
         />
-        <UpdaterSection settings={settings} setSettings={setSettings} setSuccess={setSuccess} />
+        <UpdaterSection
+          settings={settings}
+          setSettings={setSettings}
+          setSuccess={setSuccess}
+        />
         <div className="card settings-card settings-footer-card">
           {error && <div className="error-text">{error}</div>}
           {success && <div className="success-text">{success}</div>}
           <div className="btn-row">
-            <button className="action-btn" onClick={saveSettings} disabled={loading || saving}>
-              {saving ? 'Saving...' : 'Save Settings'}
+            <button
+              className="action-btn"
+              onClick={saveSettings}
+              disabled={loading || saving}
+            >
+              {saving ? "Saving..." : "Save Settings"}
             </button>
           </div>
         </div>

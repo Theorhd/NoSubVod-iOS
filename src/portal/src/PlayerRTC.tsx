@@ -1,54 +1,67 @@
-import React, { useRef, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useResponsive } from './hooks/useResponsive';
-import { useScreenShareState } from '../../shared/hooks/useScreenShareState';
-import type { RemoteControlPayload, ScreenShareSessionState } from '../../shared/types';
-import { useWebRTCViewer } from './hooks/useWebRTCViewer';
-import { usePlayerControls } from './hooks/usePlayerControls';
+import React, { useRef, useEffect, useMemo, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useResponsive } from "./hooks/useResponsive";
+import { useScreenShareState } from "../../shared/hooks/useScreenShareState";
+import type {
+  RemoteControlPayload,
+  ScreenShareSessionState,
+} from "../../shared/types";
+import { useWebRTCViewer } from "./hooks/useWebRTCViewer";
+import { usePlayerControls } from "./hooks/usePlayerControls";
 
-const RELAY_STORAGE_KEY = 'nsv_remote_relay_origin';
+const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
 
 function getAuthQueryFromStorage(): string {
   const token =
-    globalThis.sessionStorage.getItem('nsv_token') ||
-    globalThis.localStorage.getItem('nsv_token');
-  const deviceId = globalThis.localStorage.getItem('nsv_device_id');
+    globalThis.sessionStorage.getItem("nsv_token") ||
+    globalThis.localStorage.getItem("nsv_token");
+  const deviceId = globalThis.localStorage.getItem("nsv_device_id");
   const params = new URLSearchParams();
-  if (token) params.set('t', token);
-  if (deviceId) params.set('d', deviceId);
+  if (token) params.set("t", token);
+  if (deviceId) params.set("d", deviceId);
   return params.toString();
 }
 
 function normalizeRelayOrigin(input: string): string {
   const trimmed = input.trim();
-  if (!trimmed) return '';
-  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  if (!trimmed) return "";
+  const withScheme = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
   return new URL(withScheme).origin;
 }
 
 function formatStartedAt(startedAt: number | null): string {
-  if (!startedAt) return 'Not started';
+  if (!startedAt) return "Not started";
   const date = new Date(startedAt);
   return date.toLocaleString();
 }
 
-const pointerButtonFromMouseEvent = (button: number): 'left' | 'middle' | 'right' => {
-  if (button === 1) return 'middle';
-  if (button === 2) return 'right';
-  return 'left';
+const pointerButtonFromMouseEvent = (
+  button: number,
+): "left" | "middle" | "right" => {
+  if (button === 1) return "middle";
+  if (button === 2) return "right";
+  return "left";
 };
 
 const normalizedPointerPosition = (
   event: React.MouseEvent<HTMLButtonElement>,
-  surface: HTMLButtonElement | null
+  surface: HTMLButtonElement | null,
 ) => {
   if (!surface) {
     return { x: 0.5, y: 0.5 };
   }
 
   const rect = surface.getBoundingClientRect();
-  const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)));
-  const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)));
+  const x = Math.min(
+    1,
+    Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)),
+  );
+  const y = Math.min(
+    1,
+    Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)),
+  );
 
   return {
     x: Number.isFinite(x) ? x : 0.5,
@@ -119,7 +132,11 @@ type PlayerRTCOverlayControlsProps = Readonly<{
 type PlayerRTCViewportProps = Readonly<
   Omit<
     PlayerRTCViewProps,
-    'statusLabel' | 'rtcStatus' | 'signalStatus' | 'handleBack' | 'sendRemoteControl'
+    | "statusLabel"
+    | "rtcStatus"
+    | "signalStatus"
+    | "handleBack"
+    | "sendRemoteControl"
   >
 >;
 
@@ -130,7 +147,7 @@ type PlayerRTCSidebarProps = Readonly<{
   rtcStatus: string;
   hasRemoteStream: boolean;
   sendRemoteControl: (payload: RemoteControlPayload) => void;
-  state: PlayerRTCViewProps['state'];
+  state: PlayerRTCViewProps["state"];
 }>;
 
 function PlayerRTCTransportControls({
@@ -141,34 +158,38 @@ function PlayerRTCTransportControls({
   sendRemoteControl: (payload: RemoteControlPayload) => void;
 }>) {
   const buttonStyle: React.CSSProperties = {
-    border: '1px solid #36466f',
-    background: '#1f2a46',
-    color: '#eff3ff',
-    borderRadius: '7px',
-    padding: '8px 10px',
-    cursor: hasRemoteStream ? 'pointer' : 'not-allowed',
-    fontSize: '12px',
+    border: "1px solid #36466f",
+    background: "#1f2a46",
+    color: "#eff3ff",
+    borderRadius: "7px",
+    padding: "8px 10px",
+    cursor: hasRemoteStream ? "pointer" : "not-allowed",
+    fontSize: "12px",
     fontWeight: 700,
-    minWidth: '72px',
+    minWidth: "72px",
     opacity: hasRemoteStream ? 1 : 0.5,
   };
 
   return (
     <div
       style={{
-        border: '1px solid #2f3f66',
-        borderRadius: '10px',
-        padding: '10px',
-        background: 'rgba(20, 28, 45, 0.5)',
+        border: "1px solid #2f3f66",
+        borderRadius: "10px",
+        padding: "10px",
+        background: "rgba(20, 28, 45, 0.5)",
       }}
     >
-      <div style={{ color: '#a1a1aa', fontSize: '12px', marginBottom: '8px' }}>Contrôles</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+      <div style={{ color: "#a1a1aa", fontSize: "12px", marginBottom: "8px" }}>
+        Contrôles
+      </div>
+      <div
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}
+      >
         <button
           type="button"
           style={buttonStyle}
           disabled={!hasRemoteStream}
-          onClick={() => sendRemoteControl({ command: 'seek', value: -10 })}
+          onClick={() => sendRemoteControl({ command: "seek", value: -10 })}
         >
           ← 10s
         </button>
@@ -176,7 +197,7 @@ function PlayerRTCTransportControls({
           type="button"
           style={buttonStyle}
           disabled={!hasRemoteStream}
-          onClick={() => sendRemoteControl({ command: 'seek', value: 10 })}
+          onClick={() => sendRemoteControl({ command: "seek", value: 10 })}
         >
           10s →
         </button>
@@ -184,7 +205,7 @@ function PlayerRTCTransportControls({
           type="button"
           style={buttonStyle}
           disabled={!hasRemoteStream}
-          onClick={() => sendRemoteControl({ command: 'play' })}
+          onClick={() => sendRemoteControl({ command: "play" })}
         >
           Play
         </button>
@@ -192,7 +213,7 @@ function PlayerRTCTransportControls({
           type="button"
           style={buttonStyle}
           disabled={!hasRemoteStream}
-          onClick={() => sendRemoteControl({ command: 'pause' })}
+          onClick={() => sendRemoteControl({ command: "pause" })}
         >
           Pause
         </button>
@@ -211,27 +232,27 @@ function PlayerRTCHeader({
   return (
     <div
       style={{
-        backgroundColor: '#18181b',
-        padding: isMobileLayout ? '10px 12px' : '10px 20px',
-        display: 'flex',
-        alignItems: 'center',
-        borderBottom: '1px solid #3a3a3d',
+        backgroundColor: "#18181b",
+        padding: isMobileLayout ? "10px 12px" : "10px 20px",
+        display: "flex",
+        alignItems: "center",
+        borderBottom: "1px solid #3a3a3d",
         zIndex: 10,
         flexShrink: 0,
-        gap: isMobileLayout ? '8px' : '10px',
+        gap: isMobileLayout ? "8px" : "10px",
       }}
     >
       <button
         onClick={handleBack}
         style={{
-          color: '#efeff1',
-          fontSize: '14px',
-          fontWeight: 'bold',
-          padding: '5px 10px',
-          backgroundColor: '#3a3a3d',
-          borderRadius: '4px',
-          border: 'none',
-          cursor: 'pointer',
+          color: "#efeff1",
+          fontSize: "14px",
+          fontWeight: "bold",
+          padding: "5px 10px",
+          backgroundColor: "#3a3a3d",
+          borderRadius: "4px",
+          border: "none",
+          cursor: "pointer",
         }}
         type="button"
       >
@@ -240,19 +261,19 @@ function PlayerRTCHeader({
 
       <h2
         style={{
-          color: 'white',
-          fontSize: '14px',
+          color: "white",
+          fontSize: "14px",
           margin: 0,
           flexGrow: 1,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}
       >
         Screen Share
       </h2>
 
-      <span style={{ color: '#efeff1', fontSize: '12px' }}>
+      <span style={{ color: "#efeff1", fontSize: "12px" }}>
         {isMobileLayout
           ? `${statusLabel} · ${rtcStatus}`
           : `${statusLabel} · ${signalStatus} · ${rtcStatus}`}
@@ -274,20 +295,23 @@ function PlayerRTCOverlayControls({
   return (
     <div
       style={{
-        position: 'absolute',
-        left: '50%',
-        bottom: isMobileLayout ? '8px' : '14px',
-        transform: 'translateX(-50%)',
-        width: isMobileLayout ? 'calc(100% - 16px)' : 'min(620px, calc(100% - 28px))',
-        background: 'linear-gradient(180deg, rgba(16, 18, 28, 0.84) 0%, rgba(9, 10, 16, 0.9) 100%)',
-        border: '1px solid rgba(150, 162, 220, 0.28)',
-        borderRadius: '10px',
-        padding: '8px 10px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        flexWrap: isMobileLayout ? 'wrap' : 'nowrap',
-        backdropFilter: 'blur(6px)',
+        position: "absolute",
+        left: "50%",
+        bottom: isMobileLayout ? "8px" : "14px",
+        transform: "translateX(-50%)",
+        width: isMobileLayout
+          ? "calc(100% - 16px)"
+          : "min(620px, calc(100% - 28px))",
+        background:
+          "linear-gradient(180deg, rgba(16, 18, 28, 0.84) 0%, rgba(9, 10, 16, 0.9) 100%)",
+        border: "1px solid rgba(150, 162, 220, 0.28)",
+        borderRadius: "10px",
+        padding: "8px 10px",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        flexWrap: isMobileLayout ? "wrap" : "nowrap",
+        backdropFilter: "blur(6px)",
       }}
     >
       <button
@@ -297,18 +321,18 @@ function PlayerRTCOverlayControls({
           revealControls();
         }}
         style={{
-          border: '1px solid #36466f',
-          background: '#1f2a46',
-          color: '#eff3ff',
-          borderRadius: '7px',
-          padding: '6px 10px',
-          cursor: 'pointer',
-          fontSize: '12px',
+          border: "1px solid #36466f",
+          background: "#1f2a46",
+          color: "#eff3ff",
+          borderRadius: "7px",
+          padding: "6px 10px",
+          cursor: "pointer",
+          fontSize: "12px",
           fontWeight: 600,
         }}
-        aria-label={isMuted ? 'Activer le son' : 'Couper le son'}
+        aria-label={isMuted ? "Activer le son" : "Couper le son"}
       >
-        {isMuted || volume <= 0 ? 'Son coupe' : 'Son actif'}
+        {isMuted || volume <= 0 ? "Son coupe" : "Son actif"}
       </button>
 
       <input
@@ -323,14 +347,21 @@ function PlayerRTCOverlayControls({
         }}
         aria-label="Volume"
         style={{
-          flex: isMobileLayout ? '1 1 100%' : 1,
-          accentColor: '#8ca6ff',
-          cursor: 'pointer',
+          flex: isMobileLayout ? "1 1 100%" : 1,
+          accentColor: "#8ca6ff",
+          cursor: "pointer",
           order: isMobileLayout ? 3 : 0,
         }}
       />
 
-      <span style={{ color: '#c9d2f3', fontSize: '12px', minWidth: '38px', textAlign: 'right' }}>
+      <span
+        style={{
+          color: "#c9d2f3",
+          fontSize: "12px",
+          minWidth: "38px",
+          textAlign: "right",
+        }}
+      >
         {Math.round((isMuted ? 0 : volume) * 100)}%
       </span>
 
@@ -341,18 +372,20 @@ function PlayerRTCOverlayControls({
           revealControls();
         }}
         style={{
-          border: '1px solid #36466f',
-          background: '#1f2a46',
-          color: '#eff3ff',
-          borderRadius: '7px',
-          padding: '6px 10px',
-          cursor: 'pointer',
-          fontSize: '12px',
+          border: "1px solid #36466f",
+          background: "#1f2a46",
+          color: "#eff3ff",
+          borderRadius: "7px",
+          padding: "6px 10px",
+          cursor: "pointer",
+          fontSize: "12px",
           fontWeight: 600,
         }}
-        aria-label={isFullscreen ? 'Quitter le plein ecran' : 'Activer le plein ecran'}
+        aria-label={
+          isFullscreen ? "Quitter le plein ecran" : "Activer le plein ecran"
+        }
       >
-        {isFullscreen ? 'Quitter plein ecran' : 'Plein ecran'}
+        {isFullscreen ? "Quitter plein ecran" : "Plein ecran"}
       </button>
     </div>
   );
@@ -385,12 +418,12 @@ function PlayerRTCViewport({
   const remoteStreamNode = useNativeMobilePlayer ? (
     <div
       style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#000',
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#000",
       }}
     >
       <video
@@ -402,10 +435,10 @@ function PlayerRTCViewport({
         controls
         controlsList="nodownload noplaybackrate"
         style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-          backgroundColor: '#000',
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          backgroundColor: "#000",
         }}
       >
         <track kind="captions" />
@@ -417,13 +450,13 @@ function PlayerRTCViewport({
       type="button"
       className="screen-share-remote-surface"
       style={{
-        touchAction: 'none',
-        border: 'none',
+        touchAction: "none",
+        border: "none",
         padding: 0,
-        background: 'transparent',
-        width: '100%',
-        height: '100%',
-        display: 'block',
+        background: "transparent",
+        width: "100%",
+        height: "100%",
+        display: "block",
       }}
       aria-label="Interactive remote stream"
       onMouseMove={handleViewerMouseMove}
@@ -442,10 +475,10 @@ function PlayerRTCViewport({
         autoPlay
         playsInline
         style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-          backgroundColor: '#000',
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          backgroundColor: "#000",
         }}
       >
         <track kind="captions" />
@@ -458,15 +491,18 @@ function PlayerRTCViewport({
       ref={playerFrameRef}
       style={{
         flex: 1,
-        minHeight: isMobileLayout ? '50vh' : undefined,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'stretch',
-        justifyContent: 'stretch',
-        backgroundColor: '#000',
-        position: 'relative',
-        overflow: 'hidden',
-        cursor: isFullscreen && hasRemoteStream && !controlsVisible ? 'none' : 'default',
+        minHeight: isMobileLayout ? "50vh" : undefined,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "stretch",
+        justifyContent: "stretch",
+        backgroundColor: "#000",
+        position: "relative",
+        overflow: "hidden",
+        cursor:
+          isFullscreen && hasRemoteStream && !controlsVisible
+            ? "none"
+            : "default",
       }}
     >
       {hasRemoteStream ? (
@@ -474,15 +510,17 @@ function PlayerRTCViewport({
       ) : (
         <div
           style={{
-            color: '#efeff1',
-            textAlign: 'center',
-            padding: '24px',
+            color: "#efeff1",
+            textAlign: "center",
+            padding: "24px",
           }}
         >
-          <div style={{ fontSize: '18px', marginBottom: '8px' }}>Waiting for host stream...</div>
-          <div style={{ color: '#a1a1aa', fontSize: '14px' }}>
+          <div style={{ fontSize: "18px", marginBottom: "8px" }}>
+            Waiting for host stream...
+          </div>
+          <div style={{ color: "#a1a1aa", fontSize: "14px" }}>
             {state.streamMessage ||
-              'When the host starts sharing, the WebRTC feed will appear here.'}
+              "When the host starts sharing, the WebRTC feed will appear here."}
           </div>
         </div>
       )}
@@ -503,15 +541,15 @@ function PlayerRTCViewport({
       {streamError && (
         <div
           style={{
-            position: 'absolute',
+            position: "absolute",
             bottom: 12,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            padding: '8px 12px',
-            borderRadius: '6px',
-            color: '#ff9c9c',
-            fontSize: '13px',
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "rgba(0,0,0,0.6)",
+            padding: "8px 12px",
+            borderRadius: "6px",
+            color: "#ff9c9c",
+            fontSize: "13px",
           }}
         >
           {streamError}
@@ -533,17 +571,17 @@ function PlayerRTCSidebar({
   return (
     <div
       style={{
-        width: isMobileLayout ? '100%' : '320px',
-        backgroundColor: '#0e0e10',
-        borderLeft: isMobileLayout ? 'none' : '1px solid #3a3a3d',
-        borderTop: isMobileLayout ? '1px solid #3a3a3d' : 'none',
-        padding: isMobileLayout ? '12px' : '16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
+        width: isMobileLayout ? "100%" : "320px",
+        backgroundColor: "#0e0e10",
+        borderLeft: isMobileLayout ? "none" : "1px solid #3a3a3d",
+        borderTop: isMobileLayout ? "1px solid #3a3a3d" : "none",
+        padding: isMobileLayout ? "12px" : "16px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
         flexShrink: 0,
-        maxHeight: isMobileLayout ? '38vh' : 'none',
-        overflowY: isMobileLayout ? 'auto' : 'visible',
+        maxHeight: isMobileLayout ? "38vh" : "none",
+        overflowY: isMobileLayout ? "auto" : "visible",
       }}
     >
       <PlayerRTCTransportControls
@@ -552,49 +590,85 @@ function PlayerRTCSidebar({
       />
 
       <div>
-        <div style={{ color: '#a1a1aa', fontSize: '12px', marginBottom: '4px' }}>Session</div>
-        <div style={{ color: '#efeff1', fontSize: '14px', fontWeight: 'bold' }}>
-          {state.sessionId || 'Not started'}
+        <div
+          style={{ color: "#a1a1aa", fontSize: "12px", marginBottom: "4px" }}
+        >
+          Session
+        </div>
+        <div style={{ color: "#efeff1", fontSize: "14px", fontWeight: "bold" }}>
+          {state.sessionId || "Not started"}
         </div>
       </div>
 
       <div>
-        <div style={{ color: '#a1a1aa', fontSize: '12px', marginBottom: '4px' }}>Source</div>
-        <div style={{ color: '#efeff1', fontSize: '14px', fontWeight: 'bold' }}>
-          {state.sourceLabel || 'No source'} ({state.sourceType || 'n/a'})
+        <div
+          style={{ color: "#a1a1aa", fontSize: "12px", marginBottom: "4px" }}
+        >
+          Source
+        </div>
+        <div style={{ color: "#efeff1", fontSize: "14px", fontWeight: "bold" }}>
+          {state.sourceLabel || "No source"} ({state.sourceType || "n/a"})
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+      <div
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}
+      >
         <div>
-          <div style={{ color: '#a1a1aa', fontSize: '12px', marginBottom: '4px' }}>Status</div>
-          <div style={{ color: '#efeff1', fontSize: '14px' }}>{statusLabel}</div>
+          <div
+            style={{ color: "#a1a1aa", fontSize: "12px", marginBottom: "4px" }}
+          >
+            Status
+          </div>
+          <div style={{ color: "#efeff1", fontSize: "14px" }}>
+            {statusLabel}
+          </div>
         </div>
         <div>
-          <div style={{ color: '#a1a1aa', fontSize: '12px', marginBottom: '4px' }}>Viewers</div>
-          <div style={{ color: '#efeff1', fontSize: '14px' }}>
+          <div
+            style={{ color: "#a1a1aa", fontSize: "12px", marginBottom: "4px" }}
+          >
+            Viewers
+          </div>
+          <div style={{ color: "#efeff1", fontSize: "14px" }}>
             {state.currentViewers}/{state.maxViewers}
           </div>
         </div>
         <div>
-          <div style={{ color: '#a1a1aa', fontSize: '12px', marginBottom: '4px' }}>Signal</div>
-          <div style={{ color: '#efeff1', fontSize: '14px' }}>{signalStatus}</div>
+          <div
+            style={{ color: "#a1a1aa", fontSize: "12px", marginBottom: "4px" }}
+          >
+            Signal
+          </div>
+          <div style={{ color: "#efeff1", fontSize: "14px" }}>
+            {signalStatus}
+          </div>
         </div>
         <div>
-          <div style={{ color: '#a1a1aa', fontSize: '12px', marginBottom: '4px' }}>WebRTC</div>
-          <div style={{ color: '#efeff1', fontSize: '14px' }}>{rtcStatus}</div>
+          <div
+            style={{ color: "#a1a1aa", fontSize: "12px", marginBottom: "4px" }}
+          >
+            WebRTC
+          </div>
+          <div style={{ color: "#efeff1", fontSize: "14px" }}>{rtcStatus}</div>
         </div>
       </div>
 
       <div>
-        <div style={{ color: '#a1a1aa', fontSize: '12px', marginBottom: '4px' }}>Started</div>
-        <div style={{ color: '#efeff1', fontSize: '14px' }}>{formatStartedAt(state.startedAt)}</div>
+        <div
+          style={{ color: "#a1a1aa", fontSize: "12px", marginBottom: "4px" }}
+        >
+          Started
+        </div>
+        <div style={{ color: "#efeff1", fontSize: "14px" }}>
+          {formatStartedAt(state.startedAt)}
+        </div>
       </div>
 
-      <div style={{ color: '#a1a1aa', fontSize: '12px', marginTop: '8px' }}>
+      <div style={{ color: "#a1a1aa", fontSize: "12px", marginTop: "8px" }}>
         {state.interactive
-          ? 'Pointer/keyboard input forwarded to host.'
-          : 'Remote control disabled by host.'}
+          ? "Pointer/keyboard input forwarded to host."
+          : "Remote control disabled by host."}
       </div>
     </div>
   );
@@ -634,14 +708,14 @@ function renderPlayerRTCView(props: PlayerRTCViewProps) {
   return (
     <div
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'fixed',
+        display: "flex",
+        flexDirection: "column",
+        position: "fixed",
         inset: 0,
-        width: '100%',
-        height: '100dvh',
-        backgroundColor: '#07080f',
-        overflow: 'hidden',
+        width: "100%",
+        height: "100dvh",
+        backgroundColor: "#07080f",
+        overflow: "hidden",
       }}
     >
       <PlayerRTCHeader
@@ -654,10 +728,10 @@ function renderPlayerRTCView(props: PlayerRTCViewProps) {
 
       <div
         style={{
-          display: 'flex',
+          display: "flex",
           flex: 1,
-          overflow: 'hidden',
-          flexDirection: isMobileLayout ? 'column' : 'row',
+          overflow: "hidden",
+          flexDirection: isMobileLayout ? "column" : "row",
         }}
       >
         <PlayerRTCViewport
@@ -702,11 +776,12 @@ function renderPlayerRTCView(props: PlayerRTCViewProps) {
 export default function PlayerRTC() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const sessionIdParam = searchParams.get('sessionId');
-  const relayParam = searchParams.get('relay') || '';
+  const sessionIdParam = searchParams.get("sessionId");
+  const relayParam = searchParams.get("relay") || "";
 
   const relayOrigin = useMemo(() => {
-    const candidate = relayParam || globalThis.localStorage.getItem(RELAY_STORAGE_KEY) || '';
+    const candidate =
+      relayParam || globalThis.localStorage.getItem(RELAY_STORAGE_KEY) || "";
     try {
       const normalized = normalizeRelayOrigin(candidate);
       if (normalized) {
@@ -721,12 +796,12 @@ export default function PlayerRTC() {
   const { isMobileLayout, isTouchDevice } = useResponsive();
   const fetchScreenShareState = useCallback(async () => {
     const authQuery = getAuthQueryFromStorage();
-    const statePath = '/api/screenshare/state';
+    const statePath = "/api/screenshare/state";
     const endpointBase = relayOrigin ? `${relayOrigin}${statePath}` : statePath;
     const endpoint = authQuery ? `${endpointBase}?${authQuery}` : endpointBase;
 
     const response = await fetch(endpoint);
-    if (!response.ok) throw new Error('Failed to fetch state');
+    if (!response.ok) throw new Error("Failed to fetch state");
     return (await response.json()) as ScreenShareSessionState;
   }, [relayOrigin]);
   const { state, setState } = useScreenShareState(fetchScreenShareState, 3000);
@@ -743,7 +818,13 @@ export default function PlayerRTC() {
     streamError,
     sendRemoteInput,
     sendRemoteControl,
-  } = useWebRTCViewer(sessionIdParam, state, setState, remoteVideoRef, relayOrigin);
+  } = useWebRTCViewer(
+    sessionIdParam,
+    state,
+    setState,
+    remoteVideoRef,
+    relayOrigin,
+  );
 
   const {
     isFullscreen,
@@ -763,13 +844,15 @@ export default function PlayerRTC() {
   }, [hasRemoteStream]);
 
   const statusLabel = useMemo(() => {
-    if (!state.active) return 'Offline';
-    return state.streamReady ? 'Live' : 'Preparing';
+    if (!state.active) return "Offline";
+    return state.streamReady ? "Live" : "Preparing";
   }, [state.active, state.streamReady]);
 
   const useNativeMobilePlayer = isMobileLayout || isTouchDevice;
 
-  const handleViewerMouseMove = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleViewerMouseMove = (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
     revealControls();
     // eslint-disable-next-line react-hooks/purity
     const now = performance.now();
@@ -780,19 +863,21 @@ export default function PlayerRTC() {
 
     const pos = normalizedPointerPosition(event, viewerSurfaceRef.current);
     sendRemoteInput({
-      kind: 'pointer',
-      action: 'move',
+      kind: "pointer",
+      action: "move",
       x: pos.x,
       y: pos.y,
     });
   };
 
-  const handleViewerMouseDown = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleViewerMouseDown = (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
     revealControls();
     const pos = normalizedPointerPosition(event, viewerSurfaceRef.current);
     sendRemoteInput({
-      kind: 'pointer',
-      action: 'down',
+      kind: "pointer",
+      action: "down",
       button: pointerButtonFromMouseEvent(event.button),
       x: pos.x,
       y: pos.y,
@@ -803,8 +888,8 @@ export default function PlayerRTC() {
     revealControls();
     const pos = normalizedPointerPosition(event, viewerSurfaceRef.current);
     sendRemoteInput({
-      kind: 'pointer',
-      action: 'up',
+      kind: "pointer",
+      action: "up",
       button: pointerButtonFromMouseEvent(event.button),
       x: pos.x,
       y: pos.y,
@@ -816,14 +901,20 @@ export default function PlayerRTC() {
     const surface = viewerSurfaceRef.current;
     const rect = surface?.getBoundingClientRect();
     const x = rect
-      ? Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)))
+      ? Math.min(
+          1,
+          Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)),
+        )
       : 0.5;
     const y = rect
-      ? Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)))
+      ? Math.min(
+          1,
+          Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)),
+        )
       : 0.5;
     sendRemoteInput({
-      kind: 'pointer',
-      action: 'wheel',
+      kind: "pointer",
+      action: "wheel",
       x,
       y,
       deltaX: event.deltaX,
@@ -831,14 +922,16 @@ export default function PlayerRTC() {
     });
   };
 
-  const handleViewerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+  const handleViewerKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+  ) => {
     revealControls();
     if (event.repeat) {
       return;
     }
     sendRemoteInput({
-      kind: 'keyboard',
-      action: 'down',
+      kind: "keyboard",
+      action: "down",
       key: event.key,
     });
   };
@@ -846,8 +939,8 @@ export default function PlayerRTC() {
   const handleViewerKeyUp = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     revealControls();
     sendRemoteInput({
-      kind: 'keyboard',
-      action: 'up',
+      kind: "keyboard",
+      action: "up",
       key: event.key,
     });
   };
@@ -856,7 +949,7 @@ export default function PlayerRTC() {
     if (globalThis.history.length > 1) {
       navigate(-1);
     } else {
-      navigate('/screen-share');
+      navigate("/screen-share");
     }
   };
 

@@ -1,13 +1,19 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { LiveStream, LiveStreamsPage, SubEntry } from '../../shared/types';
-import { useInfiniteScroll } from './hooks/useInfiniteScroll';
-import { StreamCard } from './components/StreamCard';
-import { TopBar } from './components/TopBar';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useNavigate } from "react-router-dom";
+import { LiveStream, LiveStreamsPage, SubEntry } from "../../shared/types";
+import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
+import { StreamCard } from "./components/StreamCard";
+import { TopBar } from "./components/TopBar";
 
 const PAGE_SIZE = 24;
 
-type LiveMode = 'all' | 'search' | 'category';
+type LiveMode = "all" | "search" | "category";
 
 type TopCategory = {
   id: string;
@@ -18,15 +24,21 @@ type TopCategory = {
 const computeScore = (stream: LiveStream, subLogins: Set<string>): number => {
   const login = stream.broadcaster.login.toLowerCase();
   const subBoost = subLogins.has(login) ? 32 : 0;
-  const frenchBoost = (stream.language || '').toLowerCase() === 'fr' ? 8 : 0;
+  const frenchBoost = (stream.language || "").toLowerCase() === "fr" ? 8 : 0;
   const viewerScore = Math.log10((stream.viewerCount || 0) + 10) * 10;
-  const uptimeHours = Math.max(0, (Date.now() - new Date(stream.startedAt).getTime()) / 3600000);
+  const uptimeHours = Math.max(
+    0,
+    (Date.now() - new Date(stream.startedAt).getTime()) / 3600000,
+  );
   const freshnessBoost = Math.max(0, 4 - Math.min(uptimeHours, 4));
 
   return viewerScore + subBoost + frenchBoost + freshnessBoost;
 };
 
-const rankStreams = (streams: LiveStream[], subLogins: Set<string>): LiveStream[] => {
+const rankStreams = (
+  streams: LiveStream[],
+  subLogins: Set<string>,
+): LiveStream[] => {
   return [...streams]
     .map((stream) => ({
       stream,
@@ -39,8 +51,8 @@ const rankStreams = (streams: LiveStream[], subLogins: Set<string>): LiveStream[
 export default function Live() {
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState<LiveMode>('all');
-  const [searchInput, setSearchInput] = useState('');
+  const [mode, setMode] = useState<LiveMode>("all");
+  const [searchInput, setSearchInput] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [topCategories, setTopCategories] = useState<TopCategory[]>([]);
 
@@ -48,7 +60,7 @@ export default function Live() {
   const [subLogins, setSubLogins] = useState<Set<string>>(new Set());
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [hasMore, setHasMore] = useState(true);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
 
@@ -61,7 +73,7 @@ export default function Live() {
     seenIdsRef.current = new Set();
     setNextCursor(null);
     setHasMore(true);
-    setError('');
+    setError("");
     isInitialLoadingRef.current = true;
     isFetchingRef.current = false;
   }, []);
@@ -76,7 +88,7 @@ export default function Live() {
       if (fresh.length === 0) return;
       setStreams((current) => rankStreams([...current, ...fresh], subLogins));
     },
-    [subLogins]
+    [subLogins],
   );
 
   const fetchPage = useCallback(
@@ -85,7 +97,7 @@ export default function Live() {
       if (!isInitialLoadingRef.current && !hasMore) return;
 
       isFetchingRef.current = true;
-      setError('');
+      setError("");
       if (isInitialLoadingRef.current) {
         setIsInitialLoading(true);
       } else {
@@ -93,20 +105,20 @@ export default function Live() {
       }
 
       try {
-        const endpoint = categoryName ? '/api/live/category' : '/api/live';
+        const endpoint = categoryName ? "/api/live/category" : "/api/live";
         const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
-        if (cursor) params.set('cursor', cursor);
-        if (categoryName) params.set('name', categoryName);
+        if (cursor) params.set("cursor", cursor);
+        if (categoryName) params.set("name", categoryName);
 
         const res = await fetch(`${endpoint}?${params.toString()}`);
-        if (!res.ok) throw new Error('Failed to load streams');
+        if (!res.ok) throw new Error("Failed to load streams");
         const payload = (await res.json()) as LiveStreamsPage;
 
         appendRankedStreams(payload.items || []);
         setNextCursor(payload.nextCursor || null);
         setHasMore(Boolean(payload.hasMore));
       } catch (err: any) {
-        setError(err?.message || 'Failed to load live streams');
+        setError(err?.message || "Failed to load live streams");
       } finally {
         isFetchingRef.current = false;
         isInitialLoadingRef.current = false;
@@ -114,16 +126,18 @@ export default function Live() {
         setIsLoadingMore(false);
       }
     },
-    [appendRankedStreams, hasMore]
+    [appendRankedStreams, hasMore],
   );
 
   const fetchSearch = useCallback(async (q: string) => {
     isFetchingRef.current = true;
-    setError('');
+    setError("");
     setIsInitialLoading(true);
     try {
-      const res = await fetch(`/api/live/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}`);
-      if (!res.ok) throw new Error('Search failed');
+      const res = await fetch(
+        `/api/live/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}`,
+      );
+      if (!res.ok) throw new Error("Search failed");
       const payload = (await res.json()) as LiveStreamsPage;
       const fresh = (payload.items || []).filter((s) => {
         if (seenIdsRef.current.has(s.id)) return false;
@@ -134,7 +148,7 @@ export default function Live() {
       setHasMore(false);
       setNextCursor(null);
     } catch (err: any) {
-      setError(err?.message || 'Search failed');
+      setError(err?.message || "Search failed");
     } finally {
       isFetchingRef.current = false;
       isInitialLoadingRef.current = false;
@@ -146,8 +160,8 @@ export default function Live() {
     const init = async () => {
       try {
         const [settingsRes, catsRes] = await Promise.all([
-          fetch('/api/settings'),
-          fetch('/api/live/top-categories'),
+          fetch("/api/settings"),
+          fetch("/api/live/top-categories"),
         ]);
 
         let oneSync = false;
@@ -158,10 +172,10 @@ export default function Live() {
 
         let subEntries: SubEntry[] = [];
         if (oneSync) {
-          const subsRes = await fetch('/api/subs');
+          const subsRes = await fetch("/api/subs");
           if (subsRes.ok) subEntries = await subsRes.json();
         } else {
-          const local = localStorage.getItem('nsv_subs');
+          const local = localStorage.getItem("nsv_subs");
           subEntries = local ? JSON.parse(local) : [];
         }
         setSubLogins(new Set(subEntries.map((e) => e.login.toLowerCase())));
@@ -180,31 +194,32 @@ export default function Live() {
   }, [subLogins]);
 
   const { lastElementRef } = useInfiniteScroll({
-    isLoading: isFetchingRef.current || mode === 'search',
+    isLoading: isFetchingRef.current || mode === "search",
     hasMore,
     onLoadMore: () => {
-      if (mode === 'all') void fetchPage(nextCursor);
-      else if (mode === 'category' && activeCategory) void fetchPage(nextCursor, activeCategory);
+      if (mode === "all") void fetchPage(nextCursor);
+      else if (mode === "category" && activeCategory)
+        void fetchPage(nextCursor, activeCategory);
     },
   });
 
   const switchToAll = useCallback(() => {
-    setMode('all');
+    setMode("all");
     setActiveCategory(null);
-    setSearchInput('');
+    setSearchInput("");
     resetStreamState();
     void fetchPage(null);
   }, [resetStreamState, fetchPage]);
 
   const switchToCategory = useCallback(
     (name: string) => {
-      setMode('category');
+      setMode("category");
       setActiveCategory(name);
-      setSearchInput('');
+      setSearchInput("");
       resetStreamState();
       void fetchPage(null, name);
     },
-    [resetStreamState, fetchPage]
+    [resetStreamState, fetchPage],
   );
 
   const handleSearchSubmit = useCallback(
@@ -215,24 +230,25 @@ export default function Live() {
         switchToAll();
         return;
       }
-      setMode('search');
+      setMode("search");
       setActiveCategory(null);
       resetStreamState();
       void fetchSearch(q);
     },
-    [searchInput, resetStreamState, fetchSearch, switchToAll]
+    [searchInput, resetStreamState, fetchSearch, switchToAll],
   );
 
   const emptyStateMessage = useMemo(() => {
-    if (mode === 'search') return 'Aucun live trouvé pour cette recherche.';
-    if (mode === 'category') return `Aucun live pour la catégorie "${activeCategory}".`;
-    return 'Aucun stream disponible pour le moment.';
+    if (mode === "search") return "Aucun live trouvé pour cette recherche.";
+    if (mode === "category")
+      return `Aucun live pour la catégorie "${activeCategory}".`;
+    return "Aucun stream disponible pour le moment.";
   }, [mode, activeCategory]);
 
   const headerLabel = useMemo(() => {
-    if (mode === 'category' && activeCategory) return activeCategory;
-    if (mode === 'search') return `"${searchInput}"`;
-    return 'En direct maintenant';
+    if (mode === "category" && activeCategory) return activeCategory;
+    if (mode === "search") return `"${searchInput}"`;
+    return "En direct maintenant";
   }, [mode, activeCategory, searchInput]);
 
   const renderContent = () => {
@@ -255,14 +271,22 @@ export default function Live() {
             <StreamCard
               key={stream.id}
               stream={stream}
-              onWatch={(login) => navigate(`/player?live=${encodeURIComponent(login)}`)}
+              onWatch={(login) =>
+                navigate(`/player?live=${encodeURIComponent(login)}`)
+              }
               onCategoryClick={switchToCategory}
               showBroadcaster
             />
           ))}
         </div>
-        <div ref={lastElementRef} style={{ height: '20px', width: '100%' }} aria-hidden="true" />
-        {isLoadingMore && <div className="status-line">Chargement de plus de streams...</div>}
+        <div
+          ref={lastElementRef}
+          style={{ height: "20px", width: "100%" }}
+          aria-hidden="true"
+        />
+        {isLoadingMore && (
+          <div className="status-line">Chargement de plus de streams...</div>
+        )}
       </>
     );
   };
@@ -284,8 +308,12 @@ export default function Live() {
             <button type="submit" className="action-btn">
               Rechercher
             </button>
-            {mode !== 'all' && (
-              <button type="button" className="secondary-btn" onClick={switchToAll}>
+            {mode !== "all" && (
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={switchToAll}
+              >
                 ✕ Réinitialiser
               </button>
             )}
@@ -298,14 +326,20 @@ export default function Live() {
                 <button
                   key={cat.id}
                   type="button"
-                  className={`live-cat-pill${activeCategory === cat.name ? ' active' : ''}`}
+                  className={`live-cat-pill${activeCategory === cat.name ? " active" : ""}`}
                   onClick={() =>
-                    activeCategory === cat.name ? switchToAll() : switchToCategory(cat.name)
+                    activeCategory === cat.name
+                      ? switchToAll()
+                      : switchToCategory(cat.name)
                   }
                   title={cat.name}
                 >
                   {cat.boxArtURL && (
-                    <img src={cat.boxArtURL} alt="" className="live-cat-pill-art" />
+                    <img
+                      src={cat.boxArtURL}
+                      alt=""
+                      className="live-cat-pill-art"
+                    />
                   )}
                   <span>{cat.name}</span>
                 </button>
@@ -316,14 +350,14 @@ export default function Live() {
 
         <div className="card live-intro-card">
           <h2>{headerLabel}</h2>
-          {mode === 'all' && (
+          {mode === "all" && (
             <p className="card-subtitle">
               Flux dynamique classé par popularité, abonnements et fraîcheur.
             </p>
           )}
           <div className="live-count">
-            {streams.length} stream{streams.length === 1 ? '' : 's'} chargé
-            {streams.length === 1 ? '' : 's'}
+            {streams.length} stream{streams.length === 1 ? "" : "s"} chargé
+            {streams.length === 1 ? "" : "s"}
           </div>
         </div>
 

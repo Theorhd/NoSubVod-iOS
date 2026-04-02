@@ -1,15 +1,15 @@
-import React from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { StreamCard } from './components/StreamCard';
-import { VODCard } from './components/VODCard';
-import { TopBar } from './components/TopBar';
-import { useChannelData } from './hooks/useChannelData';
+import React from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { StreamCard } from "./components/StreamCard";
+import { VODCard } from "./components/VODCard";
+import { TopBar } from "./components/TopBar";
+import { useChannelData } from "./hooks/useChannelData";
 
 export default function Channel() {
   const [searchParams] = useSearchParams();
-  const user = searchParams.get('user');
-  const category = searchParams.get('category');
-  const categoryId = searchParams.get('categoryId');
+  const user = searchParams.get("user");
+  const category = searchParams.get("category");
+  const categoryId = searchParams.get("categoryId");
   const navigate = useNavigate();
   const {
     title,
@@ -38,9 +38,12 @@ export default function Channel() {
         {loading && <div className="status-line">Loading...</div>}
         {error && <div className="error-text">{error}</div>}
 
-        {!loading && !error && vods.length === 0 && catLiveStreams.length === 0 && (
-          <div className="empty-state">No content found.</div>
-        )}
+        {!loading &&
+          !error &&
+          vods.length === 0 &&
+          catLiveStreams.length === 0 && (
+            <div className="empty-state">No content found.</div>
+          )}
 
         {/* User live (user-channel mode) */}
         {!loading && !error && liveStream && isUserMode && (
@@ -50,7 +53,9 @@ export default function Channel() {
               <StreamCard
                 key={liveStream.id}
                 stream={liveStream}
-                onWatch={(login) => navigate(`/player?live=${encodeURIComponent(login)}`)}
+                onWatch={(login) =>
+                  navigate(`/player?live=${encodeURIComponent(login)}`)
+                }
               />
             </div>
           </div>
@@ -62,7 +67,8 @@ export default function Channel() {
             <div className="section-header-row">
               <h2>Lives en ce moment</h2>
               <span className="section-count">
-                {catLiveStreams.length} stream{catLiveStreams.length > 1 ? 's' : ''}
+                {catLiveStreams.length} stream
+                {catLiveStreams.length > 1 ? "s" : ""}
               </span>
             </div>
             <div className="vod-grid">
@@ -70,7 +76,9 @@ export default function Channel() {
                 <StreamCard
                   key={stream.id}
                   stream={stream}
-                  onWatch={(login) => navigate(`/player?live=${encodeURIComponent(login)}`)}
+                  onWatch={(login) =>
+                    navigate(`/player?live=${encodeURIComponent(login)}`)
+                  }
                 />
               ))}
             </div>
@@ -82,7 +90,7 @@ export default function Channel() {
                   onClick={() => void loadMoreCatLive()}
                   disabled={catLiveLoading}
                 >
-                  {catLiveLoading ? 'Chargement...' : 'Voir plus de lives'}
+                  {catLiveLoading ? "Chargement..." : "Voir plus de lives"}
                 </button>
               </div>
             )}
@@ -93,12 +101,14 @@ export default function Channel() {
         {!loading && !error && vods.length > 0 && (
           <div
             className="block-section"
-            style={{ marginTop: catLiveStreams.length > 0 || liveStream ? '16px' : '0' }}
+            style={{
+              marginTop: catLiveStreams.length > 0 || liveStream ? "16px" : "0",
+            }}
           >
             <div className="section-header-row">
               <h2>VODs</h2>
               <span className="section-count">
-                {vods.length} VOD{vods.length > 1 ? 's' : ''}
+                {vods.length} VOD{vods.length > 1 ? "s" : ""}
               </span>
             </div>
             <div className="vod-grid">
@@ -126,7 +136,7 @@ export default function Channel() {
                   onClick={() => void loadMoreCatVods()}
                   disabled={catVodLoading}
                 >
-                  {catVodLoading ? 'Chargement...' : 'Voir plus de VODs'}
+                  {catVodLoading ? "Chargement..." : "Voir plus de VODs"}
                 </button>
               </div>
             )}

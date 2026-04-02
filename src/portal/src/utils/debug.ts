@@ -3,10 +3,13 @@ export function initEruda(state: boolean) {
   try {
     if (debugMode !== true) return;
 
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/eruda";
     script.onload = function () {
-      if ((globalThis as any).eruda && typeof (globalThis as any).eruda.init === 'function') {
+      if (
+        (globalThis as any).eruda &&
+        typeof (globalThis as any).eruda.init === "function"
+      ) {
         (globalThis as any).eruda.init();
       }
     };
