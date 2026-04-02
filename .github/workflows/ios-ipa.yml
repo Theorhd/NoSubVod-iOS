@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   build-ipa:
-    runs-on: macos-latest
+    runs-on: macos-14
     timeout-minutes: 60
 
     steps:
@@ -29,6 +29,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Select Xcode
+        shell: bash
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          xcodebuild -version
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -86,6 +92,8 @@ jobs:
       - name: Build iOS app (unsigned)
         shell: bash
         run: |
+          set -euo pipefail
+
           PROJECT_PATH=$(find src-tauri/gen/apple -name '*.xcodeproj' -print -quit)
           if [ -z "$PROJECT_PATH" ]; then
             echo "No .xcodeproj found under src-tauri/gen/apple"
@@ -105,20 +113,60 @@ jobs:
             exit 1
           fi
 
+          CONFIGURATION=$(xcodebuild -list -project "$PROJECT_PATH" \
+            | awk '/Build Configurations:/{flag=1;next}/Schemes:/{flag=0}flag' \
+            | sed 's/^[[:space:]]*//' \
+            | grep -E '^(release|Release)$' \
+            | head -n 1 \
+            | tr -d '\r' \
+            | xargs)
+          if [ -z "$CONFIGURATION" ]; then
+            echo "No release configuration found in $PROJECT_PATH"
+            xcodebuild -list -project "$PROJECT_PATH"
+            exit 1
+          fi
+
+          echo "Using scheme: $SCHEME"
+          echo "Using configuration: $CONFIGURATION"
+
           xcodebuild \
             -project "$PROJECT_PATH" \
             -scheme "$SCHEME" \
-            -configuration Release \
+            -configuration "$CONFIGURATION" \
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build
+            build | tee xcodebuild.log
+
+      - name: Dump Xcode Rust script diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          echo "==> Last generated Rust script phase (if any):"
+          find ~/Library/Developer/Xcode/DerivedData -name 'Script-*.sh' -print0 \
+            | xargs -0 ls -td 2>/dev/null \
+            | head -n 1 \
+            | while read -r SCRIPT; do
+                echo "Script path: $SCRIPT"
+                sed -n '1,220p' "$SCRIPT"
+              done
+
+          echo "==> Last cargo log snippets from DerivedData (if any):"
+          find ~/Library/Developer/Xcode/DerivedData -type f \( -name '*.log' -o -name '*.txt' \) -print0 \
+            | xargs -0 ls -td 2>/dev/null \
+            | head -n 20 \
+            | while read -r LOG; do
+                if grep -qiE 'cargo|error:|tauri|failed' "$LOG"; then
+                  echo "---- $LOG"
+                  tail -n 120 "$LOG"
+                fi
+              done
 
       - name: Package unsigned IPA for SideStore/AltStore
         shell: bash
         run: |
           mkdir -p artifacts/unsigned-ios/payload/Payload
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*/Build/Products/Release-iphoneos/*.app" -print -quit)
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*/Build/Products/*-iphoneos/*.app" -print0 | xargs -0 ls -td 2>/dev/null | head -n 1)
           if [ -z "$APP_PATH" ]; then
             echo "Unsigned .app not found in DerivedData"
             exit 1
