@@ -3,7 +3,7 @@ name: iOS IPA
 on:
   workflow_dispatch:
   push:
-    branches: [dev, main]
+    branches: [main]
     paths:
       - ".github/workflows/ios-ipa.yml"
       - "package.json"
@@ -13,11 +13,12 @@ on:
 
 concurrency:
   group: ios-ipa-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-ipa:
     runs-on: macos-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -32,7 +33,26 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Ensure xcodegen
+        run: |
+          if command -v xcodegen >/dev/null 2>&1; then
+            xcodegen --version
+            exit 0
+          fi
+
+          for attempt in 1 2 3; do
+            echo "Installing xcodegen (attempt $attempt/3)"
+            brew install xcodegen && break
+            if [ "$attempt" -eq 3 ]; then
+              echo "xcodegen installation failed after retries"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          xcodegen --version
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -54,16 +74,80 @@ jobs:
 
       - name: Init Tauri iOS project
         run: npx tauri ios init --ci
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+
+      - name: Detect signing mode
+        id: signing
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.APPLE_DEVELOPMENT_TEAM }}" ]; then
+            echo "mode=signed" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=unsigned" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build iOS app (unsigned)
+        if: steps.signing.outputs.mode == 'unsigned'
+        shell: bash
+        run: |
+          PROJECT_PATH=$(find src-tauri/gen/apple -name '*.xcodeproj' -print -quit)
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "No .xcodeproj found under src-tauri/gen/apple"
+            exit 1
+          fi
+
+          SCHEME=$(xcodebuild -list -project "$PROJECT_PATH" | awk '/Schemes:/{flag=1;next}/^$/{flag=0}flag' | sed 's/^\s\+//' | grep -E '(_iOS$|iOS$)' | head -n 1)
+          if [ -z "$SCHEME" ]; then
+            echo "No iOS scheme found in $PROJECT_PATH"
+            xcodebuild -list -project "$PROJECT_PATH"
+            exit 1
+          fi
+
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Archive unsigned iOS app bundle
+        if: steps.signing.outputs.mode == 'unsigned'
+        shell: bash
+        run: |
+          mkdir -p artifacts/unsigned-ios
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*/Build/Products/Release-iphoneos/*.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "Unsigned .app not found in DerivedData"
+            exit 1
+          fi
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" artifacts/unsigned-ios/NoSubVOD-iOS-unsigned-app.zip
 
       - name: Build IPA (ad-hoc)
+        if: steps.signing.outputs.mode == 'signed'
         run: npx tauri ios build --export-method ad-hoc
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
 
-      - name: Upload IPA artifact
+      - name: Upload signed IPA artifact
+        if: steps.signing.outputs.mode == 'signed'
         uses: actions/upload-artifact@v4
         with:
           name: nosubvod-ios-ipa
           path: |
             src-tauri/gen/apple/build/**/*.ipa
             src-tauri/gen/apple/build/**/*.dSYM
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload unsigned iOS bundle artifact
+        if: steps.signing.outputs.mode == 'unsigned'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nosubvod-ios-unsigned
+          path: |
+            artifacts/unsigned-ios/*.zip
           retention-days: 14
           if-no-files-found: error
