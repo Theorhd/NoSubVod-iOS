@@ -92,7 +92,13 @@ jobs:
             exit 1
           fi
 
-          SCHEME=$(xcodebuild -list -project "$PROJECT_PATH" | awk '/Schemes:/{flag=1;next}/^$/{flag=0}flag' | sed 's/^\s\+//' | grep -E '(_iOS$|iOS$)' | head -n 1)
+          SCHEME=$(xcodebuild -list -project "$PROJECT_PATH" \
+            | awk '/Schemes:/{flag=1;next}/^$/{flag=0}flag' \
+            | sed 's/^[[:space:]]*//' \
+            | grep -E '(_iOS$|iOS$)' \
+            | head -n 1 \
+            | tr -d '\r' \
+            | xargs)
           if [ -z "$SCHEME" ]; then
             echo "No iOS scheme found in $PROJECT_PATH"
             xcodebuild -list -project "$PROJECT_PATH"
