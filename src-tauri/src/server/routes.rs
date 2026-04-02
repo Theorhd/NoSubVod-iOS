@@ -841,12 +841,19 @@ async fn handle_get_downloads(State(state): State<ApiState>) -> impl IntoRespons
     Json(files).into_response()
 }
 
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 async fn handle_system_dialog_folder() -> impl IntoResponse {
     if let Some(folder) = rfd::AsyncFileDialog::new().pick_folder().await {
         return Json(serde_json::json!({ "path": folder.path().to_string_lossy().to_string() }))
             .into_response();
     }
-    Json(serde_json::json!({ "path": null })).into_response()
+    Json(serde_json::json!({ "path": serde_json::Value::Null })).into_response()
+}
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+async fn handle_system_dialog_folder() -> impl IntoResponse {
+    Json(serde_json::json!({ "path": serde_json::Value::Null, "error": "Not supported on mobile" }))
+        .into_response()
 }
 
 async fn handle_get_active_downloads(State(state): State<ApiState>) -> impl IntoResponse {
