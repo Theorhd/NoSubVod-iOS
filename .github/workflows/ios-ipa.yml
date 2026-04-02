@@ -99,85 +99,31 @@ jobs:
           echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
           echo "artifact_suffix=${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Build iOS app (unsigned)
+      - name: Build iOS IPA
         shell: bash
         run: |
           set -euo pipefail
+          npx tauri ios build
 
-          PROJECT_PATH=$(find src-tauri/gen/apple -name '*.xcodeproj' -print -quit)
-          if [ -z "$PROJECT_PATH" ]; then
-            echo "No .xcodeproj found under src-tauri/gen/apple"
-            exit 1
-          fi
-
-          PBXPROJ_PATH="$PROJECT_PATH/project.pbxproj"
-          if [ -f "$PBXPROJ_PATH" ]; then
-            echo "Detected objectVersion in pbxproj:"
-            grep -E '^[[:space:]]*objectVersion[[:space:]]*=' "$PBXPROJ_PATH" || true
-          fi
-
-          SCHEME=$(xcodebuild -list -project "$PROJECT_PATH" \
-            | awk '/Schemes:/{flag=1;next}/^$/{flag=0}flag' \
-            | sed 's/^[[:space:]]*//' \
-            | grep -E '(_iOS$|iOS$)' \
-            | head -n 1 \
-            | tr -d '\r' \
-            | xargs)
-          if [ -z "$SCHEME" ]; then
-            echo "No iOS scheme found in $PROJECT_PATH"
-            xcodebuild -list -project "$PROJECT_PATH"
-            exit 1
-          fi
-
-          CONFIGURATION=$(xcodebuild -list -project "$PROJECT_PATH" \
-            | awk '/Build Configurations:/{flag=1;next}/Schemes:/{flag=0}flag' \
-            | sed 's/^[[:space:]]*//' \
-            | grep -E '^(release|Release)$' \
-            | head -n 1 \
-            | tr -d '\r' \
-            | xargs)
-          if [ -z "$CONFIGURATION" ]; then
-            echo "No release configuration found in $PROJECT_PATH"
-            xcodebuild -list -project "$PROJECT_PATH"
-            exit 1
-          fi
-
-          echo "Using scheme: $SCHEME"
-          echo "Using configuration: $CONFIGURATION"
-
-          xcodebuild \
-            -project "$PROJECT_PATH" \
-            -scheme "$SCHEME" \
-            -configuration "$CONFIGURATION" \
-            -destination 'generic/platform=iOS' \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build | tee xcodebuild.log
-
-      - name: Package unsigned IPA for SideStore/AltStore
+      - name: Collect IPA artifact
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/unsigned-ios/payload/Payload
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*/Build/Products/*-iphoneos/*.app" -print0 | xargs -0 ls -td 2>/dev/null | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "Unsigned .app not found in DerivedData"
+          mkdir -p artifacts/ios
+          IPA_PATH=$(find src-tauri/gen/apple -type f -name '*.ipa' -print0 | xargs -0 ls -td 2>/dev/null | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "No IPA found under src-tauri/gen/apple after build"
+            find src-tauri/gen/apple -maxdepth 6 -type d -print || true
             exit 1
           fi
-          cp -R "$APP_PATH" artifacts/unsigned-ios/payload/Payload/
-          (
-            cd artifacts/unsigned-ios/payload
-            /usr/bin/zip -qry ../NoSubVOD-iOS-unsigned.ipa Payload
-          )
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" artifacts/unsigned-ios/NoSubVOD-iOS-unsigned-app.zip
-          echo "Built unsigned IPA for SideStore/AltStore re-signing and unsigned .app zip for debugging."
+          cp "$IPA_PATH" artifacts/ios/NoSubVOD-iOS.ipa
+          echo "IPA collected: $IPA_PATH"
 
-      - name: Upload unsigned iOS artifacts
+      - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nosubvod-ios-unsigned-${{ steps.meta.outputs.artifact_suffix }}
+          name: nosubvod-ios-${{ steps.meta.outputs.artifact_suffix }}
           path: |
-            artifacts/unsigned-ios/*.ipa
-            artifacts/unsigned-ios/*.zip
+            artifacts/ios/*.ipa
           retention-days: 14
           if-no-files-found: error
