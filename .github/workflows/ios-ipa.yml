@@ -91,6 +91,21 @@ jobs:
       - name: Init Tauri iOS project
         run: npx tauri ios init --ci
 
+      - name: Force unsigned Xcode settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          PBXPROJ_PATH=$(find src-tauri/gen/apple -type f -name 'project.pbxproj' -print -quit)
+          if [ -z "$PBXPROJ_PATH" ]; then
+            echo "project.pbxproj not found under src-tauri/gen/apple"
+            exit 1
+          fi
+
+          perl -0pi -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g; s/CODE_SIGNING_ALLOWED = YES;/CODE_SIGNING_ALLOWED = NO;/g; s/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g; s/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/g; s/PROVISIONING_PROFILE_SPECIFIER = [^;]*;/PROVISIONING_PROFILE_SPECIFIER = "";/g; s/PROVISIONING_PROFILE = [^;]*;/PROVISIONING_PROFILE = "";/g;' "$PBXPROJ_PATH"
+
+          echo "Patched signing settings in $PBXPROJ_PATH"
+          grep -E 'CODE_SIGN_STYLE|CODE_SIGNING_ALLOWED|CODE_SIGNING_REQUIRED|DEVELOPMENT_TEAM|PROVISIONING_PROFILE' "$PBXPROJ_PATH" | head -n 40 || true
+
       - name: Build metadata
         id: meta
         shell: bash
@@ -113,7 +128,14 @@ jobs:
           EOF
 
           export XCODE_XCCONFIG_FILE="$PWD/src-tauri/gen/apple/ci-nosign.xcconfig"
-          CI=true npx tauri ios build --ci --export-method debugging
+          CI=true npx tauri ios build --ci --export-method debugging -- \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM= \
+            CODE_SIGN_IDENTITY= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            PROVISIONING_PROFILE=
 
       - name: Collect IPA artifact
         shell: bash
