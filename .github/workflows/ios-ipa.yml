@@ -103,7 +103,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx tauri ios build
+          cat > src-tauri/gen/apple/ci-nosign.xcconfig <<'EOF'
+          CODE_SIGN_STYLE = Manual
+          CODE_SIGNING_ALLOWED = NO
+          CODE_SIGNING_REQUIRED = NO
+          DEVELOPMENT_TEAM =
+          PROVISIONING_PROFILE_SPECIFIER =
+          PROVISIONING_PROFILE =
+          EOF
+
+          export XCODE_XCCONFIG_FILE="$PWD/src-tauri/gen/apple/ci-nosign.xcconfig"
+          CI=true npx tauri ios build --ci --export-method debugging
 
       - name: Collect IPA artifact
         shell: bash
