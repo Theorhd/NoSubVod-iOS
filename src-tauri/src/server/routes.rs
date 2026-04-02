@@ -86,7 +86,12 @@ async fn handle_screenshare_ws(
 
 // ── Error helpers ─────────────────────────────────────────────────────────────
 
-fn m3u8_response(body: String) -> Response {
+fn m3u8_response(mut body: String) -> Response {
+    body = body.trim_start().to_string();
+    if !body.starts_with("#EXTM3U") {
+        body = format!("#EXTM3U\n{}", body);
+    }
+
     Response::builder()
         .header(header::CONTENT_TYPE, "application/vnd.apple.mpegurl")
         .body(Body::from(body))

@@ -30,6 +30,14 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Create .env file
+        run: |
+          echo "TWITCH_CLIENT_ID=${{ secrets.TWITCH_CLIENT_ID }}" >> src-tauri/.env
+          echo "TWITCH_CLIENT_SECRET=${{ secrets.TWITCH_CLIENT_SECRET }}" >> src-tauri/.env
+          echo "VITE_APP_ENV=production" >> .env
+          echo "VITE_SERVER_URL=https://192.168.1.162:23456" >> .env
+        shell: bash
+
       - name: Select Xcode
         shell: bash
         run: |
@@ -132,7 +140,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          
+
           # Create a wrapper script to intercept xcodebuild
           mkdir -p xcodebuild_wrapper
           cat > xcodebuild_wrapper/xcodebuild <<'EOF'
@@ -150,7 +158,7 @@ jobs:
             AD_HOC_CODE_SIGN_ALLOWED="YES"
           EOF
           chmod +x xcodebuild_wrapper/xcodebuild
-          
+
           export PATH="$PWD/xcodebuild_wrapper:$PATH"
 
           # We still use the xcconfig just in case
@@ -162,7 +170,7 @@ jobs:
           PROVISIONING_PROFILE_SPECIFIER =
           EOF
           export XCODE_XCCONFIG_FILE="$PWD/src-tauri/gen/apple/ci-nosign.xcconfig"
-          
+
           CI=true npx tauri ios build --ci --export-method debugging || true
 
       - name: Ensure IPA or Fallback to App Zip
@@ -170,7 +178,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/ios
-          
+
           # Find generated IPA safely
           IPA_PATH=$(find src-tauri/gen/apple -type f -name '*.ipa' | head -n 1)
           if [ -n "$IPA_PATH" ] && [ -f "$IPA_PATH" ]; then
@@ -178,32 +186,32 @@ jobs:
             echo "Successfully collected Tauri-generated IPA: $IPA_PATH"
             exit 0
           fi
-          
+
           echo "Tauri packaging into IPA failed or didn't run. Searching for .app directory to manually package..."
           APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -type d -name "NoSubVOD.app" | head -n 1)
           if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
             echo "NoSubVOD.app not found. Trying any .app in release-iphoneos..."
             APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -type d -name "*.app" -path "*/release-iphoneos/*" | head -n 1)
           fi
-          
+
           if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
             echo "No .app directory found. The build completely failed."
             exit 1
           fi
-          
+
           echo "Found .app directory at: $APP_PATH"
           echo "Zipping .app directly into Payload/ for a pseudo-IPA..."
-          
+
           # Create IPA folder structure
           mkdir -p IPA_BUILD/Payload
           cp -R "$APP_PATH" "IPA_BUILD/Payload/"
-          
+
           # Zip the Payload directory
           cd IPA_BUILD
           zip -qr ../artifacts/ios/NoSubVOD-iOS.ipa Payload
           cd ..
           rm -rf IPA_BUILD
-          
+
           echo "Fallback IPA collected: artifacts/ios/NoSubVOD-iOS.ipa"
 
       - name: Upload iOS artifact

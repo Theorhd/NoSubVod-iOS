@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "NoSubVOD",
+  "productName": "NoSubVod",
   "version": "0.3.7",
   "identifier": "com.nosubvod.ios",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "NoSubVOD",
+        "title": "NoSubVod",
         "width": 600,
         "height": 860,
         "resizable": true,

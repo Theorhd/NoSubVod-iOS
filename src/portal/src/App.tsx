@@ -24,9 +24,9 @@ import {
   X,
 } from "lucide-react";
 import { ExperienceSettings } from "../../shared/types";
-import Login from "./Login";
 import { useAuth } from "../../shared/hooks/useAuth";
 import { ErrorBoundary } from "../../shared/components/ErrorBoundary";
+import { ServerProvider } from "./ServerContext";
 import { ExtensionProvider, useExtensions } from "./ExtensionContext";
 
 const Home = lazy(() => import("./Home"));
@@ -299,10 +299,6 @@ function AppContent() {
     [contributions],
   );
 
-  if (!isAuthenticated) {
-    return <Login />;
-  }
-
   return (
     <Router>
       <ErrorBoundary>
@@ -356,8 +352,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ExtensionProvider suspendLoading={STABILITY_MODE}>
-      <AppContent />
-    </ExtensionProvider>
+    <ServerProvider>
+      <ExtensionProvider suspendLoading={STABILITY_MODE}>
+        <AppContent />
+      </ExtensionProvider>
+    </ServerProvider>
   );
 }

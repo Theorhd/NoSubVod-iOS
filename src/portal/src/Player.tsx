@@ -23,6 +23,7 @@ import { formatSafeClock as formatClock } from "../../shared/utils/formatters";
 import PlayerRTC from "./PlayerRTC";
 import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
+import { useServer } from "./ServerContext";
 
 const DEFAULT_SETTINGS: ExperienceSettings = {
   oneSync: false,
@@ -325,10 +326,12 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
     [vodId, liveId],
   );
 
+  const { serverUrl } = useServer();
+
   const source = useMemo(() => {
     if (vodId) {
       return {
-        src: `/api/vod/${vodId}/master.m3u8`,
+        src: `${serverUrl}/api/vod/${vodId}/master.m3u8`,
         type: "application/x-mpegurl",
         streamType: "on-demand" as const,
       };
@@ -336,14 +339,14 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
     if (liveId) {
       return {
-        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8`,
+        src: `${serverUrl}/api/live/${encodeURIComponent(liveId)}/master.m3u8`,
         type: "application/x-mpegurl",
         streamType: "live" as const,
       };
     }
 
     return null;
-  }, [vodId, liveId]);
+  }, [vodId, liveId, serverUrl]);
 
   const playerMediaSource = useMemo(
     () => (source ? { src: source.src, type: source.type } : null),
@@ -810,13 +813,20 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
         </div>
       )}
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div
+        style={{
+          display: "flex",
+          flex: 1,
+          flexDirection: "column",
+          overflowY: "auto",
+          overflowX: "hidden",
+        }}
+      >
         <div
           style={{
-            flex: 1,
+            flexShrink: 0,
             display: "flex",
             flexDirection: "column",
-            overflowY: isFullscreen ? "hidden" : "auto",
             background: "#000",
           }}
         >
@@ -859,7 +869,10 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
             )}
           </div>
 
-          <div className="container" style={{ paddingBottom: "100px" }}>
+          <div
+            className="container"
+            style={{ paddingBottom: showChat ? "20px" : "100px" }}
+          >
             {downloadMode && vodId && (
               <ClipMode
                 duration={duration}
@@ -906,11 +919,12 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
           <div
             className="glass"
             style={{
-              width: "340px",
-              borderLeft: "1px solid var(--border)",
+              width: "100%",
+              flex: 1,
+              minHeight: "400px",
+              borderTop: "1px solid var(--border)",
               display: "flex",
               flexDirection: "column",
-              height: "100%",
               position: "relative",
             }}
           >

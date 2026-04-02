@@ -10,6 +10,7 @@ import { LiveStream, LiveStreamsPage, SubEntry } from "../../shared/types";
 import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
 import { StreamCard } from "./components/StreamCard";
 import { TopBar } from "./components/TopBar";
+import { useServer } from "./ServerContext";
 
 const PAGE_SIZE = 24;
 
@@ -50,6 +51,7 @@ const rankStreams = (
 
 export default function Live() {
   const navigate = useNavigate();
+  const { serverUrl, token } = useServer();
 
   const [mode, setMode] = useState<LiveMode>("all");
   const [searchInput, setSearchInput] = useState("");
@@ -105,12 +107,19 @@ export default function Live() {
       }
 
       try {
-        const endpoint = categoryName ? "/api/live/category" : "/api/live";
+        const endpoint = categoryName
+          ? `${serverUrl}/api/live/category`
+          : `${serverUrl}/api/live`;
         const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
         if (cursor) params.set("cursor", cursor);
         if (categoryName) params.set("name", categoryName);
 
-        const res = await fetch(`${endpoint}?${params.toString()}`);
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const res = await fetch(`${endpoint}?${params.toString()}`, {
+          headers,
+        });
         if (!res.ok) throw new Error("Failed to load streams");
         const payload = (await res.json()) as LiveStreamsPage;
 
@@ -126,42 +135,52 @@ export default function Live() {
         setIsLoadingMore(false);
       }
     },
-    [appendRankedStreams, hasMore],
+    [appendRankedStreams, hasMore, serverUrl, token],
   );
 
-  const fetchSearch = useCallback(async (q: string) => {
-    isFetchingRef.current = true;
-    setError("");
-    setIsInitialLoading(true);
-    try {
-      const res = await fetch(
-        `/api/live/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}`,
-      );
-      if (!res.ok) throw new Error("Search failed");
-      const payload = (await res.json()) as LiveStreamsPage;
-      const fresh = (payload.items || []).filter((s) => {
-        if (seenIdsRef.current.has(s.id)) return false;
-        seenIdsRef.current.add(s.id);
-        return true;
-      });
-      setStreams(fresh);
-      setHasMore(false);
-      setNextCursor(null);
-    } catch (err: any) {
-      setError(err?.message || "Search failed");
-    } finally {
-      isFetchingRef.current = false;
-      isInitialLoadingRef.current = false;
-      setIsInitialLoading(false);
-    }
-  }, []);
+  const fetchSearch = useCallback(
+    async (q: string) => {
+      isFetchingRef.current = true;
+      setError("");
+      setIsInitialLoading(true);
+      try {
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const res = await fetch(
+          `${serverUrl}/api/live/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}`,
+          { headers },
+        );
+        if (!res.ok) throw new Error("Search failed");
+        const payload = (await res.json()) as LiveStreamsPage;
+        const fresh = (payload.items || []).filter((s) => {
+          if (seenIdsRef.current.has(s.id)) return false;
+          seenIdsRef.current.add(s.id);
+          return true;
+        });
+        setStreams(fresh);
+        setHasMore(false);
+        setNextCursor(null);
+      } catch (err: any) {
+        setError(err?.message || "Search failed");
+      } finally {
+        isFetchingRef.current = false;
+        isInitialLoadingRef.current = false;
+        setIsInitialLoading(false);
+      }
+    },
+    [serverUrl, token],
+  );
 
   useEffect(() => {
     const init = async () => {
       try {
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
         const [settingsRes, catsRes] = await Promise.all([
-          fetch("/api/settings"),
-          fetch("/api/live/top-categories"),
+          fetch(`${serverUrl}/api/settings`, { headers }),
+          fetch(`${serverUrl}/api/live/top-categories`, { headers }),
         ]);
 
         let oneSync = false;
@@ -172,7 +191,7 @@ export default function Live() {
 
         let subEntries: SubEntry[] = [];
         if (oneSync) {
-          const subsRes = await fetch("/api/subs");
+          const subsRes = await fetch(`${serverUrl}/api/subs`, { headers });
           if (subsRes.ok) subEntries = await subsRes.json();
         } else {
           const local = localStorage.getItem("nsv_subs");
@@ -187,7 +206,7 @@ export default function Live() {
       void fetchPage(null);
     };
     void init();
-  }, [fetchPage]);
+  }, [fetchPage, serverUrl, token]);
 
   useEffect(() => {
     setStreams((current) => rankStreams(current, subLogins));

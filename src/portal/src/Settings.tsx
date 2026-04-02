@@ -8,6 +8,7 @@ import {
 import { TopBar } from "./components/TopBar";
 import { useExtensions } from "./ExtensionContext";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
+import { useServer } from "./ServerContext";
 
 const defaultSettings: ExperienceSettings = {
   oneSync: false,
@@ -546,39 +547,86 @@ const TrustedDevicesSection = React.memo(
 );
 TrustedDevicesSection.displayName = "TrustedDevicesSection";
 
-const UpdaterSection = React.memo(
-  ({ settings, setSettings, setSuccess }: SectionProps) => (
+const ServerConnectionSection = React.memo(() => {
+  const { serverUrl, setServerUrl, token, setToken, removeToken, isOnline } =
+    useServer();
+  const [inputToken, setInputToken] = useState(token || "");
+  const [inputUrl, setInputUrl] = useState(serverUrl || "");
+
+  return (
     <div className="card settings-card">
-      <h2>Mises à jour</h2>
-      <p className="settings-description">
-        Contrôlez la façon dont NoSubVOD se met à jour.
-      </p>
-      <div className="toggle-row">
-        <span>
-          <strong>
-            <label htmlFor="autoUpdateToggle" className="mb-0">
-              Mise à jour automatique
-            </label>
-          </strong>
-          <small>
-            Vérifier, télécharger et installer automatiquement les nouvelles
-            versions
-          </small>
-        </span>
-        <input
-          id="autoUpdateToggle"
-          type="checkbox"
-          checked={settings.autoUpdate || false}
-          onChange={(e) => {
-            setSettings((prev) => ({ ...prev, autoUpdate: e.target.checked }));
-            setSuccess("");
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "16px",
+        }}
+      >
+        <h2>Serveur local (NoSubVod Desktop)</h2>
+        <div
+          style={{
+            padding: "4px 12px",
+            borderRadius: "16px",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            background: isOnline
+              ? "rgba(46, 204, 113, 0.15)"
+              : "rgba(231, 76, 60, 0.15)",
+            color: isOnline ? "#2ecc71" : "#e74c3c",
           }}
+        >
+          {isOnline ? "En Ligne" : "Hors Ligne"}
+        </div>
+      </div>
+
+      <p className="settings-description" style={{ marginBottom: "8px" }}>
+        Connectez l&apos;application Mobile à votre instance Desktop.
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+          marginTop: "16px",
+        }}
+      >
+        <input
+          type="text"
+          className="search-input"
+          placeholder="https://192.168.1.162:23456"
+          value={inputUrl}
+          onChange={(e) => setInputUrl(e.target.value)}
         />
+        <div style={{ display: "flex", gap: "10px" }}>
+          <input
+            type="password"
+            className="search-input"
+            placeholder="Server Token"
+            value={inputToken}
+            onChange={(e) => setInputToken(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button
+            className="action-btn"
+            onClick={() => {
+              if (inputUrl.trim()) setServerUrl(inputUrl.trim());
+              if (inputToken.trim()) {
+                setToken(inputToken.trim());
+              } else {
+                removeToken();
+              }
+            }}
+          >
+            Sauvegarder
+          </button>
+        </div>
       </div>
     </div>
-  ),
-);
-UpdaterSection.displayName = "UpdaterSection";
+  );
+});
+ServerConnectionSection.displayName = "ServerConnectionSection";
 
 export default function Settings() {
   const [settings, setSettings] = useState<ExperienceSettings>(defaultSettings);
@@ -796,11 +844,7 @@ export default function Settings() {
           pendingDeviceId={trustedDevicePendingId}
           onToggleTrusted={onToggleTrusted}
         />
-        <UpdaterSection
-          settings={settings}
-          setSettings={setSettings}
-          setSuccess={setSuccess}
-        />
+        <ServerConnectionSection />
         <div className="card settings-card settings-footer-card">
           {error && <div className="error-text">{error}</div>}
           {success && <div className="success-text">{success}</div>}
