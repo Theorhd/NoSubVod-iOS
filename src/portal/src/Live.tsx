@@ -108,8 +108,8 @@ export default function Live() {
 
       try {
         const endpoint = categoryName
-          ? `${serverUrl}/api/live/category`
-          : `${serverUrl}/api/live`;
+          ? `/api/live/category`
+          : `/api/live`;
         const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
         if (cursor) params.set("cursor", cursor);
         if (categoryName) params.set("name", categoryName);
@@ -148,7 +148,7 @@ export default function Live() {
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const res = await fetch(
-          `${serverUrl}/api/live/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}`,
+          `/api/live/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}`,
           { headers },
         );
         if (!res.ok) throw new Error("Search failed");
@@ -179,8 +179,8 @@ export default function Live() {
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const [settingsRes, catsRes] = await Promise.all([
-          fetch(`${serverUrl}/api/settings`, { headers }),
-          fetch(`${serverUrl}/api/live/top-categories`, { headers }),
+          fetch(`/api/settings`, { headers }),
+          fetch(`/api/live/top-categories`, { headers }),
         ]);
 
         let oneSync = false;
@@ -191,7 +191,7 @@ export default function Live() {
 
         let subEntries: SubEntry[] = [];
         if (oneSync) {
-          const subsRes = await fetch(`${serverUrl}/api/subs`, { headers });
+          const subsRes = await fetch(`/api/subs`, { headers });
           if (subsRes.ok) subEntries = await subsRes.json();
         } else {
           const local = localStorage.getItem("nsv_subs");

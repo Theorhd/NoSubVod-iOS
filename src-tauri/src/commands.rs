@@ -157,6 +157,130 @@ pub async fn internal_api_request(
 }
 
 #[tauri::command]
+pub async fn proxy_remote_request(
+    server_url: String,
+    method: String,
+    path: String,
+    query: Option<String>,
+    headers: Option<HashMap<String, String>>,
+    body: Option<String>,
+) -> Result<InternalApiResponse, String> {
+    let mut url = format!("{server_url}{path}");
+    if let Some(q) = query.filter(|s| !s.is_empty()) {
+        url = format!("{url}?{q}");
+    }
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| format!("Failed to build reqwest client: {e}"))?;
+
+    let req_method = reqwest::Method::from_bytes(method.as_bytes())
+        .map_err(|_| "Invalid HTTP method".to_string())?;
+
+    let mut req_builder = client.request(req_method, &url);
+
+    if let Some(h) = headers {
+        for (k, v) in h {
+            let key_lower = k.to_ascii_lowercase();
+            if key_lower == "host" || key_lower == "content-length" {
+                continue;
+            }
+            req_builder = req_builder.header(k, v);
+        }
+    }
+
+    if let Some(b) = body {
+        req_builder = req_builder.body(b);
+    }
+
+    let resp = req_builder
+        .send()
+        .await
+        .map_err(|e| format!("Proxy request failed: {e}"))?;
+
+    let status = resp.status().as_u16();
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let body_bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read proxy response body: {e}"))?;
+
+    let content_type_ref = content_type
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let is_textual = content_type_ref.starts_with("text/")
+        || content_type_ref.contains("json")
+        || content_type_ref.contains("javascript")
+        || content_type_ref.contains("xml")
+        || content_type_ref.contains("mpegurl");
+
+    let (body_str, is_base64) = if is_textual {
+        (String::from_utf8_lossy(&body_bytes).to_string(), false)
+    } else {
+        (B64.encode(&body_bytes), true)
+    };
+
+    Ok(InternalApiResponse {
+        status,
+        body: body_str,
+        is_base64,
+        content_type,
+    })
+}
+
+#[tauri::command]
+pub async fn scan_local_servers() -> Result<Vec<String>, String> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(std::time::Duration::from_millis(500))
+        .build()
+        .map_err(|e| format!("Failed to build reqwest client: {e}"))?;
+
+    let local_ip = local_ip_address::local_ip()
+        .map_err(|e| format!("Could not get local IP: {:?}", e))?;
+
+    let local_ip_str = local_ip.to_string();
+    let parts: Vec<&str> = local_ip_str.split('.').collect();
+    if parts.len() != 4 {
+        return Ok(vec![]);
+    }
+
+    let prefix = format!("{}.{}.{}", parts[0], parts[1], parts[2]);
+    let mut handles = vec![];
+
+    for i in 1..=254 {
+        let ip = format!("{}.{}", prefix, i);
+        let url = format!("https://{}:23456/api/auth/twitch/status", ip);
+        let client_clone = client.clone();
+        
+        handles.push(tokio::spawn(async move {
+            if let Ok(resp) = client_clone.get(&url).send().await {
+                if resp.status().is_success() {
+                    return Some(format!("https://{}:23456", ip));
+                }
+            }
+            None
+        }));
+    }
+
+    let mut found_servers = vec![];
+    for handle in handles {
+        if let Ok(Some(server_url)) = handle.await {
+            found_servers.push(server_url);
+        }
+    }
+
+    Ok(found_servers)
+}
+
+#[tauri::command]
 pub async fn start_live_chat_polling(live_id: String) -> Result<String, String> {
     let login = live_id.trim().to_lowercase();
     if login.is_empty() {

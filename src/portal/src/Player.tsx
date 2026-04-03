@@ -326,12 +326,12 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
     [vodId, liveId],
   );
 
-  const { serverUrl } = useServer();
+  const { serverUrl } = useServer(); // Kept for other uses if any
 
   const source = useMemo(() => {
     if (vodId) {
       return {
-        src: `${serverUrl}/api/vod/${vodId}/master.m3u8`,
+        src: `/api/vod/${vodId}/master.m3u8`,
         type: "application/x-mpegurl",
         streamType: "on-demand" as const,
       };
@@ -339,14 +339,14 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
     if (liveId) {
       return {
-        src: `${serverUrl}/api/live/${encodeURIComponent(liveId)}/master.m3u8`,
+        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8`,
         type: "application/x-mpegurl",
         streamType: "live" as const,
       };
     }
 
     return null;
-  }, [vodId, liveId, serverUrl]);
+  }, [vodId, liveId]);
 
   const playerMediaSource = useMemo(
     () => (source ? { src: source.src, type: source.type } : null),

@@ -113,6 +113,54 @@ async function invokeInternalApi(
   }
 }
 
+async function invokeRemoteApiViaProxy(
+  resolvedUrl: URL,
+  method: string,
+  body: string | undefined,
+  headers: Headers,
+  serverUrl: string,
+): Promise<Response> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const result = await invoke<InternalApiInvokeResponse>(
+      "proxy_remote_request",
+      {
+        serverUrl,
+        method,
+        path: resolvedUrl.pathname,
+        query: resolvedUrl.search ? resolvedUrl.search.slice(1) : undefined,
+        body,
+        headers: Object.fromEntries(headers.entries()),
+      },
+    );
+
+    const responseHeaders = new Headers();
+    if (result.content_type) {
+      responseHeaders.set("Content-Type", result.content_type);
+    }
+
+    const responseBody: BodyInit = result.is_base64
+      ? (() => {
+          const bytes = decodeBase64ToBytes(result.body ?? "");
+          const buffer = new ArrayBuffer(bytes.byteLength);
+          new Uint8Array(buffer).set(bytes);
+          return new Blob([buffer]);
+        })()
+      : (result.body ?? "");
+
+    return new Response(responseBody, {
+      status: result.status,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    const message = normalizeErrorMessage(error);
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
 function normalizeErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -223,6 +271,16 @@ function createDeviceId(): string {
         } else if (bodyCandidate instanceof URLSearchParams) {
           body = bodyCandidate.toString();
         }
+
+        const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
+        const serverToken = safeStorageGet(localStorage, "nsv_token") || safeStorageGet(sessionStorage, "nsv_token");
+
+        // Mode Paired -> Proxy vers Serveur Desktop
+        if (serverUrl && serverToken) {
+          return invokeRemoteApiViaProxy(resolvedUrl, method, body, headers, serverUrl);
+        }
+        
+        // Mode Standalone -> Appel Rust Local
         return invokeInternalApi(resolvedUrl, method, body, headers);
       }
 

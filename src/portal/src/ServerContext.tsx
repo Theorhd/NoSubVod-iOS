@@ -33,7 +33,7 @@ export function ServerProvider({
     return (
       safeStorageGet(localStorage, "nsv_server_url") ||
       (import.meta as any).env.VITE_SERVER_URL ||
-      "https://192.168.1.162:23456"
+      ""
     );
   });
 

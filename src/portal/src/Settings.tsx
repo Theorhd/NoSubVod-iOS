@@ -6,7 +6,6 @@ import {
   TwitchStatus,
 } from "../../shared/types";
 import { TopBar } from "./components/TopBar";
-import { useExtensions } from "./ExtensionContext";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { useServer } from "./ServerContext";
 
@@ -27,149 +26,6 @@ interface SectionProps {
   >;
   readonly setSuccess: (val: string) => void;
 }
-
-const ServerExperienceSection = React.memo(
-  ({
-    settings,
-    loading,
-    setSettings,
-    setSuccess,
-  }: SectionProps & { loading: boolean }) => (
-    <div className="card settings-card">
-      <h2>Server Experience</h2>
-      <p className="settings-description">
-        Gérez le comportement global de votre serveur NoSubVOD.
-      </p>
-      {loading ? (
-        <div className="trusted-devices-empty">Loading settings...</div>
-      ) : (
-        <>
-          <div className="toggle-row">
-            <span>
-              <strong>
-                <label htmlFor="oneSyncToggle" className="mb-0">
-                  OneSync
-                </label>
-              </strong>
-              <small>
-                Synchronise les données entre devices (subs, historique)
-              </small>
-            </span>
-            <input
-              id="oneSyncToggle"
-              type="checkbox"
-              checked={settings.oneSync}
-              onChange={(e) => {
-                setSettings((prev) => ({ ...prev, oneSync: e.target.checked }));
-                setSuccess("");
-              }}
-            />
-          </div>
-
-          <div className="toggle-row mt-2">
-            <span>
-              <strong>
-                <label htmlFor="launchAtLoginToggle" className="mb-0">
-                  Lancer avec l&apos;OS
-                </label>
-              </strong>
-              <small>
-                Démarre NoSubVOD automatiquement à l&apos;ouverture de session
-              </small>
-            </span>
-            <input
-              id="launchAtLoginToggle"
-              type="checkbox"
-              checked={settings.launchAtLogin}
-              onChange={(e) => {
-                setSettings((prev) => ({
-                  ...prev,
-                  launchAtLogin: e.target.checked,
-                }));
-                setSuccess("");
-              }}
-            />
-          </div>
-        </>
-      )}
-    </div>
-  ),
-);
-ServerExperienceSection.displayName = "ServerExperienceSection";
-
-const ExtensionsSection = React.memo(() => {
-  const { extensions, enabledExtensions, toggleExtension, isLoading } =
-    useExtensions();
-
-  if (isLoading) {
-    return (
-      <div className="card settings-card">
-        <h2>Extensions</h2>
-        <div className="trusted-devices-empty">
-          Chargement des extensions...
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="card settings-card">
-      <h2>Extensions</h2>
-      <p className="settings-description">
-        Activez ou désactivez vos extensions installées.
-      </p>
-      {extensions.length === 0 ? (
-        <div className="trusted-devices-empty">
-          Aucune extension installée. Ajoutez un dossier d&apos;extension valide
-          pour la gérer ici.
-        </div>
-      ) : (
-        <>
-          <div className="trusted-devices-list">
-            {extensions.map((ext) => {
-              const isEnabled = enabledExtensions.includes(ext.manifest.id);
-              return (
-                <div key={ext.manifest.id} className="trusted-device-item">
-                  <div className="trusted-device-header">
-                    <div className="trusted-device-id">
-                      <strong>{ext.manifest.name}</strong>
-                      <div style={{ fontSize: "0.75rem", opacity: 0.7 }}>
-                        v{ext.manifest.version} par{" "}
-                        {ext.manifest.author || "Inconnu"}
-                      </div>
-                    </div>
-                    <label className="trusted-device-toggle">
-                      <span className="trusted-device-toggle-label">
-                        {isEnabled ? "Active" : "Inactive"}
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={isEnabled}
-                        onChange={(e) =>
-                          toggleExtension(ext.manifest.id, e.target.checked)
-                        }
-                      />
-                    </label>
-                  </div>
-                  {ext.manifest.description && (
-                    <div className="trusted-device-meta">
-                      {ext.manifest.description}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <p className="help-text mt-2" style={{ fontStyle: "italic" }}>
-            Note: Désactiver une extension peut nécessiter un rechargement de
-            l&apos;application.
-          </p>
-        </>
-      )}
-    </div>
-  );
-});
-ExtensionsSection.displayName = "ExtensionsSection";
 
 const VideoPlayerSection = React.memo(
   ({ settings, setSettings, setSuccess }: SectionProps) => (
@@ -547,11 +403,52 @@ const TrustedDevicesSection = React.memo(
 );
 TrustedDevicesSection.displayName = "TrustedDevicesSection";
 
+import { QRCodeReader } from "./components/QRCodeReader";
+
 const ServerConnectionSection = React.memo(() => {
   const { serverUrl, setServerUrl, token, setToken, removeToken, isOnline } =
     useServer();
-  const [inputToken, setInputToken] = useState(token || "");
-  const [inputUrl, setInputUrl] = useState(serverUrl || "");
+  const [scannedServers, setScannedServers] = useState<string[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [selectedServer, setSelectedServer] = useState<string | null>(null);
+  const [manualToken, setManualToken] = useState("");
+
+  const scanNetwork = async () => {
+    setScanning(true);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const servers = await invoke<string[]>("scan_local_servers");
+      setScannedServers(servers);
+    } catch (e) {
+      console.error("Scan failed", e);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  useEffect(() => {
+    // Scan by default on mount
+    void scanNetwork();
+  }, []);
+
+  const handleQRScan = (text: string) => {
+    try {
+      const url = new URL(text);
+      const t = url.searchParams.get("t");
+      if (t) {
+        setToken(t);
+        url.searchParams.delete("t");
+        setServerUrl(url.origin);
+        setShowQRScanner(false);
+        setSelectedServer(null);
+      } else {
+        alert("No token found in QR code");
+      }
+    } catch (e) {
+      alert("Invalid QR code format");
+    }
+  };
 
   return (
     <div className="card settings-card">
@@ -564,65 +461,149 @@ const ServerConnectionSection = React.memo(() => {
         }}
       >
         <h2>Serveur local (NoSubVod Desktop)</h2>
-        <div
-          style={{
-            padding: "4px 12px",
-            borderRadius: "16px",
-            fontSize: "0.85rem",
-            fontWeight: 600,
-            background: isOnline
-              ? "rgba(46, 204, 113, 0.15)"
-              : "rgba(231, 76, 60, 0.15)",
-            color: isOnline ? "#2ecc71" : "#e74c3c",
-          }}
-        >
-          {isOnline ? "En Ligne" : "Hors Ligne"}
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button 
+            className="action-btn" 
+            style={{ padding: "4px 8px", fontSize: "0.85rem" }}
+            onClick={scanNetwork}
+            disabled={scanning}
+          >
+            {scanning ? "Scan en cours..." : "Re-scanner"}
+          </button>
+          
+          {serverUrl && token && (
+            <div
+              style={{
+                padding: "4px 12px",
+                borderRadius: "16px",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                background: isOnline
+                  ? "rgba(46, 204, 113, 0.15)"
+                  : "rgba(231, 76, 60, 0.15)",
+                color: isOnline ? "#2ecc71" : "#e74c3c",
+              }}
+            >
+              {isOnline ? "Connecté" : "Déconnecté"}
+            </div>
+          )}
         </div>
       </div>
 
-      <p className="settings-description" style={{ marginBottom: "8px" }}>
-        Connectez l&apos;application Mobile à votre instance Desktop.
+      <p className="settings-description" style={{ marginBottom: "16px" }}>
+        {serverUrl && token 
+          ? `Actuellement lié à : ${serverUrl}` 
+          : "Connectez l'application Mobile à votre instance Desktop en la sélectionnant ci-dessous."}
       </p>
 
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-          marginTop: "16px",
-        }}
-      >
-        <input
-          type="text"
-          className="search-input"
-          placeholder="https://192.168.1.162:23456"
-          value={inputUrl}
-          onChange={(e) => setInputUrl(e.target.value)}
-        />
-        <div style={{ display: "flex", gap: "10px" }}>
-          <input
-            type="password"
-            className="search-input"
-            placeholder="Server Token"
-            value={inputToken}
-            onChange={(e) => setInputToken(e.target.value)}
-            style={{ flex: 1 }}
-          />
-          <button
-            className="action-btn"
-            onClick={() => {
-              if (inputUrl.trim()) setServerUrl(inputUrl.trim());
-              if (inputToken.trim()) {
-                setToken(inputToken.trim());
-              } else {
-                removeToken();
-              }
-            }}
-          >
-            Sauvegarder
-          </button>
+      {serverUrl && token && (
+        <button 
+          className="action-btn"
+          style={{ background: "#e74c3c", color: "white", marginBottom: "16px", width: "100%" }}
+          onClick={() => {
+            removeToken();
+            setServerUrl("");
+          }}
+        >
+          Déconnecter et repasser en mode Standalone
+        </button>
+      )}
+
+      {scannedServers.length === 0 && !scanning && (!serverUrl || !token) && (
+        <div style={{ padding: "16px", background: "rgba(255,255,255,0.05)", borderRadius: "8px", textAlign: "center" }}>
+          <p style={{ color: "#a3a3a3", margin: 0 }}>Aucun Serveur NoSubVod Desktop n'a été détecté</p>
         </div>
-      </div>
+      )}
+
+      {scannedServers.length > 0 && (!serverUrl || !token) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>Serveurs découverts :</h3>
+          {scannedServers.map(s => (
+            <div key={s} style={{ 
+              display: "flex", 
+              justifyContent: "space-between", 
+              alignItems: "center",
+              padding: "12px",
+              background: "rgba(255,255,255,0.05)",
+              borderRadius: "8px"
+            }}>
+              <span>{s}</span>
+              <button 
+                className="action-btn"
+                onClick={() => {
+                  setSelectedServer(s);
+                  setShowQRScanner(false);
+                }}
+              >
+                Connect
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selectedServer && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.8)", zIndex: 9999,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: "20px"
+        }}>
+          <div style={{
+            background: "#18181b", padding: "24px", borderRadius: "12px", width: "100%", maxWidth: "400px"
+          }}>
+            <h3 style={{ marginTop: 0 }}>Connexion à {selectedServer}</h3>
+            
+            <button 
+              className="action-btn" 
+              style={{ width: "100%", marginBottom: "16px" }}
+              onClick={() => setShowQRScanner(true)}
+            >
+              Scanner le QR Code
+            </button>
+            
+            <div style={{ textAlign: "center", margin: "16px 0", color: "#a3a3a3" }}>OU</div>
+            
+            <input
+              type="password"
+              className="search-input"
+              placeholder="Entrer le token manuellement"
+              value={manualToken}
+              onChange={(e) => setManualToken(e.target.value)}
+              style={{ width: "100%", marginBottom: "16px", boxSizing: "border-box" }}
+            />
+            
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button 
+                className="action-btn" 
+                style={{ flex: 1, background: "transparent", border: "1px solid #333" }}
+                onClick={() => setSelectedServer(null)}
+              >
+                Annuler
+              </button>
+              <button 
+                className="action-btn" 
+                style={{ flex: 1 }}
+                onClick={() => {
+                  if (manualToken.trim()) {
+                    setServerUrl(selectedServer);
+                    setToken(manualToken.trim());
+                    setSelectedServer(null);
+                  }
+                }}
+              >
+                Valider
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showQRScanner && (
+        <QRCodeReader 
+          onScan={handleQRScan} 
+          onClose={() => setShowQRScanner(false)} 
+        />
+      )}
     </div>
   );
 });
@@ -805,13 +786,6 @@ export default function Settings() {
     <>
       <TopBar mode="back" title="Settings" />
       <div className="container container-settings">
-        <ServerExperienceSection
-          settings={settings}
-          loading={loading}
-          setSettings={setSettings}
-          setSuccess={setSuccess}
-        />
-        <ExtensionsSection />
         <VideoPlayerSection
           settings={settings}
           setSettings={setSettings}

@@ -143,6 +143,8 @@ pub fn run() {
 
     let builder = builder.invoke_handler(tauri::generate_handler![
         commands::internal_api_request,
+        commands::proxy_remote_request,
+        commands::scan_local_servers,
         commands::get_server_info,
         commands::start_download,
         commands::start_live_chat_polling,
