@@ -107,9 +107,7 @@ export default function Live() {
       }
 
       try {
-        const endpoint = categoryName
-          ? `/api/live/category`
-          : `/api/live`;
+        const endpoint = categoryName ? `/api/live/category` : `/api/live`;
         const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
         if (cursor) params.set("cursor", cursor);
         if (categoryName) params.set("name", categoryName);
@@ -135,7 +133,7 @@ export default function Live() {
         setIsLoadingMore(false);
       }
     },
-    [appendRankedStreams, hasMore, serverUrl, token],
+    [appendRankedStreams, hasMore, token],
   );
 
   const fetchSearch = useCallback(
@@ -169,7 +167,7 @@ export default function Live() {
         setIsInitialLoading(false);
       }
     },
-    [serverUrl, token],
+    [token],
   );
 
   useEffect(() => {

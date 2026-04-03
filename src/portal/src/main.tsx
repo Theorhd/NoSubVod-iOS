@@ -39,33 +39,24 @@ function resolveRequestUrl(input: RequestInfo | URL): string {
 }
 
 function injectApiAuthHeaders(init: RequestInit | undefined): Headers {
-    const standaloneToken =
-      safeStorageGet(sessionStorage, "nsv_token") ||
-      safeStorageGet(localStorage, "nsv_token");
-    const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
-    const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
+  const standaloneToken =
+    safeStorageGet(sessionStorage, "nsv_token") ||
+    safeStorageGet(localStorage, "nsv_token");
+  const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
+  const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
 
-    const activeToken = (serverUrl && pairedToken) ? pairedToken : standaloneToken;
-    const deviceId = safeStorageGet(localStorage, "nsv_device_id");
-    const headers = new Headers(init?.headers);
+  const activeToken = serverUrl && pairedToken ? pairedToken : standaloneToken;
+  const deviceId = safeStorageGet(localStorage, "nsv_device_id");
+  const headers = new Headers(init?.headers);
 
-    if (activeToken && !headers.has("x-nsv-token")) {
-      headers.set("x-nsv-token", activeToken);
+  if (activeToken && !headers.has("x-nsv-token")) {
+    headers.set("x-nsv-token", activeToken);
+  }
   if (deviceId && !headers.has("x-nsv-device-id")) {
     headers.set("x-nsv-device-id", deviceId);
   }
 
   return headers;
-}
-
-function resolveApiUrl(url: string): URL {
-  if (url.startsWith("/")) {
-    return new URL(url, globalThis.location.origin);
-  }
-  if (url.startsWith("api/")) {
-    return new URL(`/${url}`, globalThis.location.origin);
-  }
-  return new URL(url, globalThis.location.origin);
 }
 
 async function invokeInternalApi(
@@ -287,9 +278,15 @@ function createDeviceId(): string {
 
         // Mode Paired -> Proxy vers Serveur Desktop
         if (serverUrl && serverToken) {
-          return invokeRemoteApiViaProxy(resolvedUrl, method, body, headers, serverUrl);
+          return invokeRemoteApiViaProxy(
+            resolvedUrl,
+            method,
+            body,
+            headers,
+            serverUrl,
+          );
         }
-        
+
         // Mode Standalone -> Appel Rust Local
         return invokeInternalApi(resolvedUrl, method, body, headers);
       }

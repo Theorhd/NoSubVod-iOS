@@ -243,8 +243,8 @@ pub async fn scan_local_servers() -> Result<Vec<String>, String> {
         .build()
         .map_err(|e| format!("Failed to build reqwest client: {e}"))?;
 
-    let local_ip = local_ip_address::local_ip()
-        .map_err(|e| format!("Could not get local IP: {:?}", e))?;
+    let local_ip =
+        local_ip_address::local_ip().map_err(|e| format!("Could not get local IP: {:?}", e))?;
 
     let local_ip_str = local_ip.to_string();
     let parts: Vec<&str> = local_ip_str.split('.').collect();
@@ -259,7 +259,7 @@ pub async fn scan_local_servers() -> Result<Vec<String>, String> {
         let ip = format!("{}.{}", prefix, i);
         let url = format!("https://{}:23456/api/auth/twitch/status", ip);
         let client_clone = client.clone();
-        
+
         handles.push(tokio::spawn(async move {
             if let Ok(resp) = client_clone.get(&url).send().await {
                 if resp.status().is_success() {

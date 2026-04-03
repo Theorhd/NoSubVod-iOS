@@ -103,10 +103,7 @@ class InternalApiHlsLoader {
 
         const isBinary = context.responseType === "arraybuffer";
         if (isBinary) {
-          let data = await response.text();
-          if (typeof data === "string" && data.charCodeAt(0) === 0xFEFF) {
-            data = data.slice(1);
-          }
+          const data = await response.arrayBuffer();
           stats.loaded = data.byteLength;
           stats.total = stats.total || data.byteLength;
           stats.tload = performance.now();
@@ -119,7 +116,10 @@ class InternalApiHlsLoader {
           return;
         }
 
-        const data = await response.text();
+        let data = await response.text();
+        if (typeof data === "string" && data.codePointAt(0) === 0xfeff) {
+          data = data.slice(1);
+        }
         stats.loaded = data.length;
         stats.total = stats.total || data.length;
         stats.tload = performance.now();
@@ -226,10 +226,12 @@ function withAuthQuery(url: string): string {
   if (!url) return url;
   if (!url.startsWith("/api/")) return url;
 
-  const standaloneToken = safeStorageGet(sessionStorage, "nsv_token") || safeStorageGet(localStorage, "nsv_token");
+  const standaloneToken =
+    safeStorageGet(sessionStorage, "nsv_token") ||
+    safeStorageGet(localStorage, "nsv_token");
   const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
   const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
-  const token = (serverUrl && pairedToken) ? pairedToken : standaloneToken;
+  const token = serverUrl && pairedToken ? pairedToken : standaloneToken;
   const deviceId = safeStorageGet(localStorage, "nsv_device_id");
   const params: string[] = [];
   if (token) params.push(`t=${encodeURIComponent(token)}`);

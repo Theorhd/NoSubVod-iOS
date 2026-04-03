@@ -464,15 +464,15 @@ const ServerConnectionSection = React.memo(() => {
       >
         <h2>Serveur local (NoSubVod Desktop)</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button 
-            className="action-btn" 
+          <button
+            className="action-btn"
             style={{ padding: "4px 8px", fontSize: "0.85rem" }}
             onClick={scanNetwork}
             disabled={scanning}
           >
             {scanning ? "Scan en cours..." : "Re-scanner"}
           </button>
-          
+
           {serverUrl && token && (
             <div
               style={{
@@ -493,15 +493,20 @@ const ServerConnectionSection = React.memo(() => {
       </div>
 
       <p className="settings-description" style={{ marginBottom: "16px" }}>
-        {serverUrl && token 
-          ? `Actuellement lié à : ${serverUrl}` 
+        {serverUrl && token
+          ? `Actuellement lié à : ${serverUrl}`
           : "Connectez l'application Mobile à votre instance Desktop en la sélectionnant ci-dessous."}
       </p>
 
       {serverUrl && token && (
-        <button 
+        <button
           className="action-btn"
-          style={{ background: "#e74c3c", color: "white", marginBottom: "16px", width: "100%" }}
+          style={{
+            background: "#e74c3c",
+            color: "white",
+            marginBottom: "16px",
+            width: "100%",
+          }}
           onClick={() => {
             removeToken();
             setServerUrl("");
@@ -512,25 +517,39 @@ const ServerConnectionSection = React.memo(() => {
       )}
 
       {scannedServers.length === 0 && !scanning && (!serverUrl || !token) && (
-        <div style={{ padding: "16px", background: "rgba(255,255,255,0.05)", borderRadius: "8px", textAlign: "center" }}>
-          <p style={{ color: "#a3a3a3", margin: 0 }}>Aucun Serveur NoSubVod Desktop n'a été détecté</p>
+        <div
+          style={{
+            padding: "16px",
+            background: "rgba(255,255,255,0.05)",
+            borderRadius: "8px",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ color: "#a3a3a3", margin: 0 }}>
+            Aucun Serveur NoSubVod Desktop n&apos;a été détecté
+          </p>
         </div>
       )}
 
       {scannedServers.length > 0 && (!serverUrl || !token) && (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>Serveurs découverts :</h3>
-          {scannedServers.map(s => (
-            <div key={s} style={{ 
-              display: "flex", 
-              justifyContent: "space-between", 
-              alignItems: "center",
-              padding: "12px",
-              background: "rgba(255,255,255,0.05)",
-              borderRadius: "8px"
-            }}>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>
+            Serveurs découverts :
+          </h3>
+          {scannedServers.map((s) => (
+            <div
+              key={s}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "12px",
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "8px",
+              }}
+            >
               <span>{s}</span>
-              <button 
+              <button
                 className="action-btn"
                 onClick={() => {
                   setSelectedServer(s);
@@ -545,45 +564,77 @@ const ServerConnectionSection = React.memo(() => {
       )}
 
       {selectedServer && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0,0,0,0.8)", zIndex: 9999,
-          display: "flex", alignItems: "center", justifyContent: "center", padding: "20px"
-        }}>
-          <div style={{
-            background: "#18181b", padding: "24px", borderRadius: "12px", width: "100%", maxWidth: "400px"
-          }}>
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.8)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              background: "#18181b",
+              padding: "24px",
+              borderRadius: "12px",
+              width: "100%",
+              maxWidth: "400px",
+            }}
+          >
             <h3 style={{ marginTop: 0 }}>Connexion à {selectedServer}</h3>
-            
-            <button 
-              className="action-btn" 
+
+            <button
+              className="action-btn"
               style={{ width: "100%", marginBottom: "16px" }}
               onClick={() => setShowQRScanner(true)}
             >
               Scanner le QR Code
             </button>
-            
-            <div style={{ textAlign: "center", margin: "16px 0", color: "#a3a3a3" }}>OU</div>
-            
+
+            <div
+              style={{
+                textAlign: "center",
+                margin: "16px 0",
+                color: "#a3a3a3",
+              }}
+            >
+              OU
+            </div>
+
             <input
               type="password"
               className="search-input"
               placeholder="Entrer le token manuellement"
               value={manualToken}
               onChange={(e) => setManualToken(e.target.value)}
-              style={{ width: "100%", marginBottom: "16px", boxSizing: "border-box" }}
+              style={{
+                width: "100%",
+                marginBottom: "16px",
+                boxSizing: "border-box",
+              }}
             />
-            
+
             <div style={{ display: "flex", gap: "10px" }}>
-              <button 
-                className="action-btn" 
-                style={{ flex: 1, background: "transparent", border: "1px solid #333" }}
+              <button
+                className="action-btn"
+                style={{
+                  flex: 1,
+                  background: "transparent",
+                  border: "1px solid #333",
+                }}
                 onClick={() => setSelectedServer(null)}
               >
                 Annuler
               </button>
-              <button 
-                className="action-btn" 
+              <button
+                className="action-btn"
                 style={{ flex: 1 }}
                 onClick={() => {
                   if (manualToken.trim()) {
@@ -601,9 +652,9 @@ const ServerConnectionSection = React.memo(() => {
       )}
 
       {showQRScanner && (
-        <QRCodeReader 
-          onScan={handleQRScan} 
-          onClose={() => setShowQRScanner(false)} 
+        <QRCodeReader
+          onScan={handleQRScan}
+          onClose={() => setShowQRScanner(false)}
         />
       )}
     </div>

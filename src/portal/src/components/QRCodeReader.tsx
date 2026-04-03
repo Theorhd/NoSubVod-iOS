@@ -22,7 +22,7 @@ export const QRCodeReader: React.FC<QRCodeReaderProps> = ({
         supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
         rememberLastUsedCamera: true,
       },
-      /* verbose= */ false
+      /* verbose= */ false,
     );
 
     scannerRef.current.render(
@@ -32,9 +32,9 @@ export const QRCodeReader: React.FC<QRCodeReaderProps> = ({
         }
         onScan(decodedText);
       },
-      (error) => {
+      (_error) => {
         // ignore periodic scan failures
-      }
+      },
     );
 
     return () => {
@@ -71,7 +71,13 @@ export const QRCodeReader: React.FC<QRCodeReaderProps> = ({
           boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: "16px",
+          }}
+        >
           <h3 style={{ margin: 0, color: "#fff" }}>Scan QR Code</h3>
           <button
             onClick={onClose}
@@ -87,10 +93,17 @@ export const QRCodeReader: React.FC<QRCodeReaderProps> = ({
             &times;
           </button>
         </div>
-        
+
         <div id={containerId} style={{ width: "100%", color: "#000" }}></div>
-        
-        <p style={{ marginTop: "16px", color: "#a3a3a3", fontSize: "14px", textAlign: "center" }}>
+
+        <p
+          style={{
+            marginTop: "16px",
+            color: "#a3a3a3",
+            fontSize: "14px",
+            textAlign: "center",
+          }}
+        >
           Pointez votre caméra vers le QR code sur votre application Desktop.
         </p>
       </div>
