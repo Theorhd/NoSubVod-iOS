@@ -197,7 +197,7 @@ impl HistoryStore {
     ) -> (Vec<HistoryEntry>, usize) {
         let data = self.data.read().await;
         let total = data.history.len();
-        if total == 0 || offset >= total {
+        if total == 0 || offset >= total || limit == 0 {
             return (Vec::new(), total);
         }
 
@@ -205,12 +205,16 @@ impl HistoryStore {
 
         // Partial sort: only sort what's needed for the current page
         let end = (offset + limit).min(total);
-        let (prefix, _, _) =
+        let (prefix, nth, _) =
             entries.select_nth_unstable_by(end - 1, |a, b| b.updated_at.cmp(&a.updated_at));
 
         prefix.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
-        let paginated = prefix.iter().skip(offset).take(limit).cloned().collect();
+        let mut head = Vec::with_capacity(prefix.len() + 1);
+        head.extend(prefix.iter().cloned());
+        head.push(nth.clone());
+
+        let paginated = head.into_iter().skip(offset).take(limit).collect();
 
         (paginated, total)
     }
@@ -260,7 +264,7 @@ impl HistoryStore {
     ) -> (Vec<WatchlistEntry>, usize) {
         let data = self.data.read().await;
         let total = data.watchlist.len();
-        if total == 0 || offset >= total {
+        if total == 0 || offset >= total || limit == 0 {
             return (Vec::new(), total);
         }
 
@@ -268,11 +272,15 @@ impl HistoryStore {
 
         // Partial sort: newest first
         let end = (offset + limit).min(total);
-        let (prefix, _, _) =
+        let (prefix, nth, _) =
             entries.select_nth_unstable_by(end - 1, |a, b| b.added_at.cmp(&a.added_at));
         prefix.sort_by(|a, b| b.added_at.cmp(&a.added_at));
 
-        let paginated = prefix.iter().skip(offset).take(limit).cloned().collect();
+        let mut head = Vec::with_capacity(prefix.len() + 1);
+        head.extend(prefix.iter().cloned());
+        head.push(nth.clone());
+
+        let paginated = head.into_iter().skip(offset).take(limit).collect();
 
         (paginated, total)
     }
@@ -386,7 +394,7 @@ impl HistoryStore {
     pub async fn get_subs_paged(&self, offset: usize, limit: usize) -> (Vec<SubEntry>, usize) {
         let data = self.data.read().await;
         let total = data.subs.len();
-        if total == 0 || offset >= total {
+        if total == 0 || offset >= total || limit == 0 {
             return (Vec::new(), total);
         }
 
@@ -394,11 +402,15 @@ impl HistoryStore {
 
         // Partial sort: alphabetical by display_name
         let end = (offset + limit).min(total);
-        let (prefix, _, _) =
+        let (prefix, nth, _) =
             entries.select_nth_unstable_by(end - 1, |a, b| a.display_name.cmp(&b.display_name));
         prefix.sort_by(|a, b| a.display_name.cmp(&b.display_name));
 
-        let paginated = prefix.iter().skip(offset).take(limit).cloned().collect();
+        let mut head = Vec::with_capacity(prefix.len() + 1);
+        head.extend(prefix.iter().cloned());
+        head.push(nth.clone());
+
+        let paginated = head.into_iter().skip(offset).take(limit).collect();
 
         (paginated, total)
     }
@@ -687,5 +699,49 @@ mod tests {
         let subs = store.get_subs().await;
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].login, "testuser");
+    }
+
+    #[tokio::test]
+    async fn test_history_pagination_offset_page_returns_item() {
+        let dir = tempdir().unwrap();
+        let store = HistoryStore::load(dir.path().to_path_buf()).unwrap();
+
+        store.update_history("vod-a", 42.0, 120.0).await.unwrap();
+        store.update_history("vod-b", 84.0, 240.0).await.unwrap();
+
+        let (page, total) = store.get_history_paged(1, 1).await;
+        assert_eq!(total, 2);
+        assert_eq!(page.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_watchlist_pagination_offset_page_returns_item() {
+        let dir = tempdir().unwrap();
+        let store = HistoryStore::load(dir.path().to_path_buf()).unwrap();
+
+        store
+            .add_to_watchlist(WatchlistEntry {
+                vod_id: "vod-a".to_string(),
+                title: "A".to_string(),
+                preview_thumbnail_url: "http://example.com/a.jpg".to_string(),
+                length_seconds: 100,
+                added_at: 0,
+            })
+            .await
+            .unwrap();
+        store
+            .add_to_watchlist(WatchlistEntry {
+                vod_id: "vod-b".to_string(),
+                title: "B".to_string(),
+                preview_thumbnail_url: "http://example.com/b.jpg".to_string(),
+                length_seconds: 200,
+                added_at: 0,
+            })
+            .await
+            .unwrap();
+
+        let (page, total) = store.get_watchlist_paged(1, 1).await;
+        assert_eq!(total, 2);
+        assert_eq!(page.len(), 1);
     }
 }
