@@ -42,6 +42,25 @@ function isTauriRuntime(): boolean {
   );
 }
 
+function normalizePlaylistText(raw: string): string {
+  let text = raw.replaceAll(/\r\n?/g, "\n");
+  if (text.codePointAt(0) === 0xfeff) {
+    text = text.slice(1);
+  }
+  text = text.trimStart();
+
+  if (text.startsWith("#EXTM3U")) {
+    return text;
+  }
+
+  // Some upstream manifests can miss the EXTM3U prolog while still being valid HLS tags.
+  if (text.includes("#EXT-X-") || text.includes("#EXTINF:")) {
+    return `#EXTM3U\n${text}`;
+  }
+
+  return text;
+}
+
 class InternalApiHlsLoader {
   private abortController: AbortController | null = null;
 
@@ -117,7 +136,28 @@ class InternalApiHlsLoader {
         }
 
         let data = await response.text();
-        if (typeof data === "string" && data.codePointAt(0) === 0xfeff) {
+        const contentType = response.headers.get("content-type")?.toLowerCase() || "";
+        const isPlaylistRequest =
+          String(context.url || "").toLowerCase().includes(".m3u8") ||
+          contentType.includes("mpegurl") ||
+          contentType.includes("vnd.apple.mpegurl");
+
+        if (typeof data === "string" && isPlaylistRequest) {
+          data = normalizePlaylistText(data);
+          if (!data.startsWith("#EXTM3U")) {
+            const preview = data.slice(0, 180).replaceAll(/\s+/g, " ");
+            callbacks.onError(
+              {
+                code: response.status,
+                text: `Invalid HLS manifest body for ${context.url} (preview: ${preview || "<empty>"})`,
+              },
+              context,
+              null,
+              response,
+            );
+            return;
+          }
+        } else if (typeof data === "string" && data.codePointAt(0) === 0xfeff) {
           data = data.slice(1);
         }
         stats.loaded = data.length;
