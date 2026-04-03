@@ -34,6 +34,7 @@ export function canUseDisplayCapture(): boolean {
 }
 
 export function canUseHlsJs(): boolean {
+  if (isIOSFamily()) return false; // Force native AVPlayer on iOS
   return globalThis.window !== undefined && typeof MediaSource !== "undefined";
 }
 

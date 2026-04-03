@@ -1,12 +1,5 @@
 use axum::{extract::State, middleware::Next, response::Response};
 
-#[cfg(not(debug_assertions))]
-use axum::{
-    http::{header, StatusCode},
-    response::IntoResponse,
-    Json,
-};
-
 use super::state::ApiState;
 
 /// Validates requests carry a valid server token via the `X-NSV-Token` header
