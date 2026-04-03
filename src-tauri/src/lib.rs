@@ -130,13 +130,13 @@ pub fn run() {
                     }
                 });
             }
-
-            // ── Start Axum HTTP server (desktop only) ──────────────────────
-            let app_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                server::start_server(state, app_handle).await;
-            });
         }
+
+        // ── Start Axum HTTP server (desktop AND mobile) ──────────────────────
+        let app_handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+            server::start_server(state, app_handle).await;
+        });
 
         Ok(())
     });

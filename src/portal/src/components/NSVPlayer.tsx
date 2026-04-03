@@ -136,9 +136,12 @@ class InternalApiHlsLoader {
         }
 
         let data = await response.text();
-        const contentType = response.headers.get("content-type")?.toLowerCase() || "";
+        const contentType =
+          response.headers.get("content-type")?.toLowerCase() || "";
         const isPlaylistRequest =
-          String(context.url || "").toLowerCase().includes(".m3u8") ||
+          String(context.url || "")
+            .toLowerCase()
+            .includes(".m3u8") ||
           contentType.includes("mpegurl") ||
           contentType.includes("vnd.apple.mpegurl");
 
@@ -276,10 +279,21 @@ function withAuthQuery(url: string): string {
   const params: string[] = [];
   if (token) params.push(`t=${encodeURIComponent(token)}`);
   if (deviceId) params.push(`d=${encodeURIComponent(deviceId)}`);
-  if (params.length === 0) return url;
 
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}${params.join("&")}`;
+  let finalUrl = url;
+  if (url.startsWith("/api/")) {
+    if (serverUrl) {
+      finalUrl = `${serverUrl.replace(/\/$/, "")}${url}`;
+    } else if (isTauriRuntime() && isMobileDevice()) {
+      // Native AVPlayer relies on the local HTTP server, bypassing fetch IPC:
+      finalUrl = `http://127.0.0.1:23455${url}`;
+    }
+  }
+
+  if (params.length === 0) return finalUrl;
+
+  const sep = finalUrl.includes("?") ? "&" : "?";
+  return `${finalUrl}${sep}${params.join("&")}`;
 }
 
 const NSVPlayer = React.memo(
