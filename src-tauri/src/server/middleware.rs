@@ -97,9 +97,11 @@ pub async fn auth_middleware(
 
     let device_id = header_device_id.or(query_device_id);
 
-    let provided = token_from_header.or(token_from_query);
-
-    let token_ok = provided.as_deref() == Some(&state.server_token);
+    // Accept either auth source independently:
+    // a stale header must not override a valid signed query token.
+    let header_token_ok = token_from_header.as_deref() == Some(&state.server_token);
+    let query_token_ok = token_from_query.as_deref() == Some(&state.server_token);
+    let token_ok = header_token_ok || query_token_ok;
     let device_trusted = if token_ok {
         false
     } else if let Some(id) = device_id.as_deref() {
