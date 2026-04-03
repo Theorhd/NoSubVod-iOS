@@ -103,7 +103,10 @@ class InternalApiHlsLoader {
 
         const isBinary = context.responseType === "arraybuffer";
         if (isBinary) {
-          const data = await response.arrayBuffer();
+          let data = await response.text();
+          if (typeof data === "string" && data.charCodeAt(0) === 0xFEFF) {
+            data = data.slice(1);
+          }
           stats.loaded = data.byteLength;
           stats.total = stats.total || data.byteLength;
           stats.tload = performance.now();
@@ -223,7 +226,10 @@ function withAuthQuery(url: string): string {
   if (!url) return url;
   if (!url.startsWith("/api/")) return url;
 
-  const token = safeStorageGet(sessionStorage, "nsv_token");
+  const standaloneToken = safeStorageGet(sessionStorage, "nsv_token") || safeStorageGet(localStorage, "nsv_token");
+  const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
+  const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
+  const token = (serverUrl && pairedToken) ? pairedToken : standaloneToken;
   const deviceId = safeStorageGet(localStorage, "nsv_device_id");
   const params: string[] = [];
   if (token) params.push(`t=${encodeURIComponent(token)}`);

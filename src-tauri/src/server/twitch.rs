@@ -2778,7 +2778,7 @@ impl TwitchService {
 
         let mut lines = Vec::new();
         for line in body.split('\n') {
-            let l = line.trim_end_matches('\r');
+            let l = line.trim_end_matches('\r').strip_prefix('\u{feff}').unwrap_or_else(|| line.trim_end_matches('\r'));
             if l.is_empty() || l.starts_with('#') {
                 if l.contains("URI=\"") {
                     lines.push(rewrite_tag_uri_with_proxy(l, &base_url, token).await);

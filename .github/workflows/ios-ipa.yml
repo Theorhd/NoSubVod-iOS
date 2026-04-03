@@ -96,11 +96,11 @@ jobs:
       - name: Build portal frontend
         run: npm run build:portal
 
-      - name: Generate Desktop & Mobile Icons
-        run: npx tauri icon src-tauri/icons/icon.png
-
       - name: Init Tauri iOS project
         run: npx tauri ios init --ci
+
+      - name: Generate Desktop & Mobile Icons
+        run: npx tauri icon src-tauri/icons/icon.png
 
       - name: Force unsigned Xcode settings
         shell: bash

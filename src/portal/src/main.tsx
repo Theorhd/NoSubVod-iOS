@@ -39,15 +39,18 @@ function resolveRequestUrl(input: RequestInfo | URL): string {
 }
 
 function injectApiAuthHeaders(init: RequestInit | undefined): Headers {
-  const token =
-    safeStorageGet(sessionStorage, "nsv_token") ||
-    safeStorageGet(localStorage, "nsv_token");
-  const deviceId = safeStorageGet(localStorage, "nsv_device_id");
-  const headers = new Headers(init?.headers);
+    const standaloneToken =
+      safeStorageGet(sessionStorage, "nsv_token") ||
+      safeStorageGet(localStorage, "nsv_token");
+    const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
+    const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
 
-  if (token && !headers.has("x-nsv-token")) {
-    headers.set("x-nsv-token", token);
-  }
+    const activeToken = (serverUrl && pairedToken) ? pairedToken : standaloneToken;
+    const deviceId = safeStorageGet(localStorage, "nsv_device_id");
+    const headers = new Headers(init?.headers);
+
+    if (activeToken && !headers.has("x-nsv-token")) {
+      headers.set("x-nsv-token", activeToken);
   if (deviceId && !headers.has("x-nsv-device-id")) {
     headers.set("x-nsv-device-id", deviceId);
   }
@@ -257,12 +260,19 @@ function createDeviceId(): string {
     }
 
     // Only inject token on our own API calls
-    if (url.startsWith("/api/") || url.startsWith("api/")) {
+    let isApiCall = false;
+    let resolvedUrl: URL | null = null;
+    try {
+      resolvedUrl = new URL(url, globalThis.location.origin);
+      isApiCall = resolvedUrl.pathname.startsWith("/api/");
+    } catch {
+      isApiCall = url.startsWith("/api/") || url.startsWith("api/");
+    }
+
+    if (isApiCall) {
       const headers = injectApiAuthHeaders(init);
 
-      if (isTauriRuntime()) {
-        const resolvedUrl = resolveApiUrl(url);
-
+      if (isTauriRuntime() && resolvedUrl) {
         const method = (init?.method || "GET").toUpperCase();
         const bodyCandidate = init?.body;
         let body: string | undefined;
@@ -273,7 +283,7 @@ function createDeviceId(): string {
         }
 
         const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
-        const serverToken = safeStorageGet(localStorage, "nsv_token") || safeStorageGet(sessionStorage, "nsv_token");
+        const serverToken = safeStorageGet(localStorage, "nsv_server_token");
 
         // Mode Paired -> Proxy vers Serveur Desktop
         if (serverUrl && serverToken) {
