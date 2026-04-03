@@ -23,7 +23,6 @@ import { formatSafeClock as formatClock } from "../../shared/utils/formatters";
 import PlayerRTC from "./PlayerRTC";
 import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
-import { useServer } from "./ServerContext";
 
 const DEFAULT_SETTINGS: ExperienceSettings = {
   oneSync: false,
@@ -325,8 +324,6 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
     () => resolvePlayerTitle(vodId, liveId),
     [vodId, liveId],
   );
-
-  const { serverUrl } = useServer(); // Kept for other uses if any
 
   const source = useMemo(() => {
     if (vodId) {

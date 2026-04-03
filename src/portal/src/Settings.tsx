@@ -444,8 +444,10 @@ const ServerConnectionSection = React.memo(() => {
         setSelectedServer(null);
       } else {
         alert("No token found in QR code");
+        console.error("No token found in QR code:", text);
       }
     } catch (e) {
+      console.error("QR Code parse error:", e);
       alert("Invalid QR code format");
     }
   };
