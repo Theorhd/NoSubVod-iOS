@@ -26,6 +26,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.6.0",
+    "@tauri-apps/plugin-opener": "^2.5.3",
     "@vidstack/react": "^1.12.13",
     "hls.js": "^1.6.15",
     "html5-qrcode": "^2.3.8",

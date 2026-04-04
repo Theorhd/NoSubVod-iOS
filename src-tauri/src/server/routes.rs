@@ -34,8 +34,8 @@ use super::{
     state::ApiState,
     types::{SubEntry, WatchlistEntry},
     validation::{
-        filter_hevc_variants_for_ios, is_legacy_ios_request, is_valid_id, is_valid_login,
-        lock_master_playlist_to_height, preferred_quality_height,
+        cap_master_playlist_to_max_height, filter_hevc_variants_for_ios, is_legacy_ios_request,
+        is_valid_id, is_valid_login, lock_master_playlist_to_height, preferred_quality_height,
     },
 };
 use moka::future::Cache;
@@ -252,7 +252,9 @@ async fn handle_live_master(
         q.quality.as_deref(),
         settings.default_video_quality.as_deref(),
     ) {
-        body = lock_master_playlist_to_height(&body, target_height);
+        // Live playback keeps ABR fallbacks below the selected quality to avoid
+        // stalls on mobile networks while still honoring an upper quality bound.
+        body = cap_master_playlist_to_max_height(&body, target_height);
     }
 
     Ok(m3u8_response(body))

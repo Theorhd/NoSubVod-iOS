@@ -60,7 +60,9 @@ pub fn run() {
     init_tracing();
     init_rustls_crypto_provider();
 
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init());
 
     builder = builder.setup(|app| {
         // Shared state is initialized on every platform so frontend can use

@@ -301,6 +301,114 @@ pub fn lock_master_playlist_to_height(master_playlist: &str, target_height: u32)
     output.join("\n")
 }
 
+pub fn cap_master_playlist_to_max_height(master_playlist: &str, max_height: u32) -> String {
+    if max_height == 0 {
+        return master_playlist.to_string();
+    }
+
+    let lines: Vec<String> = master_playlist.lines().map(ToString::to_string).collect();
+    if lines.is_empty() {
+        return master_playlist.to_string();
+    }
+
+    let mut variants: Vec<VariantRef> = Vec::new();
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = lines[index].trim();
+        if line.starts_with("#EXT-X-STREAM-INF") {
+            let mut uri_index: Option<usize> = None;
+            let mut scan = index + 1;
+
+            while scan < lines.len() {
+                let next_line = lines[scan].trim();
+                if next_line.is_empty() {
+                    scan += 1;
+                    continue;
+                }
+
+                if next_line.starts_with('#') {
+                    if next_line.starts_with("#EXT-X-STREAM-INF") {
+                        break;
+                    }
+                    scan += 1;
+                    continue;
+                }
+
+                uri_index = Some(scan);
+                break;
+            }
+
+            if let Some(uri_idx) = uri_index {
+                variants.push(VariantRef {
+                    stream_inf_index: index,
+                    uri_index: uri_idx,
+                    height: extract_resolution_height(line).unwrap_or(0),
+                    group_id: extract_quoted_attr(line, "VIDEO")
+                        .or_else(|| extract_quoted_attr(line, "GROUP-ID"))
+                        .or_else(|| extract_quoted_attr(line, "NAME")),
+                });
+                index = uri_idx + 1;
+                continue;
+            }
+        }
+
+        index += 1;
+    }
+
+    if variants.len() <= 1 {
+        return master_playlist.to_string();
+    }
+
+    let mut skip_line = vec![false; lines.len()];
+    let mut removed_group_ids: Vec<String> = Vec::new();
+    let mut removed_any = false;
+
+    for variant in &variants {
+        if variant.height > 0 && variant.height > max_height {
+            skip_line[variant.stream_inf_index] = true;
+            skip_line[variant.uri_index] = true;
+            removed_any = true;
+            if let Some(group_id) = &variant.group_id {
+                removed_group_ids.push(group_id.clone());
+            }
+        }
+    }
+
+    if !removed_any {
+        return master_playlist.to_string();
+    }
+
+    let mut output: Vec<&str> = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        if skip_line[index] {
+            continue;
+        }
+
+        let trimmed = line.trim();
+        if trimmed.starts_with("#EXT-X-MEDIA") {
+            let should_remove = removed_group_ids.iter().any(|group_id| {
+                trimmed.contains(&format!("GROUP-ID=\"{group_id}\""))
+                    || trimmed.contains(&format!("NAME=\"{group_id}\""))
+            });
+            if should_remove {
+                continue;
+            }
+        }
+
+        output.push(line.as_str());
+    }
+
+    let has_stream_inf = output
+        .iter()
+        .any(|line| line.trim().starts_with("#EXT-X-STREAM-INF"));
+    if !has_stream_inf {
+        return master_playlist.to_string();
+    }
+
+    output.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -421,5 +529,28 @@ chunklist_w111.m3u8
         assert!(locked.contains("id=720"));
         assert!(!locked.contains("id=1080"));
         assert!(!locked.contains("id=480"));
+    }
+
+    #[test]
+    fn test_cap_master_playlist_to_max_height() {
+        let playlist = r#"#EXTM3U
+#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="1080p",NAME="1080p",AUTOSELECT=YES,DEFAULT=YES
+#EXT-X-STREAM-INF:BANDWIDTH=8500000,RESOLUTION=1920x1080,VIDEO="1080p"
+/api/stream/variant.m3u8?id=1080
+#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="720p60",NAME="720p60",AUTOSELECT=NO,DEFAULT=NO
+#EXT-X-STREAM-INF:BANDWIDTH=4500000,RESOLUTION=1280x720,VIDEO="720p60"
+/api/stream/variant.m3u8?id=720
+#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="480p30",NAME="480p30",AUTOSELECT=NO,DEFAULT=NO
+#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=854x480,VIDEO="480p30"
+/api/stream/variant.m3u8?id=480
+"#;
+
+        let capped = cap_master_playlist_to_max_height(playlist, 720);
+        assert!(!capped.contains("RESOLUTION=1920x1080"));
+        assert!(capped.contains("RESOLUTION=1280x720"));
+        assert!(capped.contains("RESOLUTION=854x480"));
+        assert!(!capped.contains("id=1080"));
+        assert!(capped.contains("id=720"));
+        assert!(capped.contains("id=480"));
     }
 }

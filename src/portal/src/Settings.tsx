@@ -847,8 +847,20 @@ export default function Settings() {
     // Open synchronously in a separate window/sheet to avoid replacing the app webview.
     const popup = globalThis.open("/api/auth/twitch/begin", "_blank");
     if (!popup) {
+      try {
+        const runtime = globalThis as { __TAURI_INTERNALS__?: unknown };
+        if (runtime.__TAURI_INTERNALS__) {
+          const { openUrl } = await import("@tauri-apps/plugin-opener");
+          await openUrl("http://127.0.0.1:23400/api/auth/twitch/begin");
+          startTwitchStatusPolling();
+          return;
+        }
+      } catch (openError) {
+        console.error("Failed to open Twitch OAuth via opener plugin", openError);
+      }
+
       setError(
-        "Impossible d'ouvrir la fenetre Twitch. Activez les popups et reessayez.",
+        "Impossible d'ouvrir la fenetre Twitch. Fermez les bloqueurs de popups ou redemarrez l'app.",
       );
       return;
     }
