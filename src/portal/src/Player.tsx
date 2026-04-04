@@ -402,7 +402,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
       try {
         const res = await fetch(
-          `/api/vod/${vodId}/chat?offset=${offset}&limit=120`,
+          `/api/vod/${vodId}/chat?offset=${offset}&limit=100`,
         );
         if (!res.ok) return;
 

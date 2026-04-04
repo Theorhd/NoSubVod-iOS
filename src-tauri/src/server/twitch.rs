@@ -1970,7 +1970,7 @@ impl TwitchService {
         offset: f64,
         limit: usize,
     ) -> AppResult<Value> {
-        let safe_limit = limit.clamp(20, 200);
+        let safe_limit = limit.clamp(20, 100);
         let body = format!(
             r#"{{"query":"query {{ video(id: \"{}\") {{ comments(first: {}, contentOffsetSeconds: {}) {{ edges {{ node {{ id, commenter {{ displayName, login, profileImageURL(width: 50) }}, message {{ fragments {{ text, emote {{ id, setID }} }} }}, contentOffsetSeconds, createdAt }} }}, pageInfo {{ hasNextPage }} }} }} }}"}}"#,
             gql_escape(vod_id),

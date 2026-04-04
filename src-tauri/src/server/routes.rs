@@ -126,7 +126,8 @@ async fn handle_vod_chat(
     }
 
     let offset = q.offset.unwrap_or(0.0);
-    let limit = q.limit.unwrap_or(120).clamp(20, 200);
+    // Twitch comments(first: ...) now rejects values above 100.
+    let limit = q.limit.unwrap_or(100).clamp(20, 100);
     let data = state
         .twitch
         .fetch_video_chat(&vod_id, offset, limit)
