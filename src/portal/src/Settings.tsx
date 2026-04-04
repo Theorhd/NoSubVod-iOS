@@ -405,6 +405,8 @@ const TwitchAccountSection = React.memo(
     twitchLinking,
     twitchPolling,
     twitchImporting,
+    twitchError,
+    twitchManualAuthUrl,
     linkTwitch,
     unlinkTwitch,
     importFollows,
@@ -429,6 +431,8 @@ const TwitchAccountSection = React.memo(
             Configuration Twitch incomplète (.env).
           </div>
         )}
+
+        {twitchError && <div className="error-text">{twitchError}</div>}
 
         {twitchStatus?.linked ? (
           <div>
@@ -485,17 +489,31 @@ const TwitchAccountSection = React.memo(
             </div>
           </div>
         ) : (
-          <button
-            onClick={linkTwitch}
-            disabled={
-              twitchLinking ||
-              twitchPolling ||
-              (twitchStatus !== null && !twitchStatus.clientConfigured)
-            }
-            className="action-btn twitch-connect-btn"
-          >
-            {linkButtonLabel}
-          </button>
+          <>
+            <button
+              onClick={linkTwitch}
+              disabled={
+                twitchLinking ||
+                twitchPolling ||
+                (twitchStatus !== null && !twitchStatus.clientConfigured)
+              }
+              className="action-btn twitch-connect-btn"
+            >
+              {linkButtonLabel}
+            </button>
+
+            {twitchManualAuthUrl && (
+              <a
+                href={twitchManualAuthUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="action-btn secondary-btn soft-outline-btn"
+                style={{ marginTop: "10px", display: "inline-flex" }}
+              >
+                Ouvrir Twitch manuellement
+              </a>
+            )}
+          </>
         )}
       </div>
     );
@@ -926,6 +944,10 @@ export default function Settings() {
   const [twitchLinking, setTwitchLinking] = useState(false);
   const [twitchPolling, setTwitchPolling] = useState(false);
   const [twitchImporting, setTwitchImporting] = useState(false);
+  const [twitchError, setTwitchError] = useState("");
+  const [twitchManualAuthUrl, setTwitchManualAuthUrl] = useState<string | null>(
+    null,
+  );
   const [trustedDevices, setTrustedDevices] = useState<TrustedDevice[]>([]);
   const [trustedDevicePendingId, setTrustedDevicePendingId] = useState<
     string | null
@@ -1157,27 +1179,29 @@ export default function Settings() {
   const linkTwitch = useCallback(async () => {
     setError("");
     setSuccess("");
+    setTwitchError("");
+    setTwitchManualAuthUrl(null);
     setTwitchLinking(true);
 
     if (twitchStatus && !twitchStatus.clientConfigured) {
-      setError(
-        "Configuration OAuth Twitch manquante côté serveur. Vérifie le fichier .env.",
-      );
+      const msg =
+        "Configuration OAuth Twitch manquante côté serveur. Vérifie le fichier .env.";
+      setError(msg);
+      setTwitchError(msg);
       setTwitchLinking(false);
       return;
     }
 
     let popup: Window | null = null;
     const isTauri = isTauriRuntime();
-
-    if (!isTauri) {
-      popup = globalThis.open("", "_blank", "noopener,noreferrer");
-    }
+    popup = globalThis.open("", "_blank", "noopener,noreferrer");
 
     try {
       const authUrl = await fetchTwitchAuthUrl();
+      setTwitchManualAuthUrl(authUrl);
       const launchResult = await openTwitchAuthFlow(authUrl, popup, isTauri);
       setSuccess("Ouverture de Twitch...");
+      setTwitchError("");
       if (launchResult === "opened") {
         startTwitchStatusPolling();
       }
@@ -1186,11 +1210,12 @@ export default function Settings() {
         popup.close();
       }
       console.error("Failed to start Twitch OAuth", openError);
-      setError(
+      const msg =
         openError instanceof Error
           ? openError.message
-          : "Impossible d'ouvrir la fenêtre Twitch. Vérifie ta connexion ou redémarre l'app.",
-      );
+          : "Impossible d'ouvrir la fenêtre Twitch. Vérifie ta connexion ou redémarre l'app.";
+      setError(msg);
+      setTwitchError(msg);
     } finally {
       setTwitchLinking(false);
     }
@@ -1206,6 +1231,8 @@ export default function Settings() {
           setTwitchStatus(data);
           if (data.linked) {
             stopTwitchPolling();
+            setTwitchError("");
+            setTwitchManualAuthUrl(null);
             setSuccess("Compte Twitch lie.");
           }
         } catch {
@@ -1334,6 +1361,8 @@ export default function Settings() {
           twitchLinking={twitchLinking}
           twitchPolling={twitchPolling}
           twitchImporting={twitchImporting}
+          twitchError={twitchError}
+          twitchManualAuthUrl={twitchManualAuthUrl}
           linkTwitch={linkTwitch}
           unlinkTwitch={unlinkTwitch}
           importFollows={importFollows}

@@ -96,11 +96,8 @@ fn extract_resolution_height(stream_inf_line: &str) -> Option<u32> {
     let marker = "RESOLUTION=";
     let index = stream_inf_line.find(marker)?;
     let rest = &stream_inf_line[index + marker.len()..];
-    let value = rest
-        .split(|c| c == ',' || c == ' ')
-        .next()
-        .unwrap_or_default();
-    let mut dims = value.split(|c| c == 'x' || c == 'X');
+    let value = rest.split([',', ' ']).next().unwrap_or_default();
+    let mut dims = value.split(['x', 'X']);
     let _width = dims.next()?;
     let height_part = dims.next()?;
     let height_digits: String = height_part
@@ -292,8 +289,8 @@ pub fn lock_master_playlist_to_height(master_playlist: &str, target_height: u32)
     // Ensure we did not accidentally remove the selected variant references.
     let selected_stream_line = lines[selected.stream_inf_index].as_str();
     let selected_uri_line = lines[selected.uri_index].as_str();
-    let has_selected_stream = output.iter().any(|line| *line == selected_stream_line);
-    let has_selected_uri = output.iter().any(|line| *line == selected_uri_line);
+    let has_selected_stream = output.contains(&selected_stream_line);
+    let has_selected_uri = output.contains(&selected_uri_line);
     if !has_selected_stream || !has_selected_uri {
         return master_playlist.to_string();
     }

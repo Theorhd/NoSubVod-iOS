@@ -2593,8 +2593,9 @@ impl TwitchService {
             });
         }
 
-        let mut probed_variants: Vec<Option<(String, String, u32, String, String)>> =
-            vec![None; resolutions.len()];
+        type ProbedVariant = (String, String, u32, String, String);
+
+        let mut probed_variants: Vec<Option<ProbedVariant>> = vec![None; resolutions.len()];
 
         while let Some(joined) = probe_set.join_next().await {
             if let Ok((index, res_key, resolution, fps, stream_url, Some(codec))) = joined {
