@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ExperienceSettings,
@@ -18,6 +18,30 @@ const defaultSettings: ExperienceSettings = {
   oneSync: false,
 };
 
+async function fetchJson<T>(
+  url: string,
+  signal: AbortSignal,
+): Promise<T | null> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    return null;
+  }
+  return (await response.json()) as T;
+}
+
+function readLocalSubs(): SubEntry[] {
+  const saved = localStorage.getItem("nsv_subs");
+  if (!saved) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(saved) as SubEntry[];
+  } catch {
+    return [];
+  }
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const [subs, setSubs] = useState<SubEntry[]>([]);
@@ -35,60 +59,86 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<UserInfo[]>([]);
   const [isSearchingChannels, setIsSearchingChannels] = useState(false);
 
+  const subsLiveStatusKey = useMemo(() => {
+    if (subs.length === 0) return "";
+    return subs
+      .map((sub) => sub.login.toLowerCase())
+      .sort((a, b) => a.localeCompare(b))
+      .join(",");
+  }, [subs]);
+
   useEffect(() => {
+    const controller = new AbortController();
+    let disposed = false;
+
     const loadData = async () => {
       try {
-        const [watchlistRes, settingsRes, historyRes] = await Promise.all([
-          fetch("/api/watchlist"),
-          fetch("/api/settings"),
-          fetch("/api/history/list?limit=3"),
+        const [watchlistData, settingsData, historyData] = await Promise.all([
+          fetchJson<WatchlistEntry[]>("/api/watchlist", controller.signal),
+          fetchJson<ExperienceSettings>("/api/settings", controller.signal),
+          fetchJson<HistoryVodEntry[]>(
+            "/api/history/list?limit=3",
+            controller.signal,
+          ),
         ]);
 
-        if (watchlistRes.ok) {
-          setWatchlist((await watchlistRes.json()) as WatchlistEntry[]);
+        if (disposed) return;
+
+        if (watchlistData) {
+          setWatchlist(watchlistData);
         }
 
-        if (historyRes.ok) {
-          setHistoryPreview((await historyRes.json()) as HistoryVodEntry[]);
+        if (historyData) {
+          setHistoryPreview(historyData);
         }
 
-        let oneSyncEnabled = false;
-        if (settingsRes.ok) {
-          const remoteSettings =
-            (await settingsRes.json()) as ExperienceSettings;
-          oneSyncEnabled = Boolean(remoteSettings.oneSync);
+        const oneSyncEnabled = Boolean(settingsData?.oneSync);
+        if (settingsData) {
           setSettings({ oneSync: oneSyncEnabled });
         }
 
         if (oneSyncEnabled) {
-          const subsRes = await fetch("/api/subs");
-          if (subsRes.ok) {
-            setSubs((await subsRes.json()) as SubEntry[]);
-          }
+          const remoteSubs = await fetchJson<SubEntry[]>(
+            "/api/subs",
+            controller.signal,
+          );
+          if (disposed) return;
+          setSubs(remoteSubs ?? []);
         } else {
-          const saved = localStorage.getItem("nsv_subs");
-          setSubs(saved ? (JSON.parse(saved) as SubEntry[]) : []);
+          setSubs(readLocalSubs());
         }
       } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
         console.error("Failed to fetch initial home data", error);
       }
     };
 
     void loadData();
+
+    return () => {
+      disposed = true;
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let disposed = false;
+
     const loadLiveStatus = async () => {
-      if (subs.length === 0) {
+      if (!subsLiveStatusKey) {
         setLiveStatus({});
         return;
       }
 
       try {
-        const logins = subs.map((sub) => sub.login.toLowerCase()).join(",");
         const res = await fetch(
-          `/api/live/status?logins=${encodeURIComponent(logins)}`,
+          `/api/live/status?logins=${encodeURIComponent(subsLiveStatusKey)}`,
+          { signal: controller.signal },
         );
+        if (disposed) return;
         if (!res.ok) {
           setLiveStatus({});
           return;
@@ -96,13 +146,21 @@ export default function Home() {
 
         setLiveStatus((await res.json()) as LiveStatusMap);
       } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
         console.error("Failed to fetch live status for subs", error);
         setLiveStatus({});
       }
     };
 
     void loadLiveStatus();
-  }, [subs]);
+
+    return () => {
+      disposed = true;
+      controller.abort();
+    };
+  }, [subsLiveStatusKey]);
 
   const saveSubsLocal = (newSubs: SubEntry[]) => {
     setSubs(newSubs);

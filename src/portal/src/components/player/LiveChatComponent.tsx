@@ -19,6 +19,8 @@ type LiveChatBatch = {
 };
 
 const MAX_LIVE_CHAT_MESSAGES = 300;
+const LIVE_CHAT_POLL_VISIBLE_MS = 900;
+const LIVE_CHAT_POLL_HIDDEN_MS = 2500;
 
 function isTauriRuntime(): boolean {
   return Boolean(
@@ -60,9 +62,26 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [connectionLabel, setConnectionLabel] = useState("Connected");
+  const [isPageVisible, setIsPageVisible] = useState(
+    () => document.visibilityState === "visible",
+  );
   const pollingSessionIdRef = React.useRef<string | null>(null);
 
   const tauriRuntime = isTauriRuntime();
+  const pollingDelayMs = isPageVisible
+    ? LIVE_CHAT_POLL_VISIBLE_MS
+    : LIVE_CHAT_POLL_HIDDEN_MS;
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      setIsPageVisible(document.visibilityState === "visible");
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/twitch/status")
@@ -82,14 +101,20 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
     (incoming: LiveChatMessage[]) => {
       setMessages((prev) => {
         let next = prev;
+        let shouldClearChat = false;
+        const removeIds = new Set<string>();
+        const appendBatch: LiveChatMessage[] = [];
+
         for (const data of incoming) {
           if (data.type === "clear_chat") {
-            next = [];
+            shouldClearChat = true;
+            removeIds.clear();
+            appendBatch.length = 0;
             continue;
           }
 
           if (data.type === "clear_msg" && data.id) {
-            next = next.filter((msg) => msg.id !== data.id);
+            removeIds.add(data.id);
             continue;
           }
 
@@ -97,10 +122,22 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
             continue;
           }
 
-          next = [...next, data];
+          appendBatch.push(data);
           globalThis.dispatchEvent(
             new CustomEvent("nsv-chat-message", { detail: data }),
           );
+        }
+
+        if (shouldClearChat) {
+          next = [];
+        }
+
+        if (removeIds.size > 0) {
+          next = next.filter((msg) => !msg.id || !removeIds.has(msg.id));
+        }
+
+        if (appendBatch.length > 0) {
+          next = next.concat(appendBatch);
         }
 
         if (next.length > MAX_LIVE_CHAT_MESSAGES) {
@@ -222,7 +259,7 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
 
           pollTimer = globalThis.setInterval(() => {
             void poll();
-          }, 900);
+          }, pollingDelayMs);
         } catch (error) {
           console.error("Failed to start live chat polling", error);
           setConnectionLabel("Unavailable");
@@ -279,7 +316,13 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
         ws.close();
       }
     };
-  }, [liveId, handleWsMessage, tauriRuntime, applyIncomingMessages]);
+  }, [
+    liveId,
+    handleWsMessage,
+    tauriRuntime,
+    applyIncomingMessages,
+    pollingDelayMs,
+  ]);
 
   return (
     <>

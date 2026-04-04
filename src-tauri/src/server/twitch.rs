@@ -338,6 +338,7 @@ pub struct TwitchService {
     live_page_cache: Cache<String, LiveStreamsPage>,
     related_channels_cache: Cache<String, Vec<String>>,
     generic_value_cache: Cache<String, Value>,
+    master_playlist_cache: Cache<String, String>,
 
     /// Short-lived cache for variant proxy targets (UUID -> sanitized URL).
     variant_cache: Cache<String, String>,
@@ -392,6 +393,10 @@ impl TwitchService {
                 .build(),
             generic_value_cache: Cache::builder()
                 .max_capacity(100)
+                .time_to_live(Duration::from_secs(120))
+                .build(),
+            master_playlist_cache: Cache::builder()
+                .max_capacity(600)
                 .time_to_live(Duration::from_secs(120))
                 .build(),
             variant_cache: Cache::builder()
@@ -2495,6 +2500,11 @@ impl TwitchService {
         _host: &str,
         token: &str,
     ) -> AppResult<String> {
+        let cache_key = format!("master:{}:{}", vod_id.trim(), token.trim());
+        if let Some(cached) = self.master_playlist_cache.get(&cache_key).await {
+            return Ok(cached);
+        }
+
         let safe_vod_id = gql_escape(vod_id.trim());
         if !RE_VOD_ID_SAFE.is_match(vod_id.trim()) {
             return Err(AppError::BadRequest("Invalid VOD identifier".to_string()));
@@ -2542,7 +2552,9 @@ impl TwitchService {
         );
         let mut inserted_variants = 0usize;
 
-        for (res_key, resolution, fps) in &resolutions {
+        let mut probe_set = tokio::task::JoinSet::new();
+
+        for (index, (res_key, resolution, fps)) in resolutions.iter().enumerate() {
             let stream_url = build_stream_url(
                 &domain,
                 &vod_special_id,
@@ -2553,21 +2565,41 @@ impl TwitchService {
                 channel_login,
             );
 
-            let codec = match is_valid_quality(&self.android_tv_client, &stream_url).await {
-                Some(c) => Some(c),
-                None => is_valid_quality(&self.shared_client, &stream_url).await,
-            };
-            let Some(codec) = codec else {
-                continue;
-            };
+            let android_tv_client = self.android_tv_client.clone();
+            let shared_client = self.shared_client.clone();
+            let res_key = (*res_key).to_string();
+            let resolution = (*resolution).to_string();
+            let fps = *fps;
 
-            let quality = if *res_key == "chunked" {
+            probe_set.spawn(async move {
+                let codec = match is_valid_quality(&android_tv_client, &stream_url).await {
+                    Some(c) => Some(c),
+                    None => is_valid_quality(&shared_client, &stream_url).await,
+                };
+
+                (index, res_key, resolution, fps, stream_url, codec)
+            });
+        }
+
+        let mut probed_variants: Vec<Option<(String, String, u32, String, String)>> =
+            vec![None; resolutions.len()];
+
+        while let Some(joined) = probe_set.join_next().await {
+            if let Ok((index, res_key, resolution, fps, stream_url, Some(codec))) = joined {
+                probed_variants[index] = Some((res_key, resolution, fps, stream_url, codec));
+            }
+        }
+
+        for (res_key, resolution, fps, stream_url, codec) in
+            probed_variants.into_iter().flatten()
+        {
+            let quality = if res_key == "chunked" {
                 let height = resolution.split('x').nth(1).unwrap_or("1080");
                 format!("{height}p")
             } else {
                 res_key.to_string()
             };
-            let enabled = if *res_key == "chunked" { "YES" } else { "NO" };
+            let enabled = if res_key == "chunked" { "YES" } else { "NO" };
 
             let proxy_id =
                 match register_variant_proxy_target(&self.variant_cache, &stream_url).await {
@@ -2579,7 +2611,7 @@ impl TwitchService {
                 urlencoding_simple(&proxy_id),
                 token
             );
-            let bandwidth = quality_bandwidth_bps(res_key, *fps, resolution);
+            let bandwidth = quality_bandwidth_bps(&res_key, fps, &resolution);
 
             playlist.push_str(&format!(
                 "\n#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID=\"{quality}\",NAME=\"{quality}\",AUTOSELECT={enabled},DEFAULT={enabled}\n#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},CODECS=\"{codec},mp4a.40.2\",RESOLUTION={resolution},VIDEO=\"{quality}\",FRAME-RATE={fps}\n{proxy_url}"
@@ -2592,6 +2624,10 @@ impl TwitchService {
                 "No playable VOD qualities available for this video".to_string(),
             ));
         }
+
+        self.master_playlist_cache
+            .insert(cache_key, playlist.clone())
+            .await;
 
         Ok(playlist)
     }
