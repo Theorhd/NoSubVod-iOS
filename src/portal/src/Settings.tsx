@@ -128,6 +128,12 @@ async function openTwitchAuthFlow(
   popup: Window | null,
   isTauri: boolean,
 ): Promise<TwitchLaunchResult> {
+  if (isTauri) {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(authUrl);
+    return "opened";
+  }
+
   if (popup && !popup.closed) {
     popup.location.href = authUrl;
     return "opened";
@@ -138,14 +144,22 @@ async function openTwitchAuthFlow(
     return "opened";
   }
 
-  if (isTauri) {
-    const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(authUrl);
-    return "opened";
-  }
-
   globalThis.location.assign(authUrl);
   return "redirected";
+}
+
+function unknownErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Erreur inconnue";
+  }
 }
 
 interface SectionProps {
@@ -407,6 +421,7 @@ const TwitchAccountSection = React.memo(
     twitchImporting,
     twitchError,
     twitchManualAuthUrl,
+    openTwitchManual,
     linkTwitch,
     unlinkTwitch,
     importFollows,
@@ -503,15 +518,16 @@ const TwitchAccountSection = React.memo(
             </button>
 
             {twitchManualAuthUrl && (
-              <a
-                href={twitchManualAuthUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => {
+                  void openTwitchManual(twitchManualAuthUrl);
+                }}
                 className="action-btn secondary-btn soft-outline-btn"
                 style={{ marginTop: "10px", display: "inline-flex" }}
               >
                 Ouvrir Twitch manuellement
-              </a>
+              </button>
             )}
           </>
         )}
@@ -1194,7 +1210,9 @@ export default function Settings() {
 
     let popup: Window | null = null;
     const isTauri = isTauriRuntime();
-    popup = globalThis.open("", "_blank", "noopener,noreferrer");
+    if (!isTauri) {
+      popup = globalThis.open("", "_blank", "noopener,noreferrer");
+    }
 
     try {
       const authUrl = await fetchTwitchAuthUrl();
@@ -1210,16 +1228,44 @@ export default function Settings() {
         popup.close();
       }
       console.error("Failed to start Twitch OAuth", openError);
-      const msg =
-        openError instanceof Error
-          ? openError.message
-          : "Impossible d'ouvrir la fenêtre Twitch. Vérifie ta connexion ou redémarre l'app.";
+      const details = unknownErrorMessage(openError);
+      const msg = details
+        ? `Impossible d'ouvrir Twitch (${details}).`
+        : "Impossible d'ouvrir la fenêtre Twitch. Vérifie ta connexion ou redémarre l'app.";
       setError(msg);
       setTwitchError(msg);
     } finally {
       setTwitchLinking(false);
     }
   }, [startTwitchStatusPolling, twitchStatus]);
+
+  const openTwitchManual = useCallback(
+    async (manualAuthUrl: string) => {
+      setError("");
+      setTwitchError("");
+
+      try {
+        const authUrl = normalizeTwitchAuthUrl(manualAuthUrl);
+        const launchResult = await openTwitchAuthFlow(
+          authUrl,
+          null,
+          isTauriRuntime(),
+        );
+        setSuccess("Ouverture de Twitch...");
+        if (launchResult === "opened") {
+          startTwitchStatusPolling();
+        }
+      } catch (openError) {
+        const details = unknownErrorMessage(openError);
+        const msg = details
+          ? `Impossible d'ouvrir Twitch (${details}).`
+          : "Impossible d'ouvrir Twitch manuellement.";
+        setError(msg);
+        setTwitchError(msg);
+      }
+    },
+    [startTwitchStatusPolling],
+  );
 
   useEffect(() => {
     const refreshAuthStatus = () => {
@@ -1363,6 +1409,7 @@ export default function Settings() {
           twitchImporting={twitchImporting}
           twitchError={twitchError}
           twitchManualAuthUrl={twitchManualAuthUrl}
+          openTwitchManual={openTwitchManual}
           linkTwitch={linkTwitch}
           unlinkTwitch={unlinkTwitch}
           importFollows={importFollows}
