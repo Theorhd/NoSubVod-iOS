@@ -34,8 +34,9 @@ use super::{
     state::ApiState,
     types::{ProfileBackupFile, ProfileData, SubEntry, WatchlistEntry},
     validation::{
-        cap_master_playlist_to_max_height, filter_hevc_variants_for_ios, is_legacy_ios_request,
-        is_valid_id, is_valid_login, lock_master_playlist_to_height, preferred_quality_height,
+        cap_master_playlist_to_max_height, ensure_video_media_default,
+        filter_hevc_variants_for_ios, is_legacy_ios_request, is_valid_id, is_valid_login,
+        lock_master_playlist_to_height, preferred_quality_height,
     },
 };
 use moka::future::Cache;
@@ -216,6 +217,8 @@ async fn handle_vod_master(
         body = lock_master_playlist_to_height(&body, target_height);
     }
 
+    body = ensure_video_media_default(&body);
+
     Ok(m3u8_response(body))
 }
 
@@ -255,6 +258,8 @@ async fn handle_live_master(
         // stalls on mobile networks while still honoring an upper quality bound.
         body = cap_master_playlist_to_max_height(&body, target_height);
     }
+
+    body = ensure_video_media_default(&body);
 
     Ok(m3u8_response(body))
 }

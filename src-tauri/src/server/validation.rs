@@ -118,6 +118,67 @@ fn extract_quoted_attr(line: &str, key: &str) -> Option<String> {
     Some(tail[..end].to_string())
 }
 
+fn set_unquoted_attr_value(line: &str, key: &str, value: &str) -> String {
+    let marker = format!("{key}=");
+    if let Some(start) = line.find(&marker) {
+        let value_start = start + marker.len();
+        let tail = &line[value_start..];
+        let value_end = tail.find(',').unwrap_or(tail.len());
+
+        let mut updated = String::with_capacity(line.len() + value.len());
+        updated.push_str(&line[..value_start]);
+        updated.push_str(value);
+        updated.push_str(&tail[value_end..]);
+        return updated;
+    }
+
+    format!("{line},{key}={value}")
+}
+
+pub fn ensure_video_media_default(master_playlist: &str) -> String {
+    let mut lines: Vec<String> = master_playlist.lines().map(ToString::to_string).collect();
+    if lines.is_empty() {
+        return master_playlist.to_string();
+    }
+
+    let video_media_indices: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let trimmed = line.trim();
+            if trimmed.starts_with("#EXT-X-MEDIA") && trimmed.contains("TYPE=VIDEO") {
+                Some(index)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if video_media_indices.is_empty() {
+        return master_playlist.to_string();
+    }
+
+    let mut changed = false;
+
+    for (position, index) in video_media_indices.into_iter().enumerate() {
+        let desired = if position == 0 { "YES" } else { "NO" };
+
+        let mut updated = set_unquoted_attr_value(&lines[index], "DEFAULT", desired);
+        updated = set_unquoted_attr_value(&updated, "AUTOSELECT", desired);
+
+        if updated != lines[index] {
+            lines[index] = updated;
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return master_playlist.to_string();
+    }
+
+    lines.join("\n")
+}
+
 pub fn preferred_quality_height(raw: Option<&str>) -> Option<u32> {
     let value = raw?.trim().to_ascii_lowercase();
     if value.is_empty() || value == "auto" {
@@ -549,5 +610,23 @@ chunklist_w111.m3u8
         assert!(!capped.contains("id=1080"));
         assert!(capped.contains("id=720"));
         assert!(capped.contains("id=480"));
+    }
+
+    #[test]
+    fn test_ensure_video_media_default_promotes_first_entry() {
+        let playlist = r#"#EXTM3U
+#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="720p60",NAME="720p60",AUTOSELECT=NO,DEFAULT=NO
+#EXT-X-STREAM-INF:BANDWIDTH=4500000,RESOLUTION=1280x720,VIDEO="720p60"
+/api/stream/variant.m3u8?id=720
+#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="480p30",NAME="480p30",AUTOSELECT=NO,DEFAULT=NO
+#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=854x480,VIDEO="480p30"
+/api/stream/variant.m3u8?id=480
+"#;
+
+        let normalized = ensure_video_media_default(playlist);
+        assert!(
+            normalized.contains("GROUP-ID=\"720p60\",NAME=\"720p60\",AUTOSELECT=YES,DEFAULT=YES")
+        );
+        assert!(normalized.contains("GROUP-ID=\"480p30\",NAME=\"480p30\",AUTOSELECT=NO,DEFAULT=NO"));
     }
 }

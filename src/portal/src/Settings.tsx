@@ -521,7 +521,7 @@ const TwitchAccountSection = React.memo(
               <button
                 type="button"
                 onClick={() => {
-                  void openTwitchManual(twitchManualAuthUrl);
+                  openTwitchManual(twitchManualAuthUrl);
                 }}
                 className="action-btn secondary-btn soft-outline-btn"
                 style={{ marginTop: "10px", display: "inline-flex" }}
