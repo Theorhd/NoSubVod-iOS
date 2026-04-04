@@ -177,25 +177,43 @@ export default function Live() {
         const headers: Record<string, string> = {};
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const [settingsRes, catsRes] = await Promise.all([
-          fetch(`/api/settings`, { headers }),
+        const [catsRes, subsRes] = await Promise.all([
           fetch(`/api/live/top-categories`, { headers }),
+          fetch(`/api/subs`, { headers }),
         ]);
 
-        let oneSync = false;
-        if (settingsRes.ok) {
-          const s = await settingsRes.json();
-          oneSync = Boolean(s.oneSync);
+        let subEntries: SubEntry[] = [];
+        if (subsRes.ok) {
+          subEntries = await subsRes.json();
         }
 
-        let subEntries: SubEntry[] = [];
-        if (oneSync) {
-          const subsRes = await fetch(`/api/subs`, { headers });
-          if (subsRes.ok) subEntries = await subsRes.json();
-        } else {
+        if (subEntries.length === 0) {
           const local = localStorage.getItem("nsv_subs");
-          subEntries = local ? JSON.parse(local) : [];
+          const localSubs = local ? (JSON.parse(local) as SubEntry[]) : [];
+          subEntries = localSubs;
+
+          if (localSubs.length > 0) {
+            void Promise.all(
+              localSubs.map(async (entry) => {
+                try {
+                  await fetch(`/api/subs`, {
+                    method: "POST",
+                    headers: {
+                      ...headers,
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(entry),
+                  });
+                } catch {
+                  // Keep local fallback when migration cannot complete now.
+                }
+              }),
+            );
+          }
+        } else {
+          localStorage.removeItem("nsv_subs");
         }
+
         setSubLogins(new Set(subEntries.map((e) => e.login.toLowerCase())));
 
         if (catsRes.ok) setTopCategories(await catsRes.json());

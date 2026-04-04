@@ -5,6 +5,13 @@ import "./index.css";
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 import { safeStorageGet, safeStorageSet } from "../../shared/utils/storage";
+import {
+  getActiveToken,
+  getDeviceId,
+  getRemoteServerToken,
+  initializeSecureTokenStorage,
+  setStandaloneToken,
+} from "./utils/authTokens";
 
 type InternalApiInvokeResponse = {
   status: number;
@@ -223,14 +230,8 @@ function injectApiAuthHeaders(
   init: RequestInit | undefined,
   target: ApiAuthTarget,
 ): Headers {
-  const standaloneToken =
-    safeStorageGet(sessionStorage, "nsv_token") ||
-    safeStorageGet(localStorage, "nsv_token");
-  const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
-
-  const activeToken =
-    target === "remote" ? pairedToken || standaloneToken : standaloneToken;
-  const deviceId = safeStorageGet(localStorage, "nsv_device_id");
+  const activeToken = getActiveToken(target);
+  const deviceId = getDeviceId();
   const headers = new Headers(init?.headers);
 
   if (activeToken && !headers.has("x-nsv-token")) {
@@ -381,15 +382,13 @@ function createDeviceId(): string {
 })();
 
 // ── Extract and store server auth token from URL ─────────────────────────────
-// The QR code URL includes ?t=<token>. We extract it on first load, store it
-// in sessionStorage (survives navigations but not tab close), and strip it from
-// the URL to avoid leaking it in referrer headers or browser history.
-(function initAuthToken() {
+// The QR code URL includes ?t=<token>. We extract it on first load and strip it
+// from the URL to avoid leaking it in referrer headers or browser history.
+async function initAuthTokenFromUrl() {
   const params = new URLSearchParams(globalThis.location.search);
   const token = params.get("t");
   if (token) {
-    safeStorageSet(sessionStorage, "nsv_token", token);
-    safeStorageSet(localStorage, "nsv_token", token);
+    await setStandaloneToken(token);
     // Clean the URL without reloading
     params.delete("t");
     const clean = params.toString();
@@ -399,10 +398,10 @@ function createDeviceId(): string {
       globalThis.location.hash;
     globalThis.history.replaceState({}, "", newUrl);
   }
-})();
+}
 
 // ── Patch global fetch to auto-inject auth token on API calls ────────────────
-(function patchFetch() {
+function patchFetch() {
   const originalFetch = globalThis.fetch;
 
   const isPlayerPlaybackContext = () => {
@@ -456,7 +455,7 @@ function createDeviceId(): string {
 
     if (isApiCall) {
       const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
-      const serverToken = safeStorageGet(localStorage, "nsv_server_token");
+      const serverToken = getRemoteServerToken();
       const remoteSessionEnabled = Boolean(serverUrl && serverToken);
       const isCrossOriginApiCall =
         resolvedUrl !== null &&
@@ -486,7 +485,7 @@ function createDeviceId(): string {
     }
     return originalFetch.call(globalThis, input, init);
   };
-})();
+}
 
 type AppErrorBoundaryState = {
   hasError: boolean;
@@ -541,8 +540,16 @@ class AppErrorBoundary extends React.Component<
 // Expose React globally for extensions to avoid bundling it
 (globalThis as any).React = React;
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <AppErrorBoundary>
-    <App />
-  </AppErrorBoundary>,
-);
+async function bootstrapPortal() {
+  await initializeSecureTokenStorage();
+  await initAuthTokenFromUrl();
+  patchFetch();
+
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>,
+  );
+}
+
+void bootstrapPortal();

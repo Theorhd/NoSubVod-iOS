@@ -24,6 +24,7 @@ import PlayerRTC from "./PlayerRTC";
 import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { navigateBackInApp } from "./utils/navigation";
+import { buildAuthSuffix } from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
 
 const DEFAULT_SETTINGS: ExperienceSettings = {
@@ -72,17 +73,6 @@ function resolvePlayerTitle(
   if (vodId) return `VOD: ${vodId}`;
   if (liveId) return `Live: ${liveId}`;
   return "Player";
-}
-
-function buildAuthSuffix(
-  token: string | null,
-  deviceId: string | null,
-): string {
-  const query = new URLSearchParams();
-  if (token) query.set("t", token);
-  if (deviceId) query.set("d", deviceId);
-  const qs = query.toString();
-  return qs ? `?${qs}` : "";
 }
 
 function parseMarkersPayload(payload: unknown): VideoMarker[] {
@@ -768,12 +758,7 @@ function VodLivePlayer({
       if (!vodId) return;
 
       try {
-        // On récupère les tokens pour l'auth
-        const token =
-          localStorage.getItem("nsv_token") ||
-          sessionStorage.getItem("nsv_token");
-        const deviceId = localStorage.getItem("nsv_device_id");
-        const authSuffix = buildAuthSuffix(token, deviceId);
+        const authSuffix = buildAuthSuffix("local");
 
         const [historyRes, infoRes, settingsRes] = await Promise.all([
           fetch(`/api/history/${vodId}${authSuffix}`),
@@ -842,11 +827,7 @@ function VodLivePlayer({
 
     const run = async () => {
       try {
-        const token =
-          localStorage.getItem("nsv_token") ||
-          sessionStorage.getItem("nsv_token");
-        const deviceId = localStorage.getItem("nsv_device_id");
-        const authSuffix = buildAuthSuffix(token, deviceId);
+        const authSuffix = buildAuthSuffix("local");
 
         const markersRes = await fetch(
           `/api/vod/${vodId}/markers${authSuffix}`,
@@ -884,11 +865,7 @@ function VodLivePlayer({
       if (!liveId) return;
 
       try {
-        const token =
-          localStorage.getItem("nsv_token") ||
-          sessionStorage.getItem("nsv_token");
-        const deviceId = localStorage.getItem("nsv_device_id");
-        const authSuffix = buildAuthSuffix(token, deviceId);
+        const authSuffix = buildAuthSuffix("local");
 
         const [infoRes, settingsRes] = await Promise.all([
           fetch(`/api/user/${encodeURIComponent(liveId)}/live${authSuffix}`),

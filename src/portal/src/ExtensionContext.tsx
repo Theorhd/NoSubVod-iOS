@@ -7,7 +7,7 @@ import React, {
   useMemo,
 } from "react";
 import { Extension, ExtensionContribution } from "../../shared/types";
-import { safeStorageGet } from "../../shared/utils/storage";
+import { getActiveToken } from "./utils/authTokens";
 
 interface ExtensionContextType {
   extensions: Extension[];
@@ -97,9 +97,7 @@ export function ExtensionProvider({
       setContributions([]);
 
       // Get auth token for URL-based loading (scripts, iframes)
-      const token =
-        safeStorageGet(sessionStorage, "nsv_token") ||
-        safeStorageGet(localStorage, "nsv_token");
+      const token = getActiveToken("local");
       const authSuffix = token ? `?t=${encodeURIComponent(token)}` : "";
 
       // Load extensions based on entry type

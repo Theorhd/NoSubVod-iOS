@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { buildAuthQuery } from "../../utils/authTokens";
 
 interface LiveChatComponentProps {
   liveId: string;
@@ -37,18 +38,7 @@ async function invokeTauri<T>(
 }
 
 function buildAuthQueryFromStorage(): string {
-  const token = localStorage.getItem("nsv_token");
-  const deviceId = localStorage.getItem("nsv_device_id");
-  const parts: string[] = [];
-
-  if (token) {
-    parts.push(`t=${encodeURIComponent(token)}`);
-  }
-  if (deviceId) {
-    parts.push(`d=${encodeURIComponent(deviceId)}`);
-  }
-
-  return parts.join("&");
+  return buildAuthQuery("local");
 }
 
 const LiveChatComponent: React.FC<LiveChatComponentProps> = ({

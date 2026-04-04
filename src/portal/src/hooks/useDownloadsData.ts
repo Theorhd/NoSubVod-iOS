@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DownloadedFile, ActiveDownload } from "../../../shared/types";
 import { useInterval } from "../../../shared/hooks/useInterval";
+import { getActiveToken, getRemoteServerToken } from "../utils/authTokens";
 
 const DEBUG_DOWNLOADS = false;
 const MAX_POLLING_DELAY_MS = 60000;
@@ -129,9 +130,8 @@ export function useDownloadsData() {
     else if (url.startsWith("/")) resolved = `/api${url}`;
     else resolved = `/api/${url}`;
 
-    const standaloneToken =
-      sessionStorage.getItem("nsv_token") || localStorage.getItem("nsv_token");
-    const pairedToken = localStorage.getItem("nsv_server_token");
+    const standaloneToken = getActiveToken("local");
+    const pairedToken = getRemoteServerToken();
     const serverUrl = localStorage.getItem("nsv_server_url") || "";
 
     const isRemoteDownloadPath =

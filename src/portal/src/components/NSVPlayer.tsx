@@ -18,6 +18,11 @@ import {
 import Hls from "hls.js/dist/hls.light.js";
 import { safeStorageGet } from "../../../shared/utils/storage";
 import {
+  getActiveToken,
+  getDeviceId,
+  getRemoteServerToken,
+} from "../utils/authTokens";
+import {
   canPlayHlsNatively,
   canUseHlsJs,
   isMobileDevice,
@@ -307,15 +312,13 @@ function withAuthQuery(url: string): string {
     pathname = url.split("?")[0];
   }
 
-  const standaloneToken =
-    safeStorageGet(sessionStorage, "nsv_token") ||
-    safeStorageGet(localStorage, "nsv_token");
-  const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
+  const standaloneToken = getActiveToken("local");
+  const pairedToken = getRemoteServerToken();
   const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
   const useRemoteMedia =
     Boolean(serverUrl && pairedToken) && isRemoteMediaApiPath(pathname);
   const token = useRemoteMedia ? pairedToken : standaloneToken;
-  const deviceId = safeStorageGet(localStorage, "nsv_device_id");
+  const deviceId = getDeviceId();
   const params: string[] = [];
   if (token) params.push(`t=${encodeURIComponent(token)}`);
   if (deviceId) params.push(`d=${encodeURIComponent(deviceId)}`);

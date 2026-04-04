@@ -250,6 +250,8 @@ pub struct ExperienceSettings {
 /// Root of the persisted JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PersistedData {
+    #[serde(rename = "schemaVersion", default = "default_schema_version")]
+    pub schema_version: u32,
     #[serde(default)]
     pub history: HashMap<String, HistoryEntry>,
     #[serde(default)]
@@ -267,4 +269,8 @@ pub struct PersistedData {
         skip_serializing_if = "Option::is_none"
     )]
     pub twitch_token: Option<String>,
+}
+
+const fn default_schema_version() -> u32 {
+    1
 }
