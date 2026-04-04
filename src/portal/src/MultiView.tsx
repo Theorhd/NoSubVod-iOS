@@ -164,10 +164,16 @@ export default function MultiView() {
           >
             <NSVPlayer
               source={{
-                src:
-                  slot.type === "live"
-                    ? `/api/live/${encodeURIComponent(slot.targetId)}/master.m3u8`
-                    : `/api/vod/${slot.targetId}/master.m3u8`,
+                src: (() => {
+                  const quality = (settings.defaultVideoQuality || "auto").trim();
+                  const qualityQuery = quality
+                    ? `?quality=${encodeURIComponent(quality)}`
+                    : "";
+
+                  return slot.type === "live"
+                    ? `/api/live/${encodeURIComponent(slot.targetId)}/master.m3u8${qualityQuery}`
+                    : `/api/vod/${encodeURIComponent(slot.targetId)}/master.m3u8${qualityQuery}`;
+                })(),
                 type: "application/x-mpegurl",
               }}
               streamType={slot.type === "live" ? "live" : "on-demand"}

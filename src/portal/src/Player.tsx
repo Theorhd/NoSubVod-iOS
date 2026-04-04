@@ -358,9 +358,14 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
   );
 
   const source = useMemo(() => {
+    const quality = (settings.defaultVideoQuality || "auto").trim();
+    const qualityQuery = quality
+      ? `?quality=${encodeURIComponent(quality)}`
+      : "";
+
     if (vodId) {
       return {
-        src: `/api/vod/${vodId}/master.m3u8`,
+        src: `/api/vod/${vodId}/master.m3u8${qualityQuery}`,
         type: "application/x-mpegurl",
         streamType: "on-demand" as const,
       };
@@ -368,14 +373,14 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
     if (liveId) {
       return {
-        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8`,
+        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8${qualityQuery}`,
         type: "application/x-mpegurl",
         streamType: "live" as const,
       };
     }
 
     return null;
-  }, [vodId, liveId]);
+  }, [vodId, liveId, settings.defaultVideoQuality]);
 
   const playerMediaSource = useMemo(
     () => (source ? { src: source.src, type: source.type } : null),

@@ -26,7 +26,7 @@ use super::{
     },
     dto::{
         ChatQuery, ChatSendBody, DownloadRequest, DownloadedFile, HistoryBody, HistoryListQuery,
-        LiveCategoryQuery, LiveQuery, LiveSearchQuery, LiveStatusQuery, PagedQuery,
+        LiveCategoryQuery, LiveQuery, LiveSearchQuery, LiveStatusQuery, PagedQuery, QualityQuery,
         SearchCategoryQuery, SearchQuery, SettingsPatch, TrustedDevicePatch, VariantProxyQuery,
     },
     error::{AppError, AppResult},
@@ -95,6 +95,9 @@ fn m3u8_response(mut body: String) -> Response {
 
     Response::builder()
         .header(header::CONTENT_TYPE, "application/vnd.apple.mpegurl")
+        .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate")
+        .header("Pragma", "no-cache")
+        .header("Expires", "0")
         .body(Body::from(body))
         .unwrap_or_else(|_| {
             (
@@ -103,6 +106,23 @@ fn m3u8_response(mut body: String) -> Response {
             )
                 .into_response()
         })
+}
+
+fn resolve_target_quality_height(
+    query_quality: Option<&str>,
+    settings_quality: Option<&str>,
+) -> Option<u32> {
+    let requested = query_quality
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    match requested {
+        Some(value) if value.eq_ignore_ascii_case("auto") => None,
+        Some(value) => {
+            preferred_quality_height(Some(value)).or_else(|| preferred_quality_height(settings_quality))
+        }
+        None => preferred_quality_height(settings_quality),
+    }
 }
 
 // ── Route handlers ────────────────────────────────────────────────────────────
@@ -164,6 +184,7 @@ async fn handle_vod_info(
 
 async fn handle_vod_master(
     Path(vod_id): Path<String>,
+    Query(q): Query<QualityQuery>,
     State(state): State<ApiState>,
     headers: axum::http::HeaderMap,
 ) -> AppResult<Response> {
@@ -189,8 +210,10 @@ async fn handle_vod_master(
         playlist
     };
 
-    if let Some(target_height) = preferred_quality_height(settings.default_video_quality.as_deref())
-    {
+    if let Some(target_height) = resolve_target_quality_height(
+        q.quality.as_deref(),
+        settings.default_video_quality.as_deref(),
+    ) {
         body = lock_master_playlist_to_height(&body, target_height);
     }
 
@@ -199,6 +222,7 @@ async fn handle_vod_master(
 
 async fn handle_live_master(
     Path(login): Path<String>,
+    Query(q): Query<QualityQuery>,
     State(state): State<ApiState>,
     headers: axum::http::HeaderMap,
 ) -> AppResult<Response> {
@@ -224,8 +248,10 @@ async fn handle_live_master(
         m3u8
     };
 
-    if let Some(target_height) = preferred_quality_height(settings.default_video_quality.as_deref())
-    {
+    if let Some(target_height) = resolve_target_quality_height(
+        q.quality.as_deref(),
+        settings.default_video_quality.as_deref(),
+    ) {
         body = lock_master_playlist_to_height(&body, target_height);
     }
 
