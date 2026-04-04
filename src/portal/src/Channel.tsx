@@ -4,6 +4,7 @@ import { StreamCard } from "./components/StreamCard";
 import { VODCard } from "./components/VODCard";
 import { TopBar } from "./components/TopBar";
 import { useChannelData } from "./hooks/useChannelData";
+import { navigateToPlayer } from "./utils/navigation";
 
 export default function Channel() {
   const [searchParams] = useSearchParams();
@@ -54,7 +55,9 @@ export default function Channel() {
                 key={liveStream.id}
                 stream={liveStream}
                 onWatch={(login) =>
-                  navigate(`/player?live=${encodeURIComponent(login)}`)
+                  navigateToPlayer(navigate, {
+                    liveId: login,
+                  })
                 }
               />
             </div>
@@ -77,7 +80,9 @@ export default function Channel() {
                   key={stream.id}
                   stream={stream}
                   onWatch={(login) =>
-                    navigate(`/player?live=${encodeURIComponent(login)}`)
+                    navigateToPlayer(navigate, {
+                      liveId: login,
+                    })
                   }
                 />
               ))}
@@ -118,7 +123,11 @@ export default function Channel() {
                   <VODCard
                     key={vod.id}
                     vod={vod}
-                    onWatch={(id) => navigate(`/player?vod=${id}`)}
+                    onWatch={(id) =>
+                      navigateToPlayer(navigate, {
+                        vodId: id,
+                      })
+                    }
                     historyEntry={hist}
                     onAddToWatchlist={(e, vodItem) => {
                       e.stopPropagation();

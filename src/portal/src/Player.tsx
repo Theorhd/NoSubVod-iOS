@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Search, X } from "lucide-react";
 import {
   ChatMessage,
@@ -25,7 +25,6 @@ import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { navigateBackInApp } from "./utils/navigation";
 import { useInterval } from "../../shared/hooks/useInterval";
-import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 
 const DEFAULT_SETTINGS: ExperienceSettings = {
   oneSync: false,
@@ -36,6 +35,35 @@ const CHAT_MESSAGES_BEFORE = 100;
 const CHAT_MESSAGES_AFTER = 170;
 const MAX_CHAT_MESSAGES = 700;
 const CHAT_HISTORY_SECONDS = 10 * 60;
+const HISTORY_SYNC_INTERVAL_MS = 6000;
+const HISTORY_MIN_SAVE_DELTA_SECONDS = 3;
+const HISTORY_SEEK_SAVE_DELTA_SECONDS = 20;
+const HISTORY_ACTIVE_WINDOW_MS = 12000;
+
+type PlayerRouteState = {
+  from?: string;
+};
+
+type SaveProgressOptions = {
+  force?: boolean;
+  timecode?: number;
+  duration?: number;
+};
+
+type HistorySyncPayload = {
+  timecode: number;
+  duration: number;
+  force: boolean;
+};
+
+type HistorySyncState = {
+  inFlight: boolean;
+  queued: HistorySyncPayload | null;
+  lastSavedTime: number;
+  lastSentAtMs: number;
+  lastObservedTime: number;
+  lastTickAtMs: number;
+};
 
 function resolvePlayerTitle(
   vodId: string | null,
@@ -271,6 +299,7 @@ const ChatSearch = ({
 };
 
 export default function Player() {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const vodId = searchParams.get("vod");
   const liveId = searchParams.get("live");
@@ -279,13 +308,21 @@ export default function Player() {
     searchParams.get("screenshare") ?? searchParams.get("screenShare");
   const screenShareMode =
     screenShareParam === "true" || screenShareParam === "1";
+  const routeState = location.state as PlayerRouteState | null;
+  const returnPath =
+    typeof routeState?.from === "string" ? routeState.from : null;
 
   if (screenShareMode) {
     return <PlayerRTC />;
   }
 
   return (
-    <VodLivePlayer vodId={vodId} liveId={liveId} downloadMode={downloadMode} />
+    <VodLivePlayer
+      vodId={vodId}
+      liveId={liveId}
+      downloadMode={downloadMode}
+      returnPath={returnPath}
+    />
   );
 }
 
@@ -293,11 +330,16 @@ type VodLivePlayerProps = {
   readonly vodId: string | null;
   readonly liveId: string | null;
   readonly downloadMode: boolean;
+  readonly returnPath: string | null;
 };
 
-function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
+function VodLivePlayer({
+  vodId,
+  liveId,
+  downloadMode,
+  returnPath,
+}: VodLivePlayerProps) {
   const { isMobileLayout } = useResponsive();
-  const isPageVisible = usePageVisibility();
   const navigate = useNavigate();
   const mediaKey = useMemo(() => {
     if (vodId) return `vod:${vodId}`;
@@ -333,7 +375,23 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
-  const isPlayingRef = useRef(false);
+  const activeVodIdRef = useRef<string | null>(vodId);
+  const historySyncRef = useRef<HistorySyncState>({
+    inFlight: false,
+    queued: null,
+    lastSavedTime: 0,
+    lastSentAtMs: 0,
+    lastObservedTime: 0,
+    lastTickAtMs: 0,
+  });
+  const dispatchHistoryPayloadRef = useRef<
+    (payload: HistorySyncPayload) => void
+  >(() => {});
+  const saveProgressRef = useRef<(options?: SaveProgressOptions) => void>(
+    () => {
+      // Initialized later via effect.
+    },
+  );
 
   useEffect(() => {
     currentTimeRef.current = currentTime;
@@ -344,8 +402,134 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
   }, [duration]);
 
   useEffect(() => {
-    isPlayingRef.current = isPlaying;
-  }, [isPlaying]);
+    activeVodIdRef.current = vodId;
+  }, [vodId]);
+
+  const queueHistoryPayload = useCallback((payload: HistorySyncPayload) => {
+    const activeVodId = activeVodIdRef.current;
+    if (!activeVodId) {
+      return;
+    }
+
+    const syncState = historySyncRef.current;
+    if (syncState.inFlight) {
+      const queued = syncState.queued;
+      if (!queued) {
+        syncState.queued = payload;
+        return;
+      }
+
+      const changedEnough =
+        Math.abs(payload.timecode - queued.timecode) >=
+        HISTORY_MIN_SAVE_DELTA_SECONDS;
+      if (
+        payload.force ||
+        changedEnough ||
+        payload.timecode > queued.timecode
+      ) {
+        syncState.queued = payload;
+      }
+      return;
+    }
+
+    dispatchHistoryPayloadRef.current(payload);
+  }, []);
+
+  useEffect(() => {
+    dispatchHistoryPayloadRef.current = (payload: HistorySyncPayload) => {
+      const activeVodId = activeVodIdRef.current;
+      if (!activeVodId) {
+        return;
+      }
+
+      const syncState = historySyncRef.current;
+      syncState.inFlight = true;
+      syncState.lastSentAtMs = Date.now();
+
+      fetch("/api/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vodId: activeVodId,
+          timecode: payload.timecode,
+          duration: payload.duration,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`History save failed (${res.status})`);
+          }
+          syncState.lastSavedTime = payload.timecode;
+        })
+        .catch((error) => {
+          console.error("Failed to save history", error);
+        })
+        .finally(() => {
+          syncState.inFlight = false;
+
+          const queued = syncState.queued;
+          syncState.queued = null;
+
+          if (!queued || !activeVodIdRef.current) {
+            return;
+          }
+
+          const shouldFlushQueued =
+            queued.force ||
+            Math.abs(queued.timecode - syncState.lastSavedTime) >=
+              HISTORY_MIN_SAVE_DELTA_SECONDS;
+          if (shouldFlushQueued) {
+            queueHistoryPayload(queued);
+          }
+        });
+    };
+  }, [queueHistoryPayload]);
+
+  const saveProgress = useCallback(
+    (options: SaveProgressOptions = {}) => {
+      if (!activeVodIdRef.current) {
+        return;
+      }
+
+      const current = Math.max(
+        0,
+        Number(options.timecode ?? currentTimeRef.current),
+      );
+      if (current <= 0) {
+        return;
+      }
+
+      const dur = Math.max(
+        0,
+        Number(options.duration ?? durationRef.current ?? 0),
+      );
+      const syncState = historySyncRef.current;
+      const now = Date.now();
+      const elapsedMs = now - syncState.lastSentAtMs;
+      const changedEnough =
+        Math.abs(current - syncState.lastSavedTime) >=
+        HISTORY_MIN_SAVE_DELTA_SECONDS;
+
+      if (
+        !options.force &&
+        !changedEnough &&
+        elapsedMs < HISTORY_SYNC_INTERVAL_MS
+      ) {
+        return;
+      }
+
+      queueHistoryPayload({
+        timecode: current,
+        duration: dur,
+        force: Boolean(options.force),
+      });
+    },
+    [queueHistoryPayload],
+  );
+
+  useEffect(() => {
+    saveProgressRef.current = saveProgress;
+  }, [saveProgress]);
 
   const [clipStart, setClipStart] = useState<number | null>(null);
   const [clipEnd, setClipEnd] = useState<number | null>(null);
@@ -478,6 +662,23 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
   const handlePlayerTimeUpdate = useCallback(
     (time: number) => {
+      if (vodId) {
+        const syncState = historySyncRef.current;
+        const previousObserved = syncState.lastObservedTime;
+        syncState.lastObservedTime = time;
+        syncState.lastTickAtMs = Date.now();
+
+        if (
+          previousObserved > 0 &&
+          Math.abs(time - previousObserved) >= HISTORY_SEEK_SAVE_DELTA_SECONDS
+        ) {
+          saveProgressRef.current({
+            force: true,
+            timecode: time,
+          });
+        }
+      }
+
       const roundedSecond = Math.floor(time);
       if (
         shouldUpdateUiTime &&
@@ -493,7 +694,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
       lastRequestedOffsetRef.current = offset;
       void fetchVodChatChunk(offset);
     },
-    [fetchVodChatChunk, shouldLoadChat, shouldUpdateUiTime],
+    [fetchVodChatChunk, shouldLoadChat, shouldUpdateUiTime, vodId],
   );
 
   useEffect(() => {
@@ -550,6 +751,14 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
     markersLoadedVodRef.current = null;
     markersLoadingRef.current = false;
     pendingChatOffsetsRef.current.clear();
+    historySyncRef.current = {
+      inFlight: false,
+      queued: null,
+      lastSavedTime: 0,
+      lastSentAtMs: 0,
+      lastObservedTime: 0,
+      lastTickAtMs: 0,
+    };
   }, [mediaKey]);
 
   useEffect(() => {
@@ -574,8 +783,14 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
 
         if (!disposed && historyRes.ok) {
           const hist = await historyRes.json();
-          const resumeTime = Math.max(0, Number(hist?.timecode || 0) - 5);
+          const savedTime = Math.max(0, Number(hist?.timecode || 0));
+          const resumeTime = Math.max(0, savedTime - 5);
           setInitialTime(resumeTime);
+
+          const syncState = historySyncRef.current;
+          syncState.lastSavedTime = savedTime;
+          syncState.lastObservedTime = savedTime;
+          syncState.lastTickAtMs = Date.now();
         }
 
         if (!disposed && infoRes.ok) {
@@ -718,46 +933,37 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
     };
   }, [liveId]);
 
-  const saveProgress = useCallback(() => {
-    if (!vodId) return;
-
-    const current = currentTimeRef.current;
-    const dur = durationRef.current;
-    if (current <= 0) return;
-
-    fetch("/api/history", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        vodId,
-        timecode: current,
-        duration: dur || 0,
-      }),
-    }).catch((error) => {
-      console.error("Failed to save history", error);
-    });
-  }, [vodId]);
-
   useInterval(
     () => {
-      if (!isPlayingRef.current) return;
-      if (!isPageVisible) return;
+      if (!vodId) return;
+
+      const syncState = historySyncRef.current;
+      if (Date.now() - syncState.lastTickAtMs > HISTORY_ACTIVE_WINDOW_MS) {
+        return;
+      }
+
       saveProgress();
     },
-    vodId ? 10000 : null,
+    vodId ? HISTORY_SYNC_INTERVAL_MS : null,
   );
+
+  useEffect(() => {
+    if (!vodId) return;
+    if (isPlaying) return;
+    saveProgress({ force: true });
+  }, [isPlaying, saveProgress, vodId]);
 
   useEffect(() => {
     if (!vodId) return;
 
     const flushProgressOnHide = () => {
       if (document.visibilityState === "hidden") {
-        saveProgress();
+        saveProgress({ force: true });
       }
     };
 
     const flushProgressOnPageHide = () => {
-      saveProgress();
+      saveProgress({ force: true });
     };
 
     document.addEventListener("visibilitychange", flushProgressOnHide);
@@ -766,9 +972,23 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
     return () => {
       document.removeEventListener("visibilitychange", flushProgressOnHide);
       globalThis.removeEventListener("pagehide", flushProgressOnPageHide);
-      saveProgress();
+      saveProgress({ force: true });
     };
   }, [saveProgress, vodId]);
+
+  const handleBack = useCallback(() => {
+    const currentRoute = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
+    if (
+      typeof returnPath === "string" &&
+      returnPath.startsWith("/") &&
+      returnPath !== currentRoute
+    ) {
+      navigate(returnPath, { replace: true });
+      return;
+    }
+
+    navigateBackInApp(navigate, "/");
+  }, [navigate, returnPath]);
 
   if (!source) {
     return (
@@ -804,7 +1024,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
             }}
           >
             <button
-              onClick={() => navigateBackInApp(navigate, "/")}
+              onClick={handleBack}
               className="secondary-btn"
               style={{
                 width: "40px",

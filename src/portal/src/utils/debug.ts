@@ -307,9 +307,13 @@ function loadErudaScript(): Promise<void> {
     const existing = document.getElementById(BENCHMARK_SCRIPT_ID);
     if (existing instanceof HTMLScriptElement) {
       existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("eruda-load-failed")), {
-        once: true,
-      });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("eruda-load-failed")),
+        {
+          once: true,
+        },
+      );
       return;
     }
 

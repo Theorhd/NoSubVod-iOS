@@ -11,6 +11,7 @@ import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
 import { StreamCard } from "./components/StreamCard";
 import { TopBar } from "./components/TopBar";
 import { useServer } from "./ServerContext";
+import { navigateToPlayer } from "./utils/navigation";
 
 const PAGE_SIZE = 24;
 
@@ -289,7 +290,9 @@ export default function Live() {
               key={stream.id}
               stream={stream}
               onWatch={(login) =>
-                navigate(`/player?live=${encodeURIComponent(login)}`)
+                navigateToPlayer(navigate, {
+                  liveId: login,
+                })
               }
               onCategoryClick={switchToCategory}
               showBroadcaster

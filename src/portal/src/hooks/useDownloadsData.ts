@@ -139,7 +139,8 @@ export function useDownloadsData() {
       resolved.startsWith("/api/downloads/") ||
       resolved.startsWith("/api/shared-downloads/");
 
-    const useRemoteDownloads = Boolean(serverUrl && pairedToken) && isRemoteDownloadPath;
+    const useRemoteDownloads =
+      Boolean(serverUrl && pairedToken) && isRemoteDownloadPath;
 
     if (useRemoteDownloads) {
       resolved = `${serverUrl.replace(/\/$/, "")}${resolved}`;

@@ -134,8 +134,7 @@ function normalizeApiPathname(pathname: string): string {
 function shouldUseRemoteApi(pathname: string): boolean {
   const normalized = normalizeApiPathname(pathname);
   return REMOTE_API_PATH_PREFIXES.some(
-    (prefix) =>
-      normalized === prefix || normalized.startsWith(`${prefix}/`),
+    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
   );
 }
 
@@ -207,7 +206,13 @@ function dispatchTauriApiRequest(
 
   // Pairing mode: only selected endpoints are forwarded to Desktop.
   if (shouldRouteToRemote && serverUrl) {
-    return invokeRemoteApiViaProxy(resolvedUrl, method, body, headers, serverUrl);
+    return invokeRemoteApiViaProxy(
+      resolvedUrl,
+      method,
+      body,
+      headers,
+      serverUrl,
+    );
   }
 
   // Default path: keep requests on the iOS local backend.
@@ -262,7 +267,10 @@ async function invokeInternalApi(
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const result = await invokeWithTimeout(
-          invoke<InternalApiInvokeResponse>("internal_api_request", requestPayload),
+          invoke<InternalApiInvokeResponse>(
+            "internal_api_request",
+            requestPayload,
+          ),
           "internal_api_request",
         );
         return buildInvokeResponse(result);
@@ -315,7 +323,10 @@ async function invokeRemoteApiViaProxy(
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const result = await invokeWithTimeout(
-          invoke<InternalApiInvokeResponse>("proxy_remote_request", requestPayload),
+          invoke<InternalApiInvokeResponse>(
+            "proxy_remote_request",
+            requestPayload,
+          ),
           "proxy_remote_request",
         );
         return buildInvokeResponse(result);

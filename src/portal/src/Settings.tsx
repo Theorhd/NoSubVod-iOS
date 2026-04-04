@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   ExperienceSettings,
   ProxyInfo,
@@ -20,6 +26,14 @@ const defaultSettings: ExperienceSettings = {
   launchAtLogin: false,
   enabledExtensions: [],
 };
+
+function isTauriRuntime(): boolean {
+  const runtime = globalThis as {
+    __TAURI_INTERNALS__?: unknown;
+    __TAURI__?: unknown;
+  };
+  return Boolean(runtime.__TAURI_INTERNALS__ || runtime.__TAURI__);
+}
 
 interface SectionProps {
   readonly settings: ExperienceSettings;
@@ -60,8 +74,8 @@ const VideoPlayerSection = React.memo(
           <option value="1080">1080p</option>
         </select>
         <small className="help-text">
-          En 1080p/720p/480p, le player force cette résolution si disponible.
-          En Automatique, la qualité reste adaptative.
+          En 1080p/720p/480p, le player force cette résolution si disponible. En
+          Automatique, la qualité reste adaptative.
         </small>
       </div>
     </div>
@@ -672,7 +686,10 @@ const ServerConnectionSection = React.memo(() => {
                 className="action-btn"
                 style={{ flex: 1 }}
                 onClick={() => {
-                  if (!selectedServer || !isDesktopServerOrigin(selectedServer)) {
+                  if (
+                    !selectedServer ||
+                    !isDesktopServerOrigin(selectedServer)
+                  ) {
                     setConnectionError(
                       `Connexion refusee: seul un serveur Desktop sur le port ${DESKTOP_SERVER_HTTPS_PORT} est accepte.`,
                     );
@@ -684,7 +701,9 @@ const ServerConnectionSection = React.memo(() => {
                     setSelectedServer(null);
                     setConnectionError("");
                   } else {
-                    setConnectionError("Veuillez entrer un token de connexion.");
+                    setConnectionError(
+                      "Veuillez entrer un token de connexion.",
+                    );
                   }
                 }}
               >
@@ -844,28 +863,53 @@ export default function Settings() {
 
   const linkTwitch = useCallback(async () => {
     setError("");
-    // Open synchronously in a separate window/sheet to avoid replacing the app webview.
-    const popup = globalThis.open("/api/auth/twitch/begin", "_blank");
-    if (!popup) {
-      try {
-        const runtime = globalThis as { __TAURI_INTERNALS__?: unknown };
-        if (runtime.__TAURI_INTERNALS__) {
-          const { openUrl } = await import("@tauri-apps/plugin-opener");
-          await openUrl("http://127.0.0.1:23400/api/auth/twitch/begin");
-          startTwitchStatusPolling();
-          return;
+    try {
+      const startRes = await fetch("/api/auth/twitch/start");
+      if (!startRes.ok) {
+        let backendError = "";
+        try {
+          const payload = (await startRes.json()) as { error?: string };
+          backendError = payload.error || "";
+        } catch {
+          // ignore non-json payloads
         }
-      } catch (openError) {
-        console.error("Failed to open Twitch OAuth via opener plugin", openError);
+
+        setError(
+          backendError ||
+            "Impossible de demarrer l'authentification Twitch. Verifie la configuration OAuth.",
+        );
+        return;
+      }
+
+      const startPayload = (await startRes.json()) as { authUrl?: string };
+      const authUrl = (startPayload.authUrl || "").trim();
+      if (!authUrl) {
+        setError("URL Twitch invalide. Reessaie dans quelques secondes.");
+        return;
+      }
+
+      const popup = globalThis.open(authUrl, "_blank", "noopener,noreferrer");
+      if (popup) {
+        startTwitchStatusPolling();
+        return;
+      }
+
+      if (isTauriRuntime()) {
+        const { openUrl } = await import("@tauri-apps/plugin-opener");
+        await openUrl(authUrl);
+        startTwitchStatusPolling();
+        return;
       }
 
       setError(
         "Impossible d'ouvrir la fenetre Twitch. Fermez les bloqueurs de popups ou redemarrez l'app.",
       );
-      return;
+    } catch (openError) {
+      console.error("Failed to start Twitch OAuth", openError);
+      setError(
+        "Impossible d'ouvrir la fenetre Twitch. Verifie ta connexion ou redemarre l'app.",
+      );
     }
-
-    startTwitchStatusPolling();
   }, [startTwitchStatusPolling]);
 
   useEffect(() => {

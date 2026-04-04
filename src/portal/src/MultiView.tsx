@@ -165,7 +165,9 @@ export default function MultiView() {
             <NSVPlayer
               source={{
                 src: (() => {
-                  const quality = (settings.defaultVideoQuality || "auto").trim();
+                  const quality = (
+                    settings.defaultVideoQuality || "auto"
+                  ).trim();
                   const qualityQuery = quality
                     ? `?quality=${encodeURIComponent(quality)}`
                     : "";

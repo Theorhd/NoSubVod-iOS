@@ -13,6 +13,46 @@ type CategoryVodPage = {
 };
 
 const MIN_VOD_DURATION_SECONDS = 210;
+const REQUEST_TIMEOUT_MS = 15000;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const upstreamSignal = init.signal;
+
+  const relayAbort = () => {
+    controller.abort();
+  };
+
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted) {
+      controller.abort();
+    } else {
+      upstreamSignal.addEventListener("abort", relayAbort, { once: true });
+    }
+  }
+
+  const timeoutId = globalThis.setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted && !upstreamSignal?.aborted) {
+      throw new Error("Request timed out");
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    if (upstreamSignal) {
+      upstreamSignal.removeEventListener("abort", relayAbort);
+    }
+  }
+}
 
 const filterShortVods = (vods: VOD[]): VOD[] =>
   vods.filter((vod) => (vod.lengthSeconds || 0) >= MIN_VOD_DURATION_SECONDS);
@@ -55,7 +95,7 @@ export function useChannelData({
 
   const fetchHistory = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch("/api/history", { signal });
+      const res = await fetchWithTimeout("/api/history", { signal });
       return res.ok ? ((await res.json()) as Record<string, HistoryEntry>) : {};
     } catch {
       return {};
@@ -65,13 +105,15 @@ export function useChannelData({
   const fetchUserData = useCallback(
     async (targetUser: string, signal: AbortSignal) => {
       const [vodsData, liveData, historyData] = await Promise.all([
-        fetch(`/api/user/${encodeURIComponent(targetUser)}/vods`, {
+        fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}/vods`, {
           signal,
         }).then((res) => {
           if (!res.ok) throw new Error("Failed to fetch VODs");
           return res.json() as Promise<VOD[]>;
         }),
-        fetch(`/api/user/${encodeURIComponent(targetUser)}/live`, { signal })
+        fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}/live`, {
+          signal,
+        })
           .then((res) => (res.ok ? (res.json() as Promise<LiveStream>) : null))
           .catch(() => null),
         fetchHistory(signal),
@@ -100,13 +142,16 @@ export function useChannelData({
       if (categoryId) categoryVodParams.set("id", categoryId);
 
       const [vodPage, livePage, historyData] = await Promise.all([
-        fetch(`/api/search/category-vods?${categoryVodParams.toString()}`, {
-          signal,
-        }).then((res) => {
+        fetchWithTimeout(
+          `/api/search/category-vods?${categoryVodParams.toString()}`,
+          {
+            signal,
+          },
+        ).then((res) => {
           if (!res.ok) throw new Error("Failed to fetch VODs");
           return res.json() as Promise<CategoryVodPage>;
         }),
-        fetch(
+        fetchWithTimeout(
           `/api/live/category?name=${encodeURIComponent(targetCategory)}&limit=12`,
           { signal },
         )
@@ -180,7 +225,9 @@ export function useChannelData({
       const params = new URLSearchParams({ name: category, limit: "24" });
       if (categoryId) params.set("id", categoryId);
       if (catVodCursor) params.set("cursor", catVodCursor);
-      const res = await fetch(`/api/search/category-vods?${params.toString()}`);
+      const res = await fetchWithTimeout(
+        `/api/search/category-vods?${params.toString()}`,
+      );
       if (!res.ok) throw new Error("Failed to load more VODs");
       const page = (await res.json()) as CategoryVodPage;
       if (page.items && page.items.length > 0) {
@@ -209,7 +256,9 @@ export function useChannelData({
     try {
       const params = new URLSearchParams({ name: category, limit: "12" });
       if (catLiveCursor) params.set("cursor", catLiveCursor);
-      const res = await fetch(`/api/live/category?${params.toString()}`);
+      const res = await fetchWithTimeout(
+        `/api/live/category?${params.toString()}`,
+      );
       if (!res.ok) throw new Error("Failed to load more lives");
       const page = (await res.json()) as LiveStreamsPage;
       if (page.items && page.items.length > 0) {

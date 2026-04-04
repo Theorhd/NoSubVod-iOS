@@ -2409,13 +2409,14 @@ impl TwitchService {
             channels_to_fetch.insert(ch.clone());
         }
 
-        let game_results = stream::iter(game_inputs.into_iter())
-            .map(|(game, lang_filter)| async move {
-                self.fetch_game_vods(&game, lang_filter, 40).await
-            })
-            .buffer_unordered(TRENDING_GAMES_CONCURRENCY)
-            .collect::<Vec<_>>()
-            .await;
+        let game_results =
+            stream::iter(game_inputs.into_iter())
+                .map(|(game, lang_filter)| async move {
+                    self.fetch_game_vods(&game, lang_filter, 40).await
+                })
+                .buffer_unordered(TRENDING_GAMES_CONCURRENCY)
+                .collect::<Vec<_>>()
+                .await;
 
         let channel_results = stream::iter(channels_to_fetch.into_iter())
             .map(|login| async move { self.fetch_user_vods(&login).await })
@@ -2601,9 +2602,7 @@ impl TwitchService {
             }
         }
 
-        for (res_key, resolution, fps, stream_url, codec) in
-            probed_variants.into_iter().flatten()
-        {
+        for (res_key, resolution, fps, stream_url, codec) in probed_variants.into_iter().flatten() {
             let quality = if res_key == "chunked" {
                 let height = resolution.split('x').nth(1).unwrap_or("1080");
                 format!("{height}p")

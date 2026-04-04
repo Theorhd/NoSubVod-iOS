@@ -118,9 +118,8 @@ fn resolve_target_quality_height(
 
     match requested {
         Some(value) if value.eq_ignore_ascii_case("auto") => None,
-        Some(value) => {
-            preferred_quality_height(Some(value)).or_else(|| preferred_quality_height(settings_quality))
-        }
+        Some(value) => preferred_quality_height(Some(value))
+            .or_else(|| preferred_quality_height(settings_quality)),
         None => preferred_quality_height(settings_quality),
     }
 }

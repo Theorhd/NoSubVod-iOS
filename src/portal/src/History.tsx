@@ -5,6 +5,7 @@ import { Download as DownloadIcon } from "lucide-react";
 import DownloadMenu from "./components/DownloadMenu";
 import { formatRelative } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
+import { navigateToPlayer } from "./utils/navigation";
 
 type HistoryItemProps = Readonly<{
   entry: HistoryVodEntry;
@@ -38,7 +39,11 @@ function HistoryItemComponent({ entry, navigate }: HistoryItemProps) {
       <button
         type="button"
         className="history-item-main"
-        onClick={() => navigate("/player?vod=" + entry.vodId)}
+        onClick={() =>
+          navigateToPlayer(navigate, {
+            vodId: entry.vodId,
+          })
+        }
       >
         <img
           src={

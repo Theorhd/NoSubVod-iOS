@@ -120,7 +120,7 @@ fn close_tab_html(msg: &str, success: bool) -> Html<String> {
     } else {
         ("✗", "#ff4a4a")
     };
-        let status = if success { "success" } else { "error" };
+    let status = if success { "success" } else { "error" };
     Html(format!(
         r#"<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
         body{{background:#0e0e10;color:#efeff1;font-family:Inter,Helvetica,sans-serif;

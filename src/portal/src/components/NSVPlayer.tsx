@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   MediaPlayer,
   MediaProvider,
@@ -37,7 +43,9 @@ function getHlsStabilityConfig(lockToFixedQuality: boolean) {
   };
 }
 
-function hasFixedQualityPreference(defaultQuality: string | undefined): boolean {
+function hasFixedQualityPreference(
+  defaultQuality: string | undefined,
+): boolean {
   return Boolean(defaultQuality && defaultQuality !== "auto");
 }
 
@@ -380,24 +388,21 @@ const NSVPlayer = React.memo(
     const useNativeResumeRefresh =
       isMobileDevice() && canPlayHlsNatively() && !canUseHlsJs();
 
-    const src = useMemo(
-      () => {
-        let resolvedSrc = withAuthQuery(source.src);
-        if (useNativeResumeRefresh && resumeRevision > 0) {
-          resolvedSrc = withTransientQuery(
-            resolvedSrc,
-            "_resume",
-            String(resumeRevision),
-          );
-        }
+    const src = useMemo(() => {
+      let resolvedSrc = withAuthQuery(source.src);
+      if (useNativeResumeRefresh && resumeRevision > 0) {
+        resolvedSrc = withTransientQuery(
+          resolvedSrc,
+          "_resume",
+          String(resumeRevision),
+        );
+      }
 
-        return {
-          src: resolvedSrc,
-          type: source.type,
-        };
-      },
-      [source.src, source.type, useNativeResumeRefresh, resumeRevision],
-    );
+      return {
+        src: resolvedSrc,
+        type: source.type,
+      };
+    }, [source.src, source.type, useNativeResumeRefresh, resumeRevision]);
 
     const effectiveMuted = muted || (autoPlay && isMobileDevice());
 
@@ -446,10 +451,13 @@ const NSVPlayer = React.memo(
       const triggerResumeRefresh = () => {
         const mediaState = storeRef.current;
         const currentTime = Number(mediaState.currentTime || 0);
-        const canSeek = Boolean(mediaState.canSeek) && Number(mediaState.duration || 0) > 0;
+        const canSeek =
+          Boolean(mediaState.canSeek) && Number(mediaState.duration || 0) > 0;
 
         pendingResumeSeekRef.current =
-          canSeek && Number.isFinite(currentTime) ? Math.max(0, currentTime) : null;
+          canSeek && Number.isFinite(currentTime)
+            ? Math.max(0, currentTime)
+            : null;
         pendingResumePlayRef.current = !mediaState.paused;
         setResumeRevision((prev) => prev + 1);
       };
@@ -670,21 +678,24 @@ const NSVPlayer = React.memo(
       };
     }, [handleRemoteControl]);
 
-    const onProviderChange = useCallback((provider: any) => {
-      if (provider?.type === "hls") {
-        if (!canUseHlsJs()) return;
-        provider.library = Hls;
-        const hlsConfig = getHlsStabilityConfig(
-          hasFixedQualityPreference(defaultQuality),
-        );
-        const loaderConfig = isTauriRuntime()
-          ? { loader: InternalApiHlsLoader }
-          : {};
-        provider.config = provider.config
-          ? { ...provider.config, ...hlsConfig, ...loaderConfig }
-          : { ...hlsConfig, ...loaderConfig };
-      }
-    }, [defaultQuality]);
+    const onProviderChange = useCallback(
+      (provider: any) => {
+        if (provider?.type === "hls") {
+          if (!canUseHlsJs()) return;
+          provider.library = Hls;
+          const hlsConfig = getHlsStabilityConfig(
+            hasFixedQualityPreference(defaultQuality),
+          );
+          const loaderConfig = isTauriRuntime()
+            ? { loader: InternalApiHlsLoader }
+            : {};
+          provider.config = provider.config
+            ? { ...provider.config, ...hlsConfig, ...loaderConfig }
+            : { ...hlsConfig, ...loaderConfig };
+        }
+      },
+      [defaultQuality],
+    );
 
     const renderedTextTracks = useMemo(
       () =>
