@@ -27,11 +27,6 @@ pub mod server {
 use std::sync::Arc;
 #[cfg(not(test))]
 use tauri::Manager;
-#[cfg(all(not(test), not(mobile)))]
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::{TrayIconBuilder, TrayIconEvent},
-};
 #[cfg(not(test))]
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -43,7 +38,7 @@ fn init_tracing() {
     let _ = tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "nosubvod_desktop_lib=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "nosubvod_ios_lib=debug,tower_http=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .try_init();
@@ -65,11 +60,7 @@ pub fn run() {
     init_tracing();
     init_rustls_crypto_provider();
 
-    let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init());
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
 
     builder = builder.setup(|app| {
         // Shared state is initialized on every platform so frontend can use
@@ -85,54 +76,7 @@ pub fn run() {
         );
         app.manage(state.clone());
 
-        #[cfg(not(mobile))]
-        {
-            // ── Tray icon ──────────────────────────────────────────────────
-            let show_item = MenuItem::with_id(app, "show", "Show App", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit NoSubVOD", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
-
-            let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().cloned().expect("No window icon"))
-                .menu(&menu)
-                .tooltip("NoSubVOD")
-                .show_menu_on_left_click(false)
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::DoubleClick { .. } = event {
-                        let app = tray.app_handle();
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
-                    }
-                })
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .build(app)?;
-
-            // ── Intercept close → minimize to tray ─────────────────────────
-            if let Some(win) = app.get_webview_window("main") {
-                let win_clone = win.clone();
-                win.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = win_clone.hide();
-                    }
-                });
-            }
-        }
-
-        // ── Start Axum HTTP server (desktop AND mobile) ──────────────────────
+        // ── Start Axum HTTP server used by the iOS webview ───────────────────
         let app_handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
             server::start_server(state, app_handle).await;

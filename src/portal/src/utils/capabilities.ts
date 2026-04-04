@@ -10,32 +10,13 @@ export function isIOSFamily(): boolean {
   return ua.includes("macintosh") && (nav.maxTouchPoints || 0) > 1;
 }
 
-export function isAndroid(): boolean {
-  const nav = globalThis.navigator;
-  if (!nav) return false;
-  return /android/i.test(nav.userAgent || "");
-}
-
 export function isMobileDevice(): boolean {
-  return isIOSFamily() || isAndroid();
-}
-
-export function canUseGetUserMedia(): boolean {
-  return (
-    typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia
-  );
-}
-
-export function canUseDisplayCapture(): boolean {
-  return (
-    typeof navigator !== "undefined" &&
-    !!navigator.mediaDevices?.getDisplayMedia
-  );
+  return isIOSFamily();
 }
 
 export function canUseHlsJs(): boolean {
-  if (isIOSFamily()) return false; // Force native AVPlayer on iOS
-  return globalThis.window !== undefined && typeof MediaSource !== "undefined";
+  // iOS-only build: always force native AVPlayer for HLS playback.
+  return false;
 }
 
 export function canPlayHlsNatively(): boolean {

@@ -23,8 +23,6 @@ import {
   Bell,
   X,
 } from "lucide-react";
-import { ExperienceSettings } from "../../shared/types";
-import { useAuth } from "../../shared/hooks/useAuth";
 import { ErrorBoundary } from "../../shared/components/ErrorBoundary";
 import { ServerProvider, useServer } from "./ServerContext";
 import { ExtensionProvider, useExtensions } from "./ExtensionContext";
@@ -41,7 +39,7 @@ const Downloads = lazy(() => import("./Downloads"));
 const MultiView = lazy(() => import("./MultiView"));
 const ScreenShare = lazy(() => import("./ScreenShare.tsx"));
 
-const STABILITY_MODE = true;
+const SUSPEND_EXTENSION_LOADING = true;
 
 type NavItem = {
   path: string;
@@ -91,46 +89,6 @@ const NotificationToast = ({
 };
 
 const MemoNotificationToast = React.memo(NotificationToast);
-
-const UpdateNotification = ({
-  updateInfo,
-  onRestart,
-}: {
-  updateInfo: { version: string };
-  onRestart: () => void;
-}) => {
-  return (
-    <div className="toast-container" style={{ bottom: "80px", zIndex: 1000 }}>
-      <div className="toast update-toast">
-        <div className="toast-icon">
-          <Bell size={18} />
-        </div>
-        <div className="toast-content">
-          <div className="toast-title">
-            Mise à jour installée (v{updateInfo.version})
-          </div>
-          <div className="toast-msg">
-            Une nouvelle version a été installée avec succès.
-          </div>
-        </div>
-        <button
-          className="action-btn"
-          onClick={onRestart}
-          style={{
-            marginLeft: "12px",
-            flexShrink: 0,
-            padding: "4px 12px",
-            fontSize: "0.85rem",
-          }}
-        >
-          Restart
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const MemoUpdateNotification = React.memo(UpdateNotification);
 
 function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -213,58 +171,9 @@ const BottomNav = React.memo(({ items }: Readonly<{ items: NavItem[] }>) => {
 BottomNav.displayName = "BottomNav";
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
   const { isConnected: isServerConnected, serverUrl } = useServer();
   const { contributions } = useExtensions();
-  const [installedUpdate, setInstalledUpdate] = useState<{
-    version: string;
-  } | null>(null);
   const isDesktopConnected = isServerConnected && Boolean(serverUrl);
-
-  const handleRestart = useCallback(async () => {
-    try {
-      if (isTauriRuntime()) {
-        const { relaunch } = await import("@tauri-apps/plugin-process");
-        await relaunch();
-        return;
-      }
-      globalThis.location.reload();
-    } catch (err) {
-      console.error("Failed to relaunch:", err);
-      globalThis.location.reload();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (STABILITY_MODE) return;
-    if (!isAuthenticated) return;
-
-    const checkUpdate = async () => {
-      try {
-        const settingsRes = await fetch("/api/settings");
-        if (!settingsRes.ok) return;
-        const settings = (await settingsRes.json()) as ExperienceSettings;
-
-        if (!settings.autoUpdate) return;
-
-        if (!isTauriRuntime()) return;
-
-        const { check } = await import("@tauri-apps/plugin-updater");
-        const update = await check();
-        if (update) {
-          console.log(`Found update ${update.version}`);
-          await update.downloadAndInstall();
-          console.log("Update installed");
-          setInstalledUpdate({ version: update.version });
-        }
-      } catch (err) {
-        console.error("Failed to check for updates:", err);
-      }
-    };
-
-    const timer = setTimeout(checkUpdate, 5000);
-    return () => clearTimeout(timer);
-  }, [isAuthenticated]);
 
   useEffect(() => {
     try {
@@ -348,12 +257,6 @@ function AppContent() {
           </Suspense>
           <BottomNav items={navItems} />
           <NotificationCenter />
-          {installedUpdate && (
-            <MemoUpdateNotification
-              updateInfo={installedUpdate}
-              onRestart={handleRestart}
-            />
-          )}
         </div>
       </ErrorBoundary>
     </Router>
@@ -363,7 +266,7 @@ function AppContent() {
 export default function App() {
   return (
     <ServerProvider>
-      <ExtensionProvider suspendLoading={STABILITY_MODE}>
+      <ExtensionProvider suspendLoading={SUSPEND_EXTENSION_LOADING}>
         <AppContent />
       </ExtensionProvider>
     </ServerProvider>

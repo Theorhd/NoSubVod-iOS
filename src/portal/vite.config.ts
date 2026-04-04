@@ -2,16 +2,18 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root: __dirname,
   base: "/",
   cacheDir: "../../node_modules/.vite-portal",
-  plugins: [react(), basicSsl()],
+  plugins: command === "serve" ? [react(), basicSsl()] : [react()],
   build: {
     outDir: "../../dist/portal",
     emptyOutDir: true,
     cssCodeSplit: true,
     sourcemap: false,
+    target: "safari16",
+    cssTarget: "safari16",
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -63,4 +65,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
