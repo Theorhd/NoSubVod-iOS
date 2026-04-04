@@ -71,6 +71,83 @@ function parseFilenameFromDisposition(
   return null;
 }
 
+const TWITCH_AUTH_HOSTNAME = "id.twitch.tv";
+
+async function extractErrorMessageFromResponse(
+  response: Response,
+): Promise<string> {
+  try {
+    const payload = (await response.json()) as { error?: string };
+    return payload.error || "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeTwitchAuthUrl(rawAuthUrl: string): string {
+  const authUrl = rawAuthUrl.trim();
+  if (!authUrl) {
+    throw new Error("URL OAuth Twitch invalide.");
+  }
+
+  let parsedAuthUrl: URL;
+  try {
+    parsedAuthUrl = new URL(authUrl);
+  } catch {
+    throw new Error("URL OAuth Twitch invalide.");
+  }
+
+  if (
+    parsedAuthUrl.protocol !== "https:" ||
+    parsedAuthUrl.hostname !== TWITCH_AUTH_HOSTNAME
+  ) {
+    throw new Error("URL OAuth Twitch inattendue.");
+  }
+
+  return authUrl;
+}
+
+async function fetchTwitchAuthUrl(): Promise<string> {
+  const startRes = await fetch("/api/auth/twitch/start");
+  if (!startRes.ok) {
+    const backendError = await extractErrorMessageFromResponse(startRes);
+    throw new Error(
+      backendError ||
+        "Impossible de démarrer l'authentification Twitch. Vérifie la configuration OAuth.",
+    );
+  }
+
+  const startPayload = (await startRes.json()) as { authUrl?: string };
+  return normalizeTwitchAuthUrl(startPayload.authUrl || "");
+}
+
+type TwitchLaunchResult = "opened" | "redirected";
+
+async function openTwitchAuthFlow(
+  authUrl: string,
+  popup: Window | null,
+  isTauri: boolean,
+): Promise<TwitchLaunchResult> {
+  if (popup && !popup.closed) {
+    popup.location.href = authUrl;
+    return "opened";
+  }
+
+  const popupDirect = globalThis.open(authUrl, "_blank", "noopener,noreferrer");
+  if (popupDirect && !popupDirect.closed) {
+    return "opened";
+  }
+
+  if (isTauri) {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(authUrl);
+    return "opened";
+  }
+
+  globalThis.location.assign(authUrl);
+  return "redirected";
+}
+
 interface SectionProps {
   readonly settings: ExperienceSettings;
   readonly setSettings: React.Dispatch<
@@ -325,93 +402,104 @@ DownloadsSection.displayName = "DownloadsSection";
 const TwitchAccountSection = React.memo(
   ({
     twitchStatus,
+    twitchLinking,
     twitchPolling,
     twitchImporting,
     linkTwitch,
     unlinkTwitch,
     importFollows,
     setImportFollowsSetting,
-  }: any) => (
-    <div className="card settings-card">
-      <h2>Compte Twitch</h2>
-      <p className="settings-description">
-        Lie ton compte Twitch pour les messages et l&apos;import de Subs.
-      </p>
+  }: any) => {
+    let linkButtonLabel = "Lier mon compte Twitch";
+    if (twitchLinking) {
+      linkButtonLabel = "Préparation...";
+    } else if (twitchPolling) {
+      linkButtonLabel = "En attente...";
+    }
 
-      {!twitchStatus?.clientConfigured && (
-        <div className="twitch-warning">
-          Configuration Twitch incomplète (.env).
-        </div>
-      )}
+    return (
+      <div className="card settings-card">
+        <h2>Compte Twitch</h2>
+        <p className="settings-description">
+          Lie ton compte Twitch pour les messages et l&apos;import de Subs.
+        </p>
 
-      {twitchStatus?.linked ? (
-        <div>
-          <div className="twitch-user-row">
-            {twitchStatus.userAvatar && (
-              <img
-                src={twitchStatus.userAvatar}
-                alt="Avatar"
-                className="twitch-avatar"
-              />
-            )}
-            <div>
-              <div className="twitch-display-name">
-                {twitchStatus.userDisplayName || twitchStatus.userLogin}
-              </div>
-              {twitchStatus.userLogin && (
-                <div className="twitch-login">@{twitchStatus.userLogin}</div>
+        {!twitchStatus?.clientConfigured && (
+          <div className="twitch-warning">
+            Configuration Twitch incomplète (.env).
+          </div>
+        )}
+
+        {twitchStatus?.linked ? (
+          <div>
+            <div className="twitch-user-row">
+              {twitchStatus.userAvatar && (
+                <img
+                  src={twitchStatus.userAvatar}
+                  alt="Avatar"
+                  className="twitch-avatar"
+                />
               )}
+              <div>
+                <div className="twitch-display-name">
+                  {twitchStatus.userDisplayName || twitchStatus.userLogin}
+                </div>
+                {twitchStatus.userLogin && (
+                  <div className="twitch-login">@{twitchStatus.userLogin}</div>
+                )}
+              </div>
+              <button
+                onClick={unlinkTwitch}
+                className="action-btn secondary-btn soft-outline-btn ml-auto"
+              >
+                Déconnecter
+              </button>
             </div>
-            <button
-              onClick={unlinkTwitch}
-              className="action-btn secondary-btn soft-outline-btn ml-auto"
-            >
-              Déconnecter
-            </button>
-          </div>
 
-          <div className="settings-subsection">
-            <div className="toggle-row mb-2">
-              <span>
-                <strong>
-                  <label htmlFor="importFollowsToggle" className="mb-0">
-                    Importer les chaînes suivies
-                  </label>
-                </strong>
-                <small>
-                  Ajoute auto. tes follows Twitch dans tes Subs NoSubVOD
-                </small>
-              </span>
-              <input
-                id="importFollowsToggle"
-                type="checkbox"
-                checked={twitchStatus.importFollows ?? false}
-                onChange={(e) => setImportFollowsSetting(e.target.checked)}
-              />
+            <div className="settings-subsection">
+              <div className="toggle-row mb-2">
+                <span>
+                  <strong>
+                    <label htmlFor="importFollowsToggle" className="mb-0">
+                      Importer les chaînes suivies
+                    </label>
+                  </strong>
+                  <small>
+                    Ajoute auto. tes follows Twitch dans tes Subs NoSubVOD
+                  </small>
+                </span>
+                <input
+                  id="importFollowsToggle"
+                  type="checkbox"
+                  checked={twitchStatus.importFollows ?? false}
+                  onChange={(e) => setImportFollowsSetting(e.target.checked)}
+                />
+              </div>
+              <button
+                onClick={importFollows}
+                disabled={twitchImporting}
+                className="action-btn secondary-btn soft-outline-btn"
+              >
+                {twitchImporting ? "Importation..." : "Importer maintenant"}
+              </button>
             </div>
-            <button
-              onClick={importFollows}
-              disabled={twitchImporting}
-              className="action-btn secondary-btn soft-outline-btn"
-            >
-              {twitchImporting ? "Importation..." : "Importer maintenant"}
-            </button>
           </div>
-        </div>
-      ) : (
-        <button
-          onClick={linkTwitch}
-          disabled={
-            twitchPolling ||
-            (twitchStatus !== null && !twitchStatus.clientConfigured)
-          }
-          className="action-btn twitch-connect-btn"
-        >
-          {twitchPolling ? "En attente..." : "Lier mon compte Twitch"}
-        </button>
-      )}
-    </div>
-  ),
+        ) : (
+          <button
+            onClick={linkTwitch}
+            disabled={
+              twitchLinking ||
+              twitchPolling ||
+              (twitchStatus !== null && !twitchStatus.clientConfigured)
+            }
+            className="action-btn twitch-connect-btn"
+          >
+            {linkButtonLabel}
+          </button>
+        )}
+      </div>
+    );
+  },
 );
 TwitchAccountSection.displayName = "TwitchAccountSection";
 
@@ -835,6 +923,7 @@ export default function Settings() {
   const [proxies, setProxies] = useState<ProxyInfo[]>([]);
   const [activeProxy, setActiveProxy] = useState<ProxyInfo | null>(null);
   const [twitchStatus, setTwitchStatus] = useState<TwitchStatus | null>(null);
+  const [twitchLinking, setTwitchLinking] = useState(false);
   const [twitchPolling, setTwitchPolling] = useState(false);
   const [twitchImporting, setTwitchImporting] = useState(false);
   const [trustedDevices, setTrustedDevices] = useState<TrustedDevice[]>([]);
@@ -861,31 +950,34 @@ export default function Settings() {
     setTwitchPolling(true);
 
     let attempts = 0;
-    twitchPollingTimerRef.current = setInterval(() => {
-      void (async () => {
-        if (document.visibilityState !== "visible") {
+    const pollStatus = async () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      attempts++;
+      try {
+        const r = await fetch("/api/auth/twitch/status");
+        if (!r.ok || attempts >= 60) {
+          stopTwitchPolling();
           return;
         }
 
-        attempts++;
-        try {
-          const r = await fetch("/api/auth/twitch/status");
-          if (!r.ok || attempts >= 60) {
-            stopTwitchPolling();
-            return;
-          }
-
-          const data = await r.json();
-          setTwitchStatus(data);
-          if (data.linked) {
-            stopTwitchPolling();
-          }
-        } catch {
-          if (attempts >= 60) {
-            stopTwitchPolling();
-          }
+        const data = await r.json();
+        setTwitchStatus(data);
+        if (data.linked) {
+          stopTwitchPolling();
         }
-      })();
+      } catch {
+        if (attempts >= 60) {
+          stopTwitchPolling();
+        }
+      }
+    };
+
+    void pollStatus();
+    twitchPollingTimerRef.current = setInterval(() => {
+      void pollStatus();
     }, 2000);
   }, [stopTwitchPolling]);
 
@@ -1065,40 +1157,42 @@ export default function Settings() {
   const linkTwitch = useCallback(async () => {
     setError("");
     setSuccess("");
+    setTwitchLinking(true);
 
     if (twitchStatus && !twitchStatus.clientConfigured) {
       setError(
         "Configuration OAuth Twitch manquante côté serveur. Vérifie le fichier .env.",
       );
+      setTwitchLinking(false);
       return;
     }
 
+    let popup: Window | null = null;
+    const isTauri = isTauriRuntime();
+
+    if (!isTauri) {
+      popup = globalThis.open("", "_blank", "noopener,noreferrer");
+    }
+
     try {
-      const beginUrl = `${globalThis.location.origin}/api/auth/twitch/begin`;
-
-      if (isTauriRuntime()) {
-        const { openUrl } = await import("@tauri-apps/plugin-opener");
-        await openUrl(beginUrl);
-        setSuccess("Ouverture de Twitch...");
+      const authUrl = await fetchTwitchAuthUrl();
+      const launchResult = await openTwitchAuthFlow(authUrl, popup, isTauri);
+      setSuccess("Ouverture de Twitch...");
+      if (launchResult === "opened") {
         startTwitchStatusPolling();
-        return;
       }
-
-      // Keep OAuth opening directly tied to the user click to avoid popup blocking.
-      const popup = globalThis.open(beginUrl, "_blank", "noopener,noreferrer");
-      if (popup && !popup.closed) {
-        setSuccess("Ouverture de Twitch...");
-        startTwitchStatusPolling();
-        return;
-      }
-
-      // Last fallback for strict browsers: navigate current tab.
-      globalThis.location.assign(beginUrl);
     } catch (openError) {
+      if (popup && !popup.closed) {
+        popup.close();
+      }
       console.error("Failed to start Twitch OAuth", openError);
       setError(
-        "Impossible d'ouvrir la fenetre Twitch. Verifie ta connexion ou redemarre l'app.",
+        openError instanceof Error
+          ? openError.message
+          : "Impossible d'ouvrir la fenêtre Twitch. Vérifie ta connexion ou redémarre l'app.",
       );
+    } finally {
+      setTwitchLinking(false);
     }
   }, [startTwitchStatusPolling, twitchStatus]);
 
@@ -1237,6 +1331,7 @@ export default function Settings() {
         />
         <TwitchAccountSection
           twitchStatus={twitchStatus}
+          twitchLinking={twitchLinking}
           twitchPolling={twitchPolling}
           twitchImporting={twitchImporting}
           linkTwitch={linkTwitch}
