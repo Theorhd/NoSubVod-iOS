@@ -1007,17 +1007,13 @@ function VodLivePlayer({
   const handleBack = useCallback(() => {
     void flushHistoryBeforeExit();
 
-    const currentRoute = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
-    if (
-      typeof returnPath === "string" &&
-      returnPath.startsWith("/") &&
-      returnPath !== currentRoute
-    ) {
-      navigate(returnPath);
-      return;
-    }
+    const fallbackPath =
+      typeof returnPath === "string" && returnPath.startsWith("/")
+        ? returnPath
+        : "/";
 
-    navigateBackInApp(navigate, "/");
+    // Prefer real history back to preserve multi-level navigation.
+    navigateBackInApp(navigate, fallbackPath);
   }, [flushHistoryBeforeExit, navigate, returnPath]);
 
   if (!source) {
