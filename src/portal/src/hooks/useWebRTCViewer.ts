@@ -12,6 +12,7 @@ import type {
   RemoteControlPayload,
   WsMessage,
 } from "../../../shared/types";
+import { usePageVisibility } from "../../../shared/hooks/usePageVisibility";
 
 const rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -33,6 +34,7 @@ export function useWebRTCViewer(
   remoteVideoRef: React.RefObject<HTMLVideoElement | null>,
   relayOrigin: string | null = null,
 ) {
+  const isPageVisible = usePageVisibility();
   const [signalStatus, setSignalStatus] = useState("Disconnected");
   const [rtcStatus, setRtcStatus] = useState("Idle");
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
@@ -557,7 +559,7 @@ export function useWebRTCViewer(
   }, [hasRemoteStream, recoverRemotePlayback]);
 
   useEffect(() => {
-    if (!hasRemoteStream) {
+    if (!hasRemoteStream || !isPageVisible) {
       frozenTickCountRef.current = 0;
       lastPlaybackTimeRef.current = 0;
       return;
@@ -565,7 +567,7 @@ export function useWebRTCViewer(
 
     const timer = globalThis.setInterval(() => {
       const video = remoteVideoRef.current;
-      if (!video || document.visibilityState !== "visible") {
+      if (!video) {
         return;
       }
       evaluatePlaybackHealth(video);
@@ -574,7 +576,7 @@ export function useWebRTCViewer(
     return () => {
       globalThis.clearInterval(timer);
     };
-  }, [evaluatePlaybackHealth, hasRemoteStream, remoteVideoRef]);
+  }, [evaluatePlaybackHealth, hasRemoteStream, remoteVideoRef, isPageVisible]);
 
   return {
     signalStatus: requiresRelay ? "Unavailable" : signalStatus,

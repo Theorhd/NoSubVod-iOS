@@ -8,6 +8,8 @@ import {
 import { TopBar } from "./components/TopBar";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { useServer } from "./ServerContext";
+import { useInterval } from "../../shared/hooks/useInterval";
+import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 
 const defaultSettings: ExperienceSettings = {
   oneSync: false,
@@ -705,6 +707,7 @@ const ServerConnectionSection = React.memo(() => {
 ServerConnectionSection.displayName = "ServerConnectionSection";
 
 export default function Settings() {
+  const isPageVisible = usePageVisibility();
   const [settings, setSettings] = useState<ExperienceSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -776,21 +779,27 @@ export default function Settings() {
 
   useEffect(() => {
     void fetchSettingsData();
-    const interval = setInterval(async () => {
-      if (document.visibilityState !== "visible") return;
-      try {
-        const [ads, pxs] = await Promise.all([
-          fetch("/api/adblock/status").then((r) => (r.ok ? r.json() : null)),
-          fetch("/api/adblock/proxies").then((r) => (r.ok ? r.json() : [])),
-        ]);
-        setActiveProxy(ads);
-        setProxies(pxs);
-      } catch {
-        // Keep previous values; a later tick will retry.
-      }
-    }, 30000);
-    return () => clearInterval(interval);
   }, [fetchSettingsData]);
+
+  const refreshAdblockData = useCallback(async () => {
+    try {
+      const [ads, pxs] = await Promise.all([
+        fetch("/api/adblock/status").then((r) => (r.ok ? r.json() : null)),
+        fetch("/api/adblock/proxies").then((r) => (r.ok ? r.json() : [])),
+      ]);
+      setActiveProxy(ads);
+      setProxies(pxs);
+    } catch {
+      // Keep previous values; a later tick will retry.
+    }
+  }, []);
+
+  useInterval(
+    () => {
+      void refreshAdblockData();
+    },
+    isPageVisible ? 30000 : null,
+  );
 
   const saveSettings = useCallback(async () => {
     setSaving(true);
@@ -856,6 +865,10 @@ export default function Settings() {
       let attempts = 0;
       twitchPollingTimerRef.current = setInterval(() => {
         void (async () => {
+          if (document.visibilityState !== "visible") {
+            return;
+          }
+
           attempts++;
           try {
             const r = await fetch("/api/auth/twitch/status");

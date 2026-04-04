@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use futures::stream::{self, StreamExt};
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use reqwest::Client;
@@ -343,6 +344,11 @@ pub struct TwitchService {
     /// Short-lived cache for variant proxy targets (UUID -> sanitized URL).
     variant_cache: Cache<String, String>,
 }
+
+const LIVE_STATUS_CONCURRENCY: usize = 12;
+const RELATED_CHANNELS_CONCURRENCY: usize = 8;
+const TRENDING_GAMES_CONCURRENCY: usize = 8;
+const TRENDING_CHANNELS_CONCURRENCY: usize = 10;
 
 impl Default for TwitchService {
     fn default() -> Self {
@@ -1908,17 +1914,18 @@ impl TwitchService {
         }
 
         let mut result: HashMap<String, LiveStream> = HashMap::new();
-        let mut futures = Vec::new();
+        let results = stream::iter(normalized.iter().cloned())
+            .map(|login| async move {
+                let res = self.fetch_user_live_stream(&login).await;
+                (login, res)
+            })
+            .buffer_unordered(LIVE_STATUS_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
 
-        for login in &normalized {
-            futures.push(self.fetch_user_live_stream(login));
-        }
-
-        let results = futures::future::join_all(futures).await;
-
-        for (login, res) in normalized.iter().zip(results) {
+        for (login, res) in results {
             if let Ok(Some(stream)) = res {
-                result.insert(login.clone(), stream);
+                result.insert(login, stream);
             }
         }
 
@@ -2368,11 +2375,11 @@ impl TwitchService {
         };
 
         // Fetch related channels for top channels
-        let mut related_futures = Vec::new();
-        for channel in &top_channels {
-            related_futures.push(self.fetch_related_channels(channel, 3));
-        }
-        let related_results = futures::future::join_all(related_futures).await;
+        let related_results = stream::iter(top_channels.iter().cloned())
+            .map(|channel| async move { self.fetch_related_channels(&channel, 3).await })
+            .buffer_unordered(RELATED_CHANNELS_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
         let mut related_channels_set: HashSet<String> = HashSet::new();
         for res in related_results {
             for ch in res {
@@ -2385,10 +2392,10 @@ impl TwitchService {
 
         // ── Step 2: Fetch all candidate VODs concurrently ──
 
-        let mut game_futures = Vec::new();
+        let mut game_inputs: Vec<(String, Option<Vec<String>>)> = Vec::new();
         for game in &top_games {
-            game_futures.push(self.fetch_game_vods(game, Some(vec!["fr".to_string()]), 40));
-            game_futures.push(self.fetch_game_vods(game, None, 40));
+            game_inputs.push((game.clone(), Some(vec!["fr".to_string()])));
+            game_inputs.push((game.clone(), None));
         }
 
         let mut channels_to_fetch: HashSet<String> = HashSet::new();
@@ -2402,15 +2409,19 @@ impl TwitchService {
             channels_to_fetch.insert(ch.clone());
         }
 
-        let channel_futures: Vec<_> = channels_to_fetch
-            .iter()
-            .map(|login| self.fetch_user_vods(login))
-            .collect();
+        let game_results = stream::iter(game_inputs.into_iter())
+            .map(|(game, lang_filter)| async move {
+                self.fetch_game_vods(&game, lang_filter, 40).await
+            })
+            .buffer_unordered(TRENDING_GAMES_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
 
-        let (game_results, channel_results) = tokio::join!(
-            futures::future::join_all(game_futures),
-            futures::future::join_all(channel_futures),
-        );
+        let channel_results = stream::iter(channels_to_fetch.into_iter())
+            .map(|login| async move { self.fetch_user_vods(&login).await })
+            .buffer_unordered(TRENDING_CHANNELS_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
 
         let all_candidates: Vec<Vod> = game_results
             .into_iter()

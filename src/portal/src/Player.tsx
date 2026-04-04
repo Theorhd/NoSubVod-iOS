@@ -24,6 +24,8 @@ import PlayerRTC from "./PlayerRTC";
 import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { navigateBackInApp } from "./utils/navigation";
+import { useInterval } from "../../shared/hooks/useInterval";
+import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 
 const DEFAULT_SETTINGS: ExperienceSettings = {
   oneSync: false,
@@ -295,6 +297,7 @@ type VodLivePlayerProps = {
 
 function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
   const { isMobileLayout } = useResponsive();
+  const isPageVisible = usePageVisibility();
   const navigate = useNavigate();
   const mediaKey = useMemo(() => {
     if (vodId) return `vod:${vodId}`;
@@ -710,35 +713,57 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
     };
   }, [liveId]);
 
+  const saveProgress = useCallback(() => {
+    if (!vodId) return;
+
+    const current = currentTimeRef.current;
+    const dur = durationRef.current;
+    if (current <= 0) return;
+
+    fetch("/api/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vodId,
+        timecode: current,
+        duration: dur || 0,
+      }),
+    }).catch((error) => {
+      console.error("Failed to save history", error);
+    });
+  }, [vodId]);
+
+  useInterval(
+    () => {
+      if (!isPlayingRef.current) return;
+      if (!isPageVisible) return;
+      saveProgress();
+    },
+    vodId ? 10000 : null,
+  );
+
   useEffect(() => {
     if (!vodId) return;
 
-    const saveProgress = () => {
-      const current = currentTimeRef.current;
-      const dur = durationRef.current;
-      if (current <= 0) return;
-      fetch("/api/history", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vodId,
-          timecode: current,
-          duration: dur || 0,
-        }),
-      }).catch((error) => {
-        console.error("Failed to save history", error);
-      });
+    const flushProgressOnHide = () => {
+      if (document.visibilityState === "hidden") {
+        saveProgress();
+      }
     };
 
-    const intervalId = setInterval(() => {
-      if (isPlayingRef.current) saveProgress();
-    }, 10000);
-
-    return () => {
-      clearInterval(intervalId);
+    const flushProgressOnPageHide = () => {
       saveProgress();
     };
-  }, [vodId]);
+
+    document.addEventListener("visibilitychange", flushProgressOnHide);
+    globalThis.addEventListener("pagehide", flushProgressOnPageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", flushProgressOnHide);
+      globalThis.removeEventListener("pagehide", flushProgressOnPageHide);
+      saveProgress();
+    };
+  }, [saveProgress, vodId]);
 
   if (!source) {
     return (
