@@ -5,6 +5,7 @@ import NSVPlayer from "./components/NSVPlayer";
 import { ExperienceSettings } from "../../shared/types";
 import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
+import { navigateBackInApp } from "./utils/navigation";
 
 interface MultiPlayerSlot {
   id: string;
@@ -82,7 +83,7 @@ export default function MultiView() {
           }}
         >
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigateBackInApp(navigate, "/")}
             className="secondary-btn"
             style={{
               width: "40px",

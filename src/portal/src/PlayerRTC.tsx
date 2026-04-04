@@ -8,6 +8,7 @@ import type {
 } from "../../shared/types";
 import { useWebRTCViewer } from "./hooks/useWebRTCViewer";
 import { usePlayerControls } from "./hooks/usePlayerControls";
+import { navigateBackInApp } from "./utils/navigation";
 
 const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
 
@@ -952,11 +953,7 @@ export default function PlayerRTC() {
   };
 
   const handleBack = () => {
-    if (globalThis.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate("/screen-share");
-    }
+    navigateBackInApp(navigate, "/screen-share");
   };
 
   return renderPlayerRTCView({

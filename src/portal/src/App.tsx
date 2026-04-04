@@ -10,6 +10,7 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
+  Navigate,
   useLocation,
   useNavigate,
 } from "react-router-dom";
@@ -252,6 +253,7 @@ function AppContent() {
                       element={<c.component {...c.componentProps} />}
                     />
                   ))}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
           </Suspense>

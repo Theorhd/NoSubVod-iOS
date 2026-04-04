@@ -35,6 +35,7 @@ use super::{
     types::{SubEntry, WatchlistEntry},
     validation::{
         filter_hevc_variants_for_ios, is_legacy_ios_request, is_valid_id, is_valid_login,
+        lock_master_playlist_to_height, preferred_quality_height,
     },
 };
 use moka::future::Cache;
@@ -180,11 +181,19 @@ async fn handle_vod_master(
         .generate_master_playlist(&vod_id, &host, &state.server_token)
         .await?;
 
-    let body = if is_legacy_ios_request(&headers) {
+    let settings = state.history.get_settings().await;
+
+    let mut body = if is_legacy_ios_request(&headers) {
         filter_hevc_variants_for_ios(&playlist)
     } else {
         playlist
     };
+
+    if let Some(target_height) = preferred_quality_height(settings.default_video_quality.as_deref())
+    {
+        body = lock_master_playlist_to_height(&body, target_height);
+    }
+
     Ok(m3u8_response(body))
 }
 
@@ -209,11 +218,17 @@ async fn handle_live_master(
         .generate_live_master_playlist(&login, &host, &settings, &state.server_token)
         .await?;
 
-    let body = if is_legacy_ios_request(&headers) {
+    let mut body = if is_legacy_ios_request(&headers) {
         filter_hevc_variants_for_ios(&m3u8)
     } else {
         m3u8
     };
+
+    if let Some(target_height) = preferred_quality_height(settings.default_video_quality.as_deref())
+    {
+        body = lock_master_playlist_to_height(&body, target_height);
+    }
+
     Ok(m3u8_response(body))
 }
 

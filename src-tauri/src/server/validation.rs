@@ -92,6 +92,215 @@ pub fn filter_hevc_variants_for_ios(master_playlist: &str) -> String {
     output.join("\n")
 }
 
+fn extract_resolution_height(stream_inf_line: &str) -> Option<u32> {
+    let marker = "RESOLUTION=";
+    let index = stream_inf_line.find(marker)?;
+    let rest = &stream_inf_line[index + marker.len()..];
+    let value = rest
+        .split(|c| c == ',' || c == ' ')
+        .next()
+        .unwrap_or_default();
+    let mut dims = value.split(|c| c == 'x' || c == 'X');
+    let _width = dims.next()?;
+    let height_part = dims.next()?;
+    let height_digits: String = height_part
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    if height_digits.is_empty() {
+        return None;
+    }
+    height_digits.parse::<u32>().ok()
+}
+
+fn extract_quoted_attr(line: &str, key: &str) -> Option<String> {
+    let marker = format!("{key}=\"");
+    let start = line.find(&marker)? + marker.len();
+    let tail = &line[start..];
+    let end = tail.find('"')?;
+    Some(tail[..end].to_string())
+}
+
+pub fn preferred_quality_height(raw: Option<&str>) -> Option<u32> {
+    let value = raw?.trim().to_ascii_lowercase();
+    if value.is_empty() || value == "auto" {
+        return None;
+    }
+
+    if value == "chunked" || value == "source" {
+        return Some(1080);
+    }
+
+    if let Ok(height) = value.parse::<u32>() {
+        return Some(height);
+    }
+
+    let maybe_digits = value
+        .split(|c: char| !c.is_ascii_digit())
+        .find(|part| !part.is_empty())?;
+
+    maybe_digits.parse::<u32>().ok()
+}
+
+#[derive(Clone)]
+struct VariantRef {
+    stream_inf_index: usize,
+    uri_index: usize,
+    height: u32,
+    group_id: Option<String>,
+}
+
+fn select_variant_index(variants: &[VariantRef], target_height: u32) -> usize {
+    let mut exact: Option<usize> = None;
+    let mut best_lower: Option<(usize, u32)> = None;
+    let mut best_upper: Option<(usize, u32)> = None;
+
+    for (index, variant) in variants.iter().enumerate() {
+        let height = variant.height;
+        if height == 0 {
+            continue;
+        }
+
+        if height == target_height {
+            exact = Some(index);
+            break;
+        }
+
+        if height < target_height {
+            match best_lower {
+                Some((_, best_height)) if best_height >= height => {}
+                _ => best_lower = Some((index, height)),
+            }
+        } else {
+            match best_upper {
+                Some((_, best_height)) if best_height <= height => {}
+                _ => best_upper = Some((index, height)),
+            }
+        }
+    }
+
+    exact
+        .or_else(|| best_lower.map(|(index, _)| index))
+        .or_else(|| best_upper.map(|(index, _)| index))
+        .unwrap_or(0)
+}
+
+pub fn lock_master_playlist_to_height(master_playlist: &str, target_height: u32) -> String {
+    if target_height == 0 {
+        return master_playlist.to_string();
+    }
+
+    let lines: Vec<String> = master_playlist.lines().map(ToString::to_string).collect();
+    if lines.is_empty() {
+        return master_playlist.to_string();
+    }
+
+    let mut variants: Vec<VariantRef> = Vec::new();
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = lines[index].trim();
+        if line.starts_with("#EXT-X-STREAM-INF") {
+            let mut uri_index: Option<usize> = None;
+            let mut scan = index + 1;
+
+            while scan < lines.len() {
+                let next_line = lines[scan].trim();
+                if next_line.is_empty() {
+                    scan += 1;
+                    continue;
+                }
+
+                if next_line.starts_with('#') {
+                    if next_line.starts_with("#EXT-X-STREAM-INF") {
+                        break;
+                    }
+                    scan += 1;
+                    continue;
+                }
+
+                uri_index = Some(scan);
+                break;
+            }
+
+            if let Some(uri_idx) = uri_index {
+                variants.push(VariantRef {
+                    stream_inf_index: index,
+                    uri_index: uri_idx,
+                    height: extract_resolution_height(line).unwrap_or(0),
+                    group_id: extract_quoted_attr(line, "VIDEO")
+                        .or_else(|| extract_quoted_attr(line, "GROUP-ID"))
+                        .or_else(|| extract_quoted_attr(line, "NAME")),
+                });
+                index = uri_idx + 1;
+                continue;
+            }
+        }
+
+        index += 1;
+    }
+
+    if variants.len() <= 1 {
+        return master_playlist.to_string();
+    }
+
+    let selected_index = select_variant_index(&variants, target_height);
+    let selected = &variants[selected_index];
+
+    let mut skip_line = vec![false; lines.len()];
+    let mut removed_group_ids: Vec<String> = Vec::new();
+
+    for (index, variant) in variants.iter().enumerate() {
+        if index == selected_index {
+            continue;
+        }
+        skip_line[variant.stream_inf_index] = true;
+        skip_line[variant.uri_index] = true;
+        if let Some(group_id) = &variant.group_id {
+            removed_group_ids.push(group_id.clone());
+        }
+    }
+
+    let mut output: Vec<&str> = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        if skip_line[index] {
+            continue;
+        }
+
+        let trimmed = line.trim();
+        if trimmed.starts_with("#EXT-X-MEDIA") {
+            let should_remove = removed_group_ids.iter().any(|group_id| {
+                trimmed.contains(&format!("GROUP-ID=\"{group_id}\""))
+                    || trimmed.contains(&format!("NAME=\"{group_id}\""))
+            });
+            if should_remove {
+                continue;
+            }
+        }
+
+        output.push(line.as_str());
+    }
+
+    // Keep at least one valid stream entry; fallback to original playlist if filtering became inconsistent.
+    let has_stream_inf = output
+        .iter()
+        .any(|line| line.trim().starts_with("#EXT-X-STREAM-INF"));
+    if !has_stream_inf {
+        return master_playlist.to_string();
+    }
+
+    // Ensure we did not accidentally remove the selected variant references.
+    let selected_stream_line = lines[selected.stream_inf_index].as_str();
+    let selected_uri_line = lines[selected.uri_index].as_str();
+    let has_selected_stream = output.iter().any(|line| *line == selected_stream_line);
+    let has_selected_uri = output.iter().any(|line| *line == selected_uri_line);
+    if !has_selected_stream || !has_selected_uri {
+        return master_playlist.to_string();
+    }
+
+    output.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +390,36 @@ chunklist_w111.m3u8
         assert!(!filtered.contains("chunklist_w110.m3u8"));
         assert!(!filtered.contains("chunklist_w111.m3u8"));
         assert!(filtered.contains("avc1.42e01e"));
+    }
+
+    #[test]
+    fn test_preferred_quality_height() {
+        assert_eq!(preferred_quality_height(Some("auto")), None);
+        assert_eq!(preferred_quality_height(Some("1080")), Some(1080));
+        assert_eq!(preferred_quality_height(Some("720p60")), Some(720));
+        assert_eq!(preferred_quality_height(Some("chunked")), Some(1080));
+    }
+
+    #[test]
+    fn test_lock_master_playlist_to_height() {
+        let playlist = r#"#EXTM3U
+#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="1080p",NAME="1080p",AUTOSELECT=YES,DEFAULT=YES
+#EXT-X-STREAM-INF:BANDWIDTH=8500000,RESOLUTION=1920x1080,VIDEO="1080p"
+/api/stream/variant.m3u8?id=1080
+#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="720p60",NAME="720p60",AUTOSELECT=NO,DEFAULT=NO
+#EXT-X-STREAM-INF:BANDWIDTH=4500000,RESOLUTION=1280x720,VIDEO="720p60"
+/api/stream/variant.m3u8?id=720
+#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="480p30",NAME="480p30",AUTOSELECT=NO,DEFAULT=NO
+#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=854x480,VIDEO="480p30"
+/api/stream/variant.m3u8?id=480
+"#;
+
+        let locked = lock_master_playlist_to_height(playlist, 720);
+        assert!(locked.contains("RESOLUTION=1280x720"));
+        assert!(!locked.contains("RESOLUTION=1920x1080"));
+        assert!(!locked.contains("RESOLUTION=854x480"));
+        assert!(locked.contains("id=720"));
+        assert!(!locked.contains("id=1080"));
+        assert!(!locked.contains("id=480"));
     }
 }

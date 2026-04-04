@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MediaPlayer,
   MediaProvider,
@@ -326,6 +326,18 @@ function withAuthQuery(url: string): string {
   return `${finalUrl}${sep}${params.join("&")}`;
 }
 
+function withTransientQuery(url: string, key: string, value: string): string {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url, globalThis.location.origin);
+    parsed.searchParams.set(key, value);
+    return parsed.toString();
+  } catch {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+  }
+}
+
 const NSVPlayer = React.memo(
   ({
     source,
@@ -360,13 +372,31 @@ const NSVPlayer = React.memo(
     const lastExternalSeekRef = useRef<number | null>(null);
     const didApplyDefaultQualityRef = useRef(false);
     const hlsInstanceRef = useRef<Hls | null>(null);
+    const pendingResumeSeekRef = useRef<number | null>(null);
+    const pendingResumePlayRef = useRef(false);
+    const wasBackgroundedRef = useRef(false);
+    const [resumeRevision, setResumeRevision] = useState(0);
+
+    const useNativeResumeRefresh =
+      isMobileDevice() && canPlayHlsNatively() && !canUseHlsJs();
 
     const src = useMemo(
-      () => ({
-        src: withAuthQuery(source.src),
-        type: source.type,
-      }),
-      [source.src, source.type],
+      () => {
+        let resolvedSrc = withAuthQuery(source.src);
+        if (useNativeResumeRefresh && resumeRevision > 0) {
+          resolvedSrc = withTransientQuery(
+            resolvedSrc,
+            "_resume",
+            String(resumeRevision),
+          );
+        }
+
+        return {
+          src: resolvedSrc,
+          type: source.type,
+        };
+      },
+      [source.src, source.type, useNativeResumeRefresh, resumeRevision],
     );
 
     const effectiveMuted = muted || (autoPlay && isMobileDevice());
@@ -411,9 +441,87 @@ const NSVPlayer = React.memo(
     }, [startTime, store.canSeek, store.duration, remote]);
 
     useEffect(() => {
+      if (!useNativeResumeRefresh) return;
+
+      const triggerResumeRefresh = () => {
+        const mediaState = storeRef.current;
+        const currentTime = Number(mediaState.currentTime || 0);
+        const canSeek = Boolean(mediaState.canSeek) && Number(mediaState.duration || 0) > 0;
+
+        pendingResumeSeekRef.current =
+          canSeek && Number.isFinite(currentTime) ? Math.max(0, currentTime) : null;
+        pendingResumePlayRef.current = !mediaState.paused;
+        setResumeRevision((prev) => prev + 1);
+      };
+
+      const onVisibilityChange = () => {
+        if (document.visibilityState === "hidden") {
+          wasBackgroundedRef.current = true;
+          return;
+        }
+
+        if (wasBackgroundedRef.current) {
+          wasBackgroundedRef.current = false;
+          triggerResumeRefresh();
+        }
+      };
+
+      const onPageHide = () => {
+        wasBackgroundedRef.current = true;
+      };
+
+      const onPageShowOrFocus = () => {
+        if (!wasBackgroundedRef.current) return;
+        wasBackgroundedRef.current = false;
+        triggerResumeRefresh();
+      };
+
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      globalThis.addEventListener("pagehide", onPageHide);
+      globalThis.addEventListener("pageshow", onPageShowOrFocus);
+      globalThis.addEventListener("focus", onPageShowOrFocus);
+
+      return () => {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        globalThis.removeEventListener("pagehide", onPageHide);
+        globalThis.removeEventListener("pageshow", onPageShowOrFocus);
+        globalThis.removeEventListener("focus", onPageShowOrFocus);
+      };
+    }, [useNativeResumeRefresh]);
+
+    useEffect(() => {
+      const hasPendingSeek = pendingResumeSeekRef.current !== null;
+      const hasPendingPlay = pendingResumePlayRef.current;
+
+      if (!hasPendingSeek && !hasPendingPlay) {
+        return;
+      }
+
+      if (hasPendingSeek && (!store.canSeek || store.duration <= 0)) {
+        return;
+      }
+
+      const nextSeek = pendingResumeSeekRef.current;
+      const shouldPlay = pendingResumePlayRef.current;
+
+      pendingResumeSeekRef.current = null;
+      pendingResumePlayRef.current = false;
+
+      if (nextSeek !== null) {
+        remote.seek(nextSeek);
+      }
+
+      if (shouldPlay) {
+        remote.play();
+      }
+    }, [remote, store.canSeek, store.duration]);
+
+    useEffect(() => {
       didSeekOnStartRef.current = false;
       lastExternalSeekRef.current = null;
       didApplyDefaultQualityRef.current = false;
+      pendingResumeSeekRef.current = null;
+      pendingResumePlayRef.current = false;
 
       if (hlsInstanceRef.current) {
         try {

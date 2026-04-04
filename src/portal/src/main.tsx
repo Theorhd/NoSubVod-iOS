@@ -13,6 +13,84 @@ type InternalApiInvokeResponse = {
   content_type?: string | null;
 };
 
+const API_INVOKE_TIMEOUT_MS = 10000;
+const API_RETRY_DELAY_MS = 250;
+const API_MAX_IDEMPOTENT_RETRIES = 1;
+
+type ApiInvokeCommand = "internal_api_request" | "proxy_remote_request";
+
+class ApiInvokeTimeoutError extends Error {
+  public readonly command: ApiInvokeCommand;
+
+  public readonly timeoutMs: number;
+
+  public constructor(command: ApiInvokeCommand, timeoutMs: number) {
+    super(`${command} timed out after ${timeoutMs}ms`);
+    this.name = "ApiInvokeTimeoutError";
+    this.command = command;
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+}
+
+function isIdempotentMethod(method: string): boolean {
+  const normalizedMethod = method.toUpperCase();
+  return (
+    normalizedMethod === "GET" ||
+    normalizedMethod === "HEAD" ||
+    normalizedMethod === "OPTIONS"
+  );
+}
+
+async function invokeWithTimeout<T>(
+  task: Promise<T>,
+  command: ApiInvokeCommand,
+  timeoutMs = API_INVOKE_TIMEOUT_MS,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => {
+      reject(new ApiInvokeTimeoutError(command, timeoutMs));
+    }, timeoutMs);
+
+    task.then(
+      (value) => {
+        globalThis.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        globalThis.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function buildInvokeResponse(result: InternalApiInvokeResponse): Response {
+  const responseHeaders = new Headers();
+  if (result.content_type) {
+    responseHeaders.set("Content-Type", result.content_type);
+  }
+
+  const responseBody: BodyInit = result.is_base64
+    ? (() => {
+        const bytes = decodeBase64ToBytes(result.body ?? "");
+        const buffer = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(buffer).set(bytes);
+        return new Blob([buffer]);
+      })()
+    : (result.body ?? "");
+
+  return new Response(responseBody, {
+    status: result.status,
+    headers: responseHeaders,
+  });
+}
+
 function isTauriRuntime(): boolean {
   return Boolean(
     (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
@@ -168,41 +246,46 @@ async function invokeInternalApi(
 ): Promise<Response> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    const result = await invoke<InternalApiInvokeResponse>(
-      "internal_api_request",
-      {
-        request: {
-          method,
-          path: resolvedUrl.pathname,
-          query: resolvedUrl.search ? resolvedUrl.search.slice(1) : undefined,
-          body,
-          headers: Object.fromEntries(headers.entries()),
-        },
+    const requestPayload = {
+      request: {
+        method,
+        path: resolvedUrl.pathname,
+        query: resolvedUrl.search ? resolvedUrl.search.slice(1) : undefined,
+        body,
+        headers: Object.fromEntries(headers.entries()),
       },
-    );
+    };
 
-    const responseHeaders = new Headers();
-    if (result.content_type) {
-      responseHeaders.set("Content-Type", result.content_type);
+    const maxAttempts =
+      (isIdempotentMethod(method) ? API_MAX_IDEMPOTENT_RETRIES : 0) + 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const result = await invokeWithTimeout(
+          invoke<InternalApiInvokeResponse>("internal_api_request", requestPayload),
+          "internal_api_request",
+        );
+        return buildInvokeResponse(result);
+      } catch (error) {
+        const hasAttemptsLeft = attempt < maxAttempts;
+        if (!hasAttemptsLeft) {
+          throw error;
+        }
+
+        console.warn(
+          `[fetch-guard] internal_api_request retry ${attempt}/${maxAttempts - 1}`,
+          error,
+        );
+        await wait(API_RETRY_DELAY_MS * attempt);
+      }
     }
 
-    const responseBody: BodyInit = result.is_base64
-      ? (() => {
-          const bytes = decodeBase64ToBytes(result.body ?? "");
-          const buffer = new ArrayBuffer(bytes.byteLength);
-          new Uint8Array(buffer).set(bytes);
-          return new Blob([buffer]);
-        })()
-      : (result.body ?? "");
-
-    return new Response(responseBody, {
-      status: result.status,
-      headers: responseHeaders,
-    });
+    throw new Error("internal_api_request failed unexpectedly");
   } catch (error) {
     const message = normalizeErrorMessage(error);
+    const status = error instanceof ApiInvokeTimeoutError ? 504 : 500;
     return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+      status,
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -217,40 +300,45 @@ async function invokeRemoteApiViaProxy(
 ): Promise<Response> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    const result = await invoke<InternalApiInvokeResponse>(
-      "proxy_remote_request",
-      {
-        serverUrl,
-        method,
-        path: resolvedUrl.pathname,
-        query: resolvedUrl.search ? resolvedUrl.search.slice(1) : undefined,
-        body,
-        headers: Object.fromEntries(headers.entries()),
-      },
-    );
+    const requestPayload = {
+      serverUrl,
+      method,
+      path: resolvedUrl.pathname,
+      query: resolvedUrl.search ? resolvedUrl.search.slice(1) : undefined,
+      body,
+      headers: Object.fromEntries(headers.entries()),
+    };
 
-    const responseHeaders = new Headers();
-    if (result.content_type) {
-      responseHeaders.set("Content-Type", result.content_type);
+    const maxAttempts =
+      (isIdempotentMethod(method) ? API_MAX_IDEMPOTENT_RETRIES : 0) + 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const result = await invokeWithTimeout(
+          invoke<InternalApiInvokeResponse>("proxy_remote_request", requestPayload),
+          "proxy_remote_request",
+        );
+        return buildInvokeResponse(result);
+      } catch (error) {
+        const hasAttemptsLeft = attempt < maxAttempts;
+        if (!hasAttemptsLeft) {
+          throw error;
+        }
+
+        console.warn(
+          `[fetch-guard] proxy_remote_request retry ${attempt}/${maxAttempts - 1}`,
+          error,
+        );
+        await wait(API_RETRY_DELAY_MS * attempt);
+      }
     }
 
-    const responseBody: BodyInit = result.is_base64
-      ? (() => {
-          const bytes = decodeBase64ToBytes(result.body ?? "");
-          const buffer = new ArrayBuffer(bytes.byteLength);
-          new Uint8Array(buffer).set(bytes);
-          return new Blob([buffer]);
-        })()
-      : (result.body ?? "");
-
-    return new Response(responseBody, {
-      status: result.status,
-      headers: responseHeaders,
-    });
+    throw new Error("proxy_remote_request failed unexpectedly");
   } catch (error) {
     const message = normalizeErrorMessage(error);
+    const status = error instanceof ApiInvokeTimeoutError ? 504 : 500;
     return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+      status,
       headers: { "Content-Type": "application/json" },
     });
   }

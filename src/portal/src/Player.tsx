@@ -23,6 +23,7 @@ import { formatSafeClock as formatClock } from "../../shared/utils/formatters";
 import PlayerRTC from "./PlayerRTC";
 import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
+import { navigateBackInApp } from "./utils/navigation";
 
 const DEFAULT_SETTINGS: ExperienceSettings = {
   oneSync: false,
@@ -67,6 +68,34 @@ function parseMarkersPayload(payload: unknown): VideoMarker[] {
   }
 
   return [];
+}
+
+function extractChatMessageText(message: ChatMessage): string {
+  const messagePayload = message.message as
+    | {
+        fragments?: Array<{ text?: string | null } | null> | null;
+        text?: string;
+        body?: string;
+      }
+    | undefined;
+
+  if (Array.isArray(messagePayload?.fragments)) {
+    return messagePayload.fragments
+      .map((fragment) =>
+        typeof fragment?.text === "string" ? fragment.text : "",
+      )
+      .join("");
+  }
+
+  if (typeof messagePayload?.text === "string") {
+    return messagePayload.text;
+  }
+
+  if (typeof messagePayload?.body === "string") {
+    return messagePayload.body;
+  }
+
+  return "";
 }
 
 const ChatSearch = ({
@@ -745,7 +774,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
             }}
           >
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => navigateBackInApp(navigate, "/")}
               className="secondary-btn"
               style={{
                 width: "40px",
@@ -997,9 +1026,7 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
                         {message.commenter?.displayName || "Unknown"}:{" "}
                       </span>
                       <span style={{ color: "var(--text)" }}>
-                        {message.message?.fragments
-                          ?.map((fragment) => fragment.text)
-                          .join("") || ""}
+                        {extractChatMessageText(message)}
                       </span>
                     </div>
                   ))}
