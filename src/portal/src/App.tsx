@@ -26,7 +26,7 @@ import {
 import { ExperienceSettings } from "../../shared/types";
 import { useAuth } from "../../shared/hooks/useAuth";
 import { ErrorBoundary } from "../../shared/components/ErrorBoundary";
-import { ServerProvider } from "./ServerContext";
+import { ServerProvider, useServer } from "./ServerContext";
 import { ExtensionProvider, useExtensions } from "./ExtensionContext";
 
 const Home = lazy(() => import("./Home"));
@@ -214,10 +214,12 @@ BottomNav.displayName = "BottomNav";
 
 function AppContent() {
   const { isAuthenticated } = useAuth();
+  const { isConnected: isServerConnected, serverUrl } = useServer();
   const { contributions } = useExtensions();
   const [installedUpdate, setInstalledUpdate] = useState<{
     version: string;
   } | null>(null);
+  const isDesktopConnected = isServerConnected && Boolean(serverUrl);
 
   const handleRestart = useCallback(async () => {
     try {
@@ -283,7 +285,15 @@ function AppContent() {
       { path: "/trends", label: "Trends", Icon: TrendingUp },
       { path: "/live", label: "Live", Icon: Radio },
       { path: "/", label: "Home", Icon: HomeIcon, isHome: true },
-      { path: "/screen-share", label: "Screen Share", Icon: MonitorSmartphone },
+      ...(isDesktopConnected
+        ? [
+            {
+              path: "/screen-share",
+              label: "Screen Share",
+              Icon: MonitorSmartphone,
+            },
+          ]
+        : []),
       { path: "/search", label: "Search", Icon: SearchIcon },
       { path: "/downloads", label: "Downloads", Icon: Download },
       // Contribution Nav Items
@@ -296,7 +306,7 @@ function AppContent() {
           IconProps: c.componentProps,
         })),
     ],
-    [contributions],
+    [contributions, isDesktopConnected],
   );
 
   return (

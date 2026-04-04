@@ -10,6 +10,8 @@ import React, {
 import { safeStorageGet, safeStorageSet } from "../../shared/utils/storage";
 import { useInterval } from "../../shared/hooks/useInterval";
 
+const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
+
 interface ServerContextState {
   isOnline: boolean;
   isConnected: boolean;
@@ -27,7 +29,8 @@ export function ServerProvider({
 }: Readonly<{ children: ReactNode }>) {
   const [isOnline, setIsOnline] = useState(false);
   const [tokenValue, setTokenValue] = useState<string | null>(() => {
-    return safeStorageGet(localStorage, "nsv_server_token");
+    const stored = safeStorageGet(localStorage, "nsv_server_token");
+    return stored || null;
   });
   const [serverUrlState, setServerUrlState] = useState<string>(() => {
     return (
@@ -48,11 +51,22 @@ export function ServerProvider({
   };
 
   const setServerUrl = (url: string) => {
-    safeStorageSet(localStorage, "nsv_server_url", url);
-    setServerUrlState(url);
+    const normalized = url.trim().replace(/\/$/, "");
+    safeStorageSet(localStorage, "nsv_server_url", normalized);
+    if (normalized) {
+      safeStorageSet(localStorage, RELAY_STORAGE_KEY, normalized);
+    } else {
+      localStorage.removeItem(RELAY_STORAGE_KEY);
+    }
+    setServerUrlState(normalized);
   };
 
   const checkStatus = useCallback(async () => {
+    if (!serverUrlState || !tokenValue) {
+      setIsOnline(false);
+      return;
+    }
+
     try {
       // Pinging the health endpoint to check if the server is available
       await fetch(`${serverUrlState}/api/auth/twitch/status`, {
@@ -75,7 +89,7 @@ export function ServerProvider({
   const value = useMemo(
     () => ({
       isOnline,
-      isConnected: !!tokenValue,
+      isConnected: !!tokenValue && !!serverUrlState,
       token: tokenValue,
       serverUrl: serverUrlState,
       setToken,

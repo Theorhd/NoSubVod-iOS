@@ -38,14 +38,115 @@ function resolveRequestUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
-function injectApiAuthHeaders(init: RequestInit | undefined): Headers {
+type ApiAuthTarget = "local" | "remote";
+
+const REMOTE_API_PATH_PREFIXES = [
+  "/api/screenshare",
+  "/api/downloads",
+  "/api/download/start",
+  "/api/shared-downloads",
+];
+
+function normalizeApiPathname(pathname: string): string {
+  if (!pathname) return "";
+  if (pathname.startsWith("/")) return pathname;
+  return `/${pathname}`;
+}
+
+function shouldUseRemoteApi(pathname: string): boolean {
+  const normalized = normalizeApiPathname(pathname);
+  return REMOTE_API_PATH_PREFIXES.some(
+    (prefix) =>
+      normalized === prefix || normalized.startsWith(`${prefix}/`),
+  );
+}
+
+type ApiRequestContext = {
+  isApiCall: boolean;
+  apiPathname: string;
+  resolvedUrl: URL | null;
+};
+
+function resolveApiRequestContext(url: string): ApiRequestContext {
+  try {
+    const resolvedUrl = new URL(url, globalThis.location.origin);
+    const apiPathname = resolvedUrl.pathname;
+    return {
+      isApiCall: apiPathname.startsWith("/api/"),
+      apiPathname,
+      resolvedUrl,
+    };
+  } catch {
+    if (url.startsWith("/api/")) {
+      return {
+        isApiCall: true,
+        apiPathname: url.split("?")[0],
+        resolvedUrl: null,
+      };
+    }
+
+    if (url.startsWith("api/")) {
+      return {
+        isApiCall: true,
+        apiPathname: `/${url.split("?")[0]}`,
+        resolvedUrl: null,
+      };
+    }
+
+    return {
+      isApiCall: false,
+      apiPathname: "",
+      resolvedUrl: null,
+    };
+  }
+}
+
+function extractInvokeBody(bodyCandidate: BodyInit | null | undefined) {
+  if (typeof bodyCandidate === "string") {
+    return bodyCandidate;
+  }
+
+  if (bodyCandidate instanceof URLSearchParams) {
+    return bodyCandidate.toString();
+  }
+
+  return undefined;
+}
+
+function dispatchTauriApiRequest(
+  resolvedUrl: URL | null,
+  init: RequestInit | undefined,
+  headers: Headers,
+  shouldRouteToRemote: boolean,
+  serverUrl: string,
+): Promise<Response> | null {
+  if (!isTauriRuntime() || !resolvedUrl) {
+    return null;
+  }
+
+  const method = (init?.method || "GET").toUpperCase();
+  const body = extractInvokeBody(init?.body);
+
+  // Pairing mode: only selected endpoints are forwarded to Desktop.
+  if (shouldRouteToRemote && serverUrl) {
+    return invokeRemoteApiViaProxy(resolvedUrl, method, body, headers, serverUrl);
+  }
+
+  // Default path: keep requests on the iOS local backend.
+  return invokeInternalApi(resolvedUrl, method, body, headers);
+}
+
+function injectApiAuthHeaders(
+  init: RequestInit | undefined,
+  target: ApiAuthTarget,
+): Headers {
   const standaloneToken =
     safeStorageGet(sessionStorage, "nsv_token") ||
     safeStorageGet(localStorage, "nsv_token");
-  const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
   const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
 
-  const activeToken = serverUrl && pairedToken ? pairedToken : standaloneToken;
+  const activeToken =
+    target === "remote" ? pairedToken || standaloneToken : standaloneToken;
   const deviceId = safeStorageGet(localStorage, "nsv_device_id");
   const headers = new Headers(init?.headers);
 
@@ -251,44 +352,35 @@ function createDeviceId(): string {
     }
 
     // Only inject token on our own API calls
-    let isApiCall = false;
-    let resolvedUrl: URL | null = null;
-    try {
-      resolvedUrl = new URL(url, globalThis.location.origin);
-      isApiCall = resolvedUrl.pathname.startsWith("/api/");
-    } catch {
-      isApiCall = url.startsWith("/api/") || url.startsWith("api/");
-    }
+    const { isApiCall, apiPathname, resolvedUrl } =
+      resolveApiRequestContext(url);
 
     if (isApiCall) {
-      const headers = injectApiAuthHeaders(init);
+      const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
+      const serverToken = safeStorageGet(localStorage, "nsv_server_token");
+      const remoteSessionEnabled = Boolean(serverUrl && serverToken);
+      const isCrossOriginApiCall =
+        resolvedUrl !== null &&
+        resolvedUrl.origin !== globalThis.location.origin;
+      const shouldRouteToRemote =
+        remoteSessionEnabled &&
+        (shouldUseRemoteApi(apiPathname) ||
+          (apiPathname === "/api/auth/twitch/status" && isCrossOriginApiCall));
 
-      if (isTauriRuntime() && resolvedUrl) {
-        const method = (init?.method || "GET").toUpperCase();
-        const bodyCandidate = init?.body;
-        let body: string | undefined;
-        if (typeof bodyCandidate === "string") {
-          body = bodyCandidate;
-        } else if (bodyCandidate instanceof URLSearchParams) {
-          body = bodyCandidate.toString();
-        }
+      const headers = injectApiAuthHeaders(
+        init,
+        shouldRouteToRemote ? "remote" : "local",
+      );
 
-        const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
-        const serverToken = safeStorageGet(localStorage, "nsv_server_token");
-
-        // Mode Paired -> Proxy vers Serveur Desktop
-        if (serverUrl && serverToken) {
-          return invokeRemoteApiViaProxy(
-            resolvedUrl,
-            method,
-            body,
-            headers,
-            serverUrl,
-          );
-        }
-
-        // Mode Standalone -> Appel Rust Local
-        return invokeInternalApi(resolvedUrl, method, body, headers);
+      const tauriResponse = dispatchTauriApiRequest(
+        resolvedUrl,
+        init,
+        headers,
+        shouldRouteToRemote,
+        serverUrl,
+      );
+      if (tauriResponse) {
+        return tauriResponse;
       }
 
       init = { ...init, headers };

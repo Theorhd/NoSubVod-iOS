@@ -46,9 +46,9 @@ use types::ServerInfo;
 
 use error::AppResult;
 
-pub const SERVER_PORT: u16 = 23455;
+pub const SERVER_PORT: u16 = 23400;
 #[cfg(not(debug_assertions))]
-pub const SERVER_HTTPS_PORT: u16 = 23456;
+pub const SERVER_HTTPS_PORT: u16 = 23401;
 
 pub struct AppState {
     pub server_info: ServerInfo,

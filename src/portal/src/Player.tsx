@@ -738,9 +738,10 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: "16px",
+              alignItems: "flex-start",
+              gap: "12px",
               flex: 1,
+              minWidth: 0,
             }}
           >
             <button
@@ -759,53 +760,17 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
               style={{
                 fontSize: "1rem",
                 fontWeight: 800,
-                margin: 0,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
+                margin: "2px 0 0",
+                whiteSpace: "normal",
+                lineHeight: 1.35,
+                wordBreak: "break-word",
+                overflowWrap: "anywhere",
+                flex: 1,
+                minWidth: 0,
               }}
             >
               {vodInfo?.title || liveInfo?.title || playerTitle}
             </h2>
-          </div>
-
-          <div style={{ display: "flex", gap: "8px" }}>
-            {!liveId && (
-              <button
-                onClick={() => setShowChatSearch((v) => !v)}
-                className="secondary-btn"
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  padding: 0,
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-                title="Rechercher dans le chat"
-              >
-                <Search size={18} />
-              </button>
-            )}
-
-            {!liveId && (
-              <button
-                onClick={() => setShowMarkers((v) => !v)}
-                className="secondary-btn"
-                style={{ fontSize: "0.8rem", padding: "6px 12px" }}
-              >
-                Chapters ({markers.length})
-              </button>
-            )}
-
-            <button
-              onClick={() => setShowChat((v) => !v)}
-              className="action-btn"
-              style={{ fontSize: "0.8rem", padding: "6px 12px" }}
-            >
-              {showChat ? "Hide Chat" : "Show Chat"}
-            </button>
           </div>
         </div>
       )}
@@ -870,6 +835,56 @@ function VodLivePlayer({ vodId, liveId, downloadMode }: VodLivePlayerProps) {
             className="container"
             style={{ paddingBottom: showChat ? "20px" : "100px" }}
           >
+            {!isFullscreen && (
+              <div
+                className="glass"
+                style={{
+                  marginBottom: "16px",
+                  padding: "10px 12px",
+                  borderRadius: "var(--radius-md)",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                }}
+              >
+                {!liveId && (
+                  <button
+                    onClick={() => setShowChatSearch((v) => !v)}
+                    className="secondary-btn"
+                    style={{
+                      fontSize: "0.8rem",
+                      padding: "6px 12px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                    title="Rechercher dans le chat"
+                  >
+                    <Search size={16} />
+                    Rechercher chat
+                  </button>
+                )}
+
+                {!liveId && (
+                  <button
+                    onClick={() => setShowMarkers((v) => !v)}
+                    className="secondary-btn"
+                    style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                  >
+                    Chapitres ({markers.length})
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setShowChat((v) => !v)}
+                  className="action-btn"
+                  style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                >
+                  {showChat ? "Masquer le chat" : "Afficher le chat"}
+                </button>
+              </div>
+            )}
+
             {downloadMode && vodId && (
               <ClipMode
                 duration={duration}

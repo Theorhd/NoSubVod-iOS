@@ -144,9 +144,12 @@ export function useWebRTCViewer(
   );
 
   const getAuthQuery = useCallback(() => {
-    const token =
+    const standaloneToken =
       globalThis.sessionStorage.getItem("nsv_token") ||
       globalThis.localStorage.getItem("nsv_token");
+    const pairedToken = globalThis.localStorage.getItem("nsv_server_token");
+    const serverUrl = globalThis.localStorage.getItem("nsv_server_url");
+    const token = pairedToken && serverUrl ? pairedToken : standaloneToken;
     const deviceId = globalThis.localStorage.getItem("nsv_device_id");
     const params = new URLSearchParams();
     if (token) {

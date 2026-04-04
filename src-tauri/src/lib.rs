@@ -5,7 +5,7 @@ pub mod server;
 
 #[cfg(test)]
 pub mod server {
-    pub const SERVER_PORT: u16 = 23455;
+    pub const SERVER_PORT: u16 = 23400;
     pub mod auth;
     pub mod chat;
     pub mod download;

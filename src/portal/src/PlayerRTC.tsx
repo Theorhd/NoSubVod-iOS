@@ -12,9 +12,12 @@ import { usePlayerControls } from "./hooks/usePlayerControls";
 const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
 
 function getAuthQueryFromStorage(): string {
-  const token =
+  const standaloneToken =
     globalThis.sessionStorage.getItem("nsv_token") ||
     globalThis.localStorage.getItem("nsv_token");
+  const pairedToken = globalThis.localStorage.getItem("nsv_server_token");
+  const serverUrl = globalThis.localStorage.getItem("nsv_server_url");
+  const token = pairedToken && serverUrl ? pairedToken : standaloneToken;
   const deviceId = globalThis.localStorage.getItem("nsv_device_id");
   const params = new URLSearchParams();
   if (token) params.set("t", token);
@@ -781,7 +784,10 @@ export default function PlayerRTC() {
 
   const relayOrigin = useMemo(() => {
     const candidate =
-      relayParam || globalThis.localStorage.getItem(RELAY_STORAGE_KEY) || "";
+      relayParam ||
+      globalThis.localStorage.getItem(RELAY_STORAGE_KEY) ||
+      globalThis.localStorage.getItem("nsv_server_url") ||
+      "";
     try {
       const normalized = normalizeRelayOrigin(candidate);
       if (normalized) {

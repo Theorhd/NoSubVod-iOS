@@ -72,7 +72,7 @@ const DownloadPlayer = React.memo(
       if (!file) return null;
       if (file.name.toLowerCase().endsWith(".ts"))
         return {
-          src: `/api/downloads/hls/${encodeURIComponent(file.name)}`,
+          src: resolveUrl(`/api/downloads/hls/${encodeURIComponent(file.name)}`),
           type: "application/x-mpegurl",
         };
       const url = resolveUrl(file.url);

@@ -30,12 +30,27 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Create .env file
+      - name: Prepare env and Twitch credentials
         run: |
-          echo "TWITCH_CLIENT_ID=${{ secrets.TWITCH_CLIENT_ID }}" >> src-tauri/.env
-          echo "TWITCH_CLIENT_SECRET=${{ secrets.TWITCH_CLIENT_SECRET }}" >> src-tauri/.env
-          echo "VITE_APP_ENV=production" >> .env
-          echo "VITE_SERVER_URL=https://192.168.1.162:23456" >> .env
+          set -euo pipefail
+
+          if [ -z "${{ secrets.TWITCH_CLIENT_ID }}" ] || [ -z "${{ secrets.TWITCH_CLIENT_SECRET }}" ]; then
+            echo "Missing required GitHub secrets: TWITCH_CLIENT_ID and/or TWITCH_CLIENT_SECRET"
+            exit 1
+          fi
+
+          cat > src-tauri/.env <<EOF
+          TWITCH_CLIENT_ID=${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET=${{ secrets.TWITCH_CLIENT_SECRET }}
+          EOF
+
+          echo "TWITCH_CLIENT_ID=${{ secrets.TWITCH_CLIENT_ID }}" >> "$GITHUB_ENV"
+          echo "TWITCH_CLIENT_SECRET=${{ secrets.TWITCH_CLIENT_SECRET }}" >> "$GITHUB_ENV"
+
+          cat > .env <<EOF
+          VITE_APP_ENV=production
+          VITE_SERVER_URL=https://192.168.1.162:23456
+          EOF
         shell: bash
 
       - name: Select Xcode
@@ -140,6 +155,9 @@ jobs:
           echo "artifact_suffix=${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build iOS IPA
+        env:
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
         shell: bash
         run: |
           set -euo pipefail

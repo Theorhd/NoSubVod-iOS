@@ -129,8 +129,23 @@ export function useDownloadsData() {
     else if (url.startsWith("/")) resolved = `/api${url}`;
     else resolved = `/api/${url}`;
 
-    const token =
+    const standaloneToken =
       sessionStorage.getItem("nsv_token") || localStorage.getItem("nsv_token");
+    const pairedToken = localStorage.getItem("nsv_server_token");
+    const serverUrl = localStorage.getItem("nsv_server_url") || "";
+
+    const isRemoteDownloadPath =
+      resolved === "/api/downloads" ||
+      resolved.startsWith("/api/downloads/") ||
+      resolved.startsWith("/api/shared-downloads/");
+
+    const useRemoteDownloads = Boolean(serverUrl && pairedToken) && isRemoteDownloadPath;
+
+    if (useRemoteDownloads) {
+      resolved = `${serverUrl.replace(/\/$/, "")}${resolved}`;
+    }
+
+    const token = useRemoteDownloads ? pairedToken : standaloneToken;
     if (token) {
       const sep = resolved.includes("?") ? "&" : "?";
       resolved = `${resolved}${sep}t=${encodeURIComponent(token)}`;

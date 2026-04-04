@@ -19,25 +19,35 @@ use super::types::SubEntry;
 
 // ── CONFIGURE YOUR TWITCH APP HERE ─────────────────────────────────────────────
 // 1. Register your app at https://dev.twitch.tv/console/apps
-// 2. Add this redirect URI: http://localhost:23455/api/auth/twitch/callback
+// 2. Add this redirect URI: http://localhost:23400/api/auth/twitch/callback
 // 3. Required scopes: user:read:follows user:write:chat
 // 4. Set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in src-tauri/.env (see .env.example)
 pub static TWITCH_CLIENT_ID: Lazy<String> = Lazy::new(|| {
-    std::env::var("TWITCH_CLIENT_ID").unwrap_or_else(|_| {
-        option_env!("TWITCH_CLIENT_ID")
-            .unwrap_or_default()
-            .to_string()
-    })
+    std::env::var("TWITCH_CLIENT_ID")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| {
+            option_env!("TWITCH_CLIENT_ID")
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        })
 });
 pub static TWITCH_CLIENT_SECRET: Lazy<String> = Lazy::new(|| {
-    std::env::var("TWITCH_CLIENT_SECRET").unwrap_or_else(|_| {
-        option_env!("TWITCH_CLIENT_SECRET")
-            .unwrap_or_default()
-            .to_string()
-    })
+    std::env::var("TWITCH_CLIENT_SECRET")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| {
+            option_env!("TWITCH_CLIENT_SECRET")
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        })
 });
 
-const REDIRECT_URI: &str = "http://localhost:23455/api/auth/twitch/callback";
+const REDIRECT_URI: &str = "http://localhost:23400/api/auth/twitch/callback";
 const SCOPES: &str = "user:read:follows user:write:chat";
 
 // ── In-memory OAuth pending state ──────────────────────────────────────────────
@@ -133,7 +143,7 @@ fn client_not_configured() -> Response {
 }
 
 fn twitch_client_configured() -> bool {
-    !TWITCH_CLIENT_ID.is_empty() && !TWITCH_CLIENT_SECRET.is_empty()
+    !TWITCH_CLIENT_ID.trim().is_empty() && !TWITCH_CLIENT_SECRET.trim().is_empty()
 }
 
 // ── Route handlers ─────────────────────────────────────────────────────────────

@@ -17,12 +17,13 @@ import {
   isMobileDevice,
 } from "../utils/capabilities";
 
-function getHlsStabilityConfig() {
+function getHlsStabilityConfig(lockToFixedQuality: boolean) {
   return {
     enableWorker: true,
     lowLatencyMode: false,
     startLevel: -1,
-    capLevelToPlayerSize: true,
+    // When quality is explicitly requested (e.g. 1080p), avoid size-based capping.
+    capLevelToPlayerSize: !lockToFixedQuality,
     maxBufferLength: 4,
     maxMaxBufferLength: 6,
     backBufferLength: 0,
@@ -34,6 +35,20 @@ function getHlsStabilityConfig() {
     nudgeMaxRetry: 8,
     abrEwmaDefaultEstimate: 24_000_000,
   };
+}
+
+function hasFixedQualityPreference(defaultQuality: string | undefined): boolean {
+  return Boolean(defaultQuality && defaultQuality !== "auto");
+}
+
+function setHlsLevelMode(instance: Hls, level: number) {
+  try {
+    instance.currentLevel = level;
+    instance.nextLevel = level;
+    instance.loadLevel = level;
+  } catch {
+    // Ignore runtime constraints from stale/tearing down instances.
+  }
 }
 
 function isTauriRuntime(): boolean {
@@ -265,29 +280,44 @@ type NSVPlayerProps = {
   onError?: (message: string) => void;
 };
 
+function isRemoteMediaApiPath(pathname: string): boolean {
+  return (
+    pathname === "/api/downloads" ||
+    pathname.startsWith("/api/downloads/") ||
+    pathname.startsWith("/api/shared-downloads/")
+  );
+}
+
 function withAuthQuery(url: string): string {
   if (!url) return url;
   if (!url.startsWith("/api/")) return url;
+
+  let pathname = "";
+  try {
+    pathname = new URL(url, "http://localhost").pathname;
+  } catch {
+    pathname = url.split("?")[0];
+  }
 
   const standaloneToken =
     safeStorageGet(sessionStorage, "nsv_token") ||
     safeStorageGet(localStorage, "nsv_token");
   const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
   const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
-  const token = serverUrl && pairedToken ? pairedToken : standaloneToken;
+  const useRemoteMedia =
+    Boolean(serverUrl && pairedToken) && isRemoteMediaApiPath(pathname);
+  const token = useRemoteMedia ? pairedToken : standaloneToken;
   const deviceId = safeStorageGet(localStorage, "nsv_device_id");
   const params: string[] = [];
   if (token) params.push(`t=${encodeURIComponent(token)}`);
   if (deviceId) params.push(`d=${encodeURIComponent(deviceId)}`);
 
   let finalUrl = url;
-  if (url.startsWith("/api/")) {
-    if (serverUrl) {
-      finalUrl = `${serverUrl.replace(/\/$/, "")}${url}`;
-    } else if (isTauriRuntime() && isMobileDevice()) {
-      // Native AVPlayer relies on the local HTTP server, bypassing fetch IPC:
-      finalUrl = `http://127.0.0.1:23455${url}`;
-    }
+  if (useRemoteMedia && serverUrl) {
+    finalUrl = `${serverUrl.replace(/\/$/, "")}${url}`;
+  } else if (isTauriRuntime() && isMobileDevice()) {
+    // Native AVPlayer relies on the local HTTP server, bypassing fetch IPC.
+    finalUrl = `http://127.0.0.1:23400${url}`;
   }
 
   if (params.length === 0) return finalUrl;
@@ -430,11 +460,17 @@ const NSVPlayer = React.memo(
         const qualityIdx = resolveRequestedQuality(sorted, defaultQuality);
 
         if (qualityIdx < 0) {
+          if (hlsInstanceRef.current) {
+            setHlsLevelMode(hlsInstanceRef.current, -1);
+          }
           didApplyDefaultQualityRef.current = true;
           return;
         }
 
         remote.changeQuality(qualityIdx);
+        if (hlsInstanceRef.current) {
+          setHlsLevelMode(hlsInstanceRef.current, qualityIdx);
+        }
         didApplyDefaultQualityRef.current = true;
       } catch (error) {
         didApplyDefaultQualityRef.current = false;
@@ -530,7 +566,9 @@ const NSVPlayer = React.memo(
       if (provider?.type === "hls") {
         if (!canUseHlsJs()) return;
         provider.library = Hls;
-        const hlsConfig = getHlsStabilityConfig();
+        const hlsConfig = getHlsStabilityConfig(
+          hasFixedQualityPreference(defaultQuality),
+        );
         const loaderConfig = isTauriRuntime()
           ? { loader: InternalApiHlsLoader }
           : {};
@@ -538,7 +576,7 @@ const NSVPlayer = React.memo(
           ? { ...provider.config, ...hlsConfig, ...loaderConfig }
           : { ...hlsConfig, ...loaderConfig };
       }
-    }, []);
+    }, [defaultQuality]);
 
     const renderedTextTracks = useMemo(
       () =>

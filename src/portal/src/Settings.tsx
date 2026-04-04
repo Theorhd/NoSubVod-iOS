@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   ExperienceSettings,
   ProxyInfo,
@@ -58,8 +58,8 @@ const VideoPlayerSection = React.memo(
           <option value="1080">1080p</option>
         </select>
         <small className="help-text">
-          La vidéo tentera de démarrer avec cette résolution si elle est
-          disponible.
+          En 1080p/720p/480p, le player force cette résolution si disponible.
+          En Automatique, la qualité reste adaptative.
         </small>
       </div>
     </div>
@@ -405,6 +405,16 @@ TrustedDevicesSection.displayName = "TrustedDevicesSection";
 
 import { QRCodeReader } from "./components/QRCodeReader";
 
+const DESKTOP_SERVER_HTTPS_PORT = "23456";
+
+function isDesktopServerOrigin(origin: string): boolean {
+  try {
+    return new URL(origin).port === DESKTOP_SERVER_HTTPS_PORT;
+  } catch {
+    return false;
+  }
+}
+
 const ServerConnectionSection = React.memo(() => {
   const { serverUrl, setServerUrl, token, setToken, removeToken, isOnline } =
     useServer();
@@ -413,9 +423,16 @@ const ServerConnectionSection = React.memo(() => {
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [selectedServer, setSelectedServer] = useState<string | null>(null);
   const [manualToken, setManualToken] = useState("");
+  const [connectionError, setConnectionError] = useState("");
+
+  const desktopServers = useMemo(
+    () => scannedServers.filter((server) => isDesktopServerOrigin(server)),
+    [scannedServers],
+  );
 
   const scanNetwork = async () => {
     setScanning(true);
+    setConnectionError("");
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const servers = await invoke<string[]>("scan_local_servers");
@@ -435,6 +452,13 @@ const ServerConnectionSection = React.memo(() => {
   const handleQRScan = (text: string) => {
     try {
       const url = new URL(text);
+      if (url.port !== DESKTOP_SERVER_HTTPS_PORT) {
+        setConnectionError(
+          `Connexion refusee: iOS accepte uniquement les serveurs Desktop sur le port ${DESKTOP_SERVER_HTTPS_PORT}.`,
+        );
+        return;
+      }
+
       const t = url.searchParams.get("t");
       if (t) {
         setToken(t);
@@ -442,13 +466,14 @@ const ServerConnectionSection = React.memo(() => {
         setServerUrl(url.origin);
         setShowQRScanner(false);
         setSelectedServer(null);
+        setConnectionError("");
       } else {
-        alert("No token found in QR code");
+        setConnectionError("Le QR code ne contient pas de token de connexion.");
         console.error("No token found in QR code:", text);
       }
     } catch (e) {
       console.error("QR Code parse error:", e);
-      alert("Invalid QR code format");
+      setConnectionError("QR code invalide.");
     }
   };
 
@@ -510,13 +535,20 @@ const ServerConnectionSection = React.memo(() => {
           onClick={() => {
             removeToken();
             setServerUrl("");
+            setConnectionError("");
           }}
         >
           Déconnecter et repasser en mode Standalone
         </button>
       )}
 
-      {scannedServers.length === 0 && !scanning && (!serverUrl || !token) && (
+      {connectionError && (
+        <div className="error-text" style={{ marginBottom: "16px" }}>
+          {connectionError}
+        </div>
+      )}
+
+      {desktopServers.length === 0 && !scanning && (!serverUrl || !token) && (
         <div
           style={{
             padding: "16px",
@@ -531,12 +563,12 @@ const ServerConnectionSection = React.memo(() => {
         </div>
       )}
 
-      {scannedServers.length > 0 && (!serverUrl || !token) && (
+      {desktopServers.length > 0 && (!serverUrl || !token) && (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>
             Serveurs découverts :
           </h3>
-          {scannedServers.map((s) => (
+          {desktopServers.map((s) => (
             <div
               key={s}
               style={{
@@ -554,6 +586,7 @@ const ServerConnectionSection = React.memo(() => {
                 onClick={() => {
                   setSelectedServer(s);
                   setShowQRScanner(false);
+                  setConnectionError("");
                 }}
               >
                 Connect
@@ -637,10 +670,19 @@ const ServerConnectionSection = React.memo(() => {
                 className="action-btn"
                 style={{ flex: 1 }}
                 onClick={() => {
+                  if (!selectedServer || !isDesktopServerOrigin(selectedServer)) {
+                    setConnectionError(
+                      `Connexion refusee: seul un serveur Desktop sur le port ${DESKTOP_SERVER_HTTPS_PORT} est accepte.`,
+                    );
+                    return;
+                  }
                   if (manualToken.trim()) {
                     setServerUrl(selectedServer);
                     setToken(manualToken.trim());
                     setSelectedServer(null);
+                    setConnectionError("");
+                  } else {
+                    setConnectionError("Veuillez entrer un token de connexion.");
                   }
                 }}
               >
