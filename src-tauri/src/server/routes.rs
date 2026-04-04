@@ -1285,6 +1285,10 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
             get(crate::server::auth::handle_auth_start),
         )
         .route(
+            "/auth/twitch/begin",
+            get(crate::server::auth::handle_auth_begin),
+        )
+        .route(
             "/auth/twitch/status",
             get(crate::server::auth::handle_auth_status),
         )

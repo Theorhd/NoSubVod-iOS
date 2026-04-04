@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 
 use axum::{
     extract::{Query, State},
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
     Json,
 };
 use serde::Deserialize;
@@ -120,13 +120,41 @@ fn close_tab_html(msg: &str, success: bool) -> Html<String> {
     } else {
         ("✗", "#ff4a4a")
     };
+        let status = if success { "success" } else { "error" };
     Html(format!(
         r#"<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
         body{{background:#0e0e10;color:#efeff1;font-family:Inter,Helvetica,sans-serif;
-        display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}}
+                display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:16px;box-sizing:border-box}}
         .icon{{font-size:3rem;margin-bottom:12px}}.msg{{color:{color};font-size:1rem;max-width:420px;line-height:1.5}}
+                .hint{{opacity:.85;font-size:.9rem;margin-top:10px;max-width:420px}}
+                .btn{{margin-top:14px;background:#2f81f7;color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:.95rem}}
         </style></head><body><div><div class="icon">{icon}</div><p class="msg">{msg}</p></div>
-        <script>setTimeout(()=>window.close(),2500)</script></body></html>"#
+                <p class="hint">Si cette fenetre ne se ferme pas automatiquement, revenez a NoSubVOD via le bouton "Terminer" de Safari.</p>
+                <button class="btn" id="nsv-close">Fermer</button>
+                <script>
+                (function() {{
+                    const payload = {{ type: "nsv:twitch-auth", status: "{status}", at: Date.now() }};
+                    try {{
+                        if (window.opener && !window.opener.closed) {{
+                            window.opener.postMessage(payload, "*");
+                        }}
+                    }} catch (_err) {{}}
+                    try {{
+                        localStorage.setItem("nsv_twitch_oauth_status", JSON.stringify(payload));
+                    }} catch (_err) {{}}
+
+                    const closeNow = function () {{
+                        try {{ window.close(); }} catch (_err) {{}}
+                    }};
+
+                    const button = document.getElementById("nsv-close");
+                    if (button) {{
+                        button.addEventListener("click", closeNow);
+                    }}
+
+                    setTimeout(closeNow, 1800);
+                }})();
+                </script></body></html>"#
     ))
 }
 
@@ -146,13 +174,9 @@ fn twitch_client_configured() -> bool {
     !TWITCH_CLIENT_ID.trim().is_empty() && !TWITCH_CLIENT_SECRET.trim().is_empty()
 }
 
-// ── Route handlers ─────────────────────────────────────────────────────────────
-
-/// GET /api/auth/twitch/start
-/// Returns { authUrl } — frontend opens this URL in a new tab.
-pub async fn handle_auth_start(State(state): State<ApiState>) -> Response {
+async fn build_twitch_auth_url(state: &ApiState) -> Result<String, Response> {
     if !twitch_client_configured() {
-        return client_not_configured();
+        return Err(client_not_configured());
     }
 
     // Proactive cleanup
@@ -191,7 +215,28 @@ pub async fn handle_auth_start(State(state): State<ApiState>) -> Response {
         challenge = challenge,
     );
 
-    Json(serde_json::json!({ "authUrl": auth_url })).into_response()
+    Ok(auth_url)
+}
+
+// ── Route handlers ─────────────────────────────────────────────────────────────
+
+/// GET /api/auth/twitch/start
+/// Returns { authUrl } — frontend opens this URL in a new tab.
+pub async fn handle_auth_start(State(state): State<ApiState>) -> Response {
+    match build_twitch_auth_url(&state).await {
+        Ok(auth_url) => Json(serde_json::json!({ "authUrl": auth_url })).into_response(),
+        Err(err_response) => err_response,
+    }
+}
+
+/// GET /api/auth/twitch/begin
+/// Immediately redirects to Twitch OAuth so frontend can open this endpoint
+/// synchronously in a separate Safari sheet/window.
+pub async fn handle_auth_begin(State(state): State<ApiState>) -> Response {
+    match build_twitch_auth_url(&state).await {
+        Ok(auth_url) => Redirect::temporary(&auth_url).into_response(),
+        Err(err_response) => err_response,
+    }
 }
 
 #[derive(Deserialize)]
