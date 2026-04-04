@@ -1,4 +1,4 @@
-# 🚀 NoSubVOD iOS v0.3.7 - Pré-release
+# 🚀 NoSubVOD iOS
 
 NoSubVOD iOS est le client mobile de NoSubVOD, basé sur Tauri v2 avec un backend Rust embarqué pour lire des VODs et des lives Twitch depuis une interface React adaptée au mobile.
 NoSubVOD iOS est dérivé de NoSubVOD-Desktop. La version 0.3.7 de NSV iOS est le fruit d'un travail de refactorisation d'un code initialement prévu pour des machines Linux et Windows vers la plateforme iOS.
