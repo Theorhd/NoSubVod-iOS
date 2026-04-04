@@ -32,7 +32,7 @@ use super::{
     error::{AppError, AppResult},
     middleware::{auth_middleware, security_headers_middleware},
     state::ApiState,
-    types::{SubEntry, WatchlistEntry},
+    types::{ProfileBackupFile, ProfileData, SubEntry, WatchlistEntry},
     validation::{
         cap_master_playlist_to_max_height, filter_hevc_variants_for_ios, is_legacy_ios_request,
         is_valid_id, is_valid_login, lock_master_playlist_to_height, preferred_quality_height,
@@ -458,6 +458,52 @@ async fn handle_update_settings(
             .await?,
     )
     .into_response())
+}
+
+async fn handle_profile_export(State(state): State<ApiState>) -> AppResult<Response> {
+    let backup = state.history.export_profile_backup().await;
+    let json = serde_json::to_string_pretty(&backup)?;
+
+    let file_name = if backup.exported_at > 0 {
+        format!("nosubvod-profile-{}.json", backup.exported_at)
+    } else {
+        "nosubvod-profile-export.json".to_string()
+    };
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/json; charset=utf-8")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{file_name}\""),
+        )
+        .body(Body::from(json))
+        .map_err(|e| AppError::Internal(e.to_string()))
+}
+
+async fn handle_profile_import(
+    State(state): State<ApiState>,
+    Json(payload): Json<Value>,
+) -> AppResult<Response> {
+    let profile_data = if let Some(profile_value) = payload.get("profile") {
+        serde_json::from_value::<ProfileData>(profile_value.clone()).map_err(|e| {
+            AppError::BadRequest(format!(
+                "Invalid profile payload in file (profile field): {}",
+                e
+            ))
+        })?
+    } else if serde_json::from_value::<ProfileBackupFile>(payload.clone()).is_ok() {
+        serde_json::from_value::<ProfileBackupFile>(payload)
+            .map_err(|e| AppError::BadRequest(format!("Invalid profile backup file: {}", e)))?
+            .profile
+    } else {
+        serde_json::from_value::<ProfileData>(payload)
+            .map_err(|e| AppError::BadRequest(format!("Invalid profile data: {}", e)))?
+    };
+
+    state.history.import_profile_backup(profile_data).await?;
+
+    Ok(Json(serde_json::json!({ "ok": true })).into_response())
 }
 
 async fn handle_get_subs(
@@ -1255,6 +1301,8 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
             "/settings",
             get(handle_get_settings).post(handle_update_settings),
         )
+        .route("/profile/export", get(handle_profile_export))
+        .route("/profile/import", post(handle_profile_import))
         .route("/capabilities", get(handle_get_capabilities))
         .route("/screenshare/state", get(handle_get_screenshare_state))
         .route("/screenshare/ws", get(handle_screenshare_ws))

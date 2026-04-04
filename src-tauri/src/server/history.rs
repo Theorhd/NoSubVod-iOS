@@ -17,7 +17,8 @@ use sha2::{Digest, Sha256};
 
 use super::error::{AppError, AppResult};
 use super::types::{
-    ExperienceSettings, HistoryEntry, PersistedData, SubEntry, TrustedDevice, WatchlistEntry,
+    ExperienceSettings, HistoryEntry, PersistedData, ProfileBackupFile, ProfileData, SubEntry,
+    TrustedDevice, WatchlistEntry,
 };
 
 const CURRENT_PERSISTED_SCHEMA_VERSION: u32 = 1;
@@ -735,6 +736,62 @@ impl HistoryStore {
         }
 
         Ok(updated)
+    }
+
+    pub async fn export_profile_backup(&self) -> ProfileBackupFile {
+        let data = self.data.read().await;
+        let exported_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or(0);
+
+        ProfileBackupFile {
+            format_version: 1,
+            exported_at,
+            profile: ProfileData {
+                history: data.history.clone(),
+                watchlist: data.watchlist.clone(),
+                subs: data.subs.clone(),
+                settings: data.settings.clone(),
+                trusted_devices: data.trusted_devices.clone(),
+            },
+        }
+    }
+
+    pub async fn import_profile_backup(&self, profile: ProfileData) -> AppResult<()> {
+        {
+            let mut data = self.data.write().await;
+
+            let existing_twitch_token = data.twitch_token.clone();
+            let existing_twitch_user_id = data.settings.twitch_user_id.clone();
+            let existing_twitch_user_login = data.settings.twitch_user_login.clone();
+            let existing_twitch_user_display_name = data.settings.twitch_user_display_name.clone();
+            let existing_twitch_user_avatar = data.settings.twitch_user_avatar.clone();
+
+            data.history = profile.history;
+            data.watchlist = profile.watchlist;
+            data.subs = profile.subs;
+            data.settings = profile.settings;
+            data.trusted_devices = profile.trusted_devices;
+            data.schema_version = CURRENT_PERSISTED_SCHEMA_VERSION;
+
+            if let Some(token) = existing_twitch_token {
+                data.twitch_token = Some(token);
+                data.settings.twitch_user_id = existing_twitch_user_id;
+                data.settings.twitch_user_login = existing_twitch_user_login;
+                data.settings.twitch_user_display_name = existing_twitch_user_display_name;
+                data.settings.twitch_user_avatar = existing_twitch_user_avatar;
+            } else {
+                data.twitch_token = None;
+                data.settings.twitch_user_id = None;
+                data.settings.twitch_user_login = None;
+                data.settings.twitch_user_display_name = None;
+                data.settings.twitch_user_avatar = None;
+            }
+        }
+
+        self.schedule_save();
+        Ok(())
     }
 }
 

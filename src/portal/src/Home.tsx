@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   HistoryVodEntry,
   LiveStatusMap,
@@ -12,6 +12,7 @@ import MySubsList from "./components/home/MySubsList";
 import HistoryPreview from "./components/home/HistoryPreview";
 import WatchlistPreview from "./components/home/WatchlistPreview";
 import { TopBar } from "./components/TopBar";
+import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 
 async function fetchJson<T>(
   url: string,
@@ -104,6 +105,8 @@ async function resolveSubsFromStorage(
 
 export default function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPageVisible = usePageVisibility();
   const [subs, setSubs] = useState<SubEntry[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
   const [historyPreview, setHistoryPreview] = useState<HistoryVodEntry[]>([]);
@@ -126,56 +129,51 @@ export default function Home() {
       .join(",");
   }, [subs]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let disposed = false;
+  const loadHomeData = useCallback(async (signal: AbortSignal) => {
+    try {
+      const [watchlistData, historyData, remoteSubsData] = await Promise.all([
+        fetchJson<WatchlistEntry[]>("/api/watchlist", signal),
+        fetchJson<HistoryVodEntry[]>("/api/history/list?limit=3", signal),
+        fetchJson<SubEntry[]>("/api/subs", signal),
+      ]);
 
-    const loadData = async () => {
-      try {
-        const [watchlistData, historyData, remoteSubsData] = await Promise.all([
-          fetchJson<WatchlistEntry[]>("/api/watchlist", controller.signal),
-          fetchJson<HistoryVodEntry[]>(
-            "/api/history/list?limit=3",
-            controller.signal,
-          ),
-          fetchJson<SubEntry[]>("/api/subs", controller.signal),
-        ]);
+      if (signal.aborted) return;
 
-        if (disposed) return;
-
-        if (watchlistData) {
-          setWatchlist(watchlistData);
-        }
-
-        if (historyData) {
-          setHistoryPreview(historyData);
-        }
-
-        const resolvedSubs = await resolveSubsFromStorage(
-          controller.signal,
-          remoteSubsData,
-        );
-        if (disposed) return;
-
-        setSubs(resolvedSubs.subs);
-        if (resolvedSubs.clearLegacyLocal) {
-          localStorage.removeItem("nsv_subs");
-        }
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-        console.error("Failed to fetch initial home data", error);
+      if (watchlistData) {
+        setWatchlist(watchlistData);
       }
-    };
 
-    void loadData();
+      if (historyData) {
+        setHistoryPreview(historyData);
+      }
+
+      const resolvedSubs = await resolveSubsFromStorage(signal, remoteSubsData);
+      if (signal.aborted) return;
+
+      setSubs(resolvedSubs.subs);
+      if (resolvedSubs.clearLegacyLocal) {
+        localStorage.removeItem("nsv_subs");
+      }
+    } catch (error) {
+      if (signal.aborted) {
+        return;
+      }
+      console.error("Failed to fetch home data", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isPageVisible) {
+      return;
+    }
+
+    const controller = new AbortController();
+    void loadHomeData(controller.signal);
 
     return () => {
-      disposed = true;
       controller.abort();
     };
-  }, []);
+  }, [isPageVisible, loadHomeData, location.key]);
 
   useEffect(() => {
     const controller = new AbortController();

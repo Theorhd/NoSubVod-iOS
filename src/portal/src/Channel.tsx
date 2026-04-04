@@ -1,5 +1,5 @@
 import React from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { StreamCard } from "./components/StreamCard";
 import { VODCard } from "./components/VODCard";
 import { TopBar } from "./components/TopBar";
@@ -8,6 +8,7 @@ import { navigateToPlayer } from "./utils/navigation";
 
 export default function Channel() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const user = searchParams.get("user");
   const category = searchParams.get("category");
   const categoryId = searchParams.get("categoryId");
@@ -29,7 +30,12 @@ export default function Channel() {
     loadMoreCatVods,
     loadMoreCatLive,
     addToWatchlist,
-  } = useChannelData({ user, category, categoryId });
+  } = useChannelData({
+    user,
+    category,
+    categoryId,
+    refreshKey: location.key,
+  });
 
   return (
     <>

@@ -450,6 +450,15 @@ function VodLivePlayer({
             throw new Error(`History save failed (${res.status})`);
           }
           syncState.lastSavedTime = payload.timecode;
+          globalThis.dispatchEvent(
+            new CustomEvent("nsv:history-updated", {
+              detail: {
+                vodId: activeVodId,
+                timecode: payload.timecode,
+                duration: payload.duration,
+              },
+            }),
+          );
         })
         .catch((error) => {
           console.error("Failed to save history", error);
@@ -520,6 +529,48 @@ function VodLivePlayer({
   useEffect(() => {
     saveProgressRef.current = saveProgress;
   }, [saveProgress]);
+
+  const flushHistoryBeforeExit = useCallback(async () => {
+    const activeVodId = activeVodIdRef.current;
+    if (!activeVodId) {
+      return;
+    }
+
+    const timecode = Math.max(0, Number(currentTimeRef.current || 0));
+    if (timecode <= 0) {
+      return;
+    }
+
+    const durationValue = Math.max(0, Number(durationRef.current || 0));
+
+    try {
+      const res = await fetch("/api/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vodId: activeVodId,
+          timecode,
+          duration: durationValue,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`History save failed (${res.status})`);
+      }
+
+      historySyncRef.current.lastSavedTime = timecode;
+      globalThis.dispatchEvent(
+        new CustomEvent("nsv:history-updated", {
+          detail: {
+            vodId: activeVodId,
+            timecode,
+            duration: durationValue,
+          },
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to flush history before exit", error);
+    }
+  }, []);
 
   const [clipStart, setClipStart] = useState<number | null>(null);
   const [clipEnd, setClipEnd] = useState<number | null>(null);
@@ -954,18 +1005,20 @@ function VodLivePlayer({
   }, [saveProgress, vodId]);
 
   const handleBack = useCallback(() => {
+    void flushHistoryBeforeExit();
+
     const currentRoute = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
     if (
       typeof returnPath === "string" &&
       returnPath.startsWith("/") &&
       returnPath !== currentRoute
     ) {
-      navigate(returnPath, { replace: true });
+      navigate(returnPath);
       return;
     }
 
     navigateBackInApp(navigate, "/");
-  }, [navigate, returnPath]);
+  }, [flushHistoryBeforeExit, navigate, returnPath]);
 
   if (!source) {
     return (

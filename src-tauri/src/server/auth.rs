@@ -416,11 +416,13 @@ pub async fn handle_auth_callback(
 /// GET /api/auth/twitch/status
 pub async fn handle_auth_status(State(state): State<ApiState>) -> impl IntoResponse {
     let settings = state.history.get_settings().await;
-    let linked = settings
+    let has_account = settings
         .twitch_user_id
         .as_ref()
         .map(|s| !s.is_empty())
         .unwrap_or(false);
+    let has_token = state.history.get_twitch_token().await.is_some();
+    let linked = has_account && has_token;
 
     Json(serde_json::json!({
         "linked": linked,

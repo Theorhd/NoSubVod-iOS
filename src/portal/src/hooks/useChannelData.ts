@@ -5,6 +5,7 @@ import {
   LiveStreamsPage,
   VOD,
 } from "../../../shared/types";
+import { usePageVisibility } from "../../../shared/hooks/usePageVisibility";
 
 type CategoryVodPage = {
   items: VOD[];
@@ -61,12 +62,14 @@ type UseChannelDataParams = Readonly<{
   user: string | null;
   category: string | null;
   categoryId: string | null;
+  refreshKey?: string;
 }>;
 
 export function useChannelData({
   user,
   category,
   categoryId,
+  refreshKey,
 }: UseChannelDataParams) {
   const [vods, setVods] = useState<VOD[]>([]);
   const [liveStream, setLiveStream] = useState<LiveStream | null>(null);
@@ -83,6 +86,7 @@ export function useChannelData({
   const [catVodLoading, setCatVodLoading] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isPageVisible = usePageVisibility();
 
   const isUserMode = Boolean(user);
   const isCategoryMode = !isUserMode && Boolean(category);
@@ -212,11 +216,16 @@ export function useChannelData({
   ]);
 
   useEffect(() => {
+    if (!isPageVisible) {
+      return;
+    }
+
     void fetchData();
+
     return () => {
       if (abortControllerRef.current) abortControllerRef.current.abort();
     };
-  }, [fetchData]);
+  }, [fetchData, isPageVisible, refreshKey]);
 
   const loadMoreCatVods = useCallback(async () => {
     if (!category || catVodLoading || !catVodHasMore) return;

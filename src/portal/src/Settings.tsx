@@ -35,6 +35,42 @@ function isTauriRuntime(): boolean {
   return Boolean(runtime.__TAURI_INTERNALS__ || runtime.__TAURI__);
 }
 
+function buildFallbackProfileFilename(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return `nosubvod-profile-${yyyy}${mm}${dd}-${hh}${min}.json`;
+}
+
+function parseFilenameFromDisposition(
+  disposition: string | null,
+): string | null {
+  if (!disposition) {
+    return null;
+  }
+
+  const utf8FilenamePattern = /filename\*=UTF-8''([^;]+)/i;
+  const utf8Match = utf8FilenamePattern.exec(disposition);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim());
+    } catch {
+      return utf8Match[1].trim();
+    }
+  }
+
+  const basicFilenamePattern = /filename="?([^";]+)"?/i;
+  const basicMatch = basicFilenamePattern.exec(disposition);
+  if (basicMatch?.[1]) {
+    return basicMatch[1].trim();
+  }
+
+  return null;
+}
+
 interface SectionProps {
   readonly settings: ExperienceSettings;
   readonly setSettings: React.Dispatch<
@@ -419,6 +455,70 @@ const TrustedDevicesSection = React.memo(
 );
 TrustedDevicesSection.displayName = "TrustedDevicesSection";
 
+const ProfileBackupSection = React.memo(
+  ({
+    exporting,
+    importing,
+    onExport,
+    onImport,
+    importInputRef,
+    onImportFileSelected,
+  }: {
+    exporting: boolean;
+    importing: boolean;
+    onExport: () => Promise<void>;
+    onImport: () => void;
+    importInputRef: React.RefObject<HTMLInputElement | null>;
+    onImportFileSelected: (
+      event: React.ChangeEvent<HTMLInputElement>,
+    ) => Promise<void>;
+  }) => (
+    <div className="card settings-card">
+      <h2>Profil utilisateur</h2>
+      <p className="settings-description">
+        Exporte ton profil (historique, subs, watchlist, settings) dans un
+        fichier JSON que tu peux conserver où tu veux, puis réimporter après
+        réinstallation.
+      </p>
+
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json,.json"
+        style={{ display: "none" }}
+        onChange={(event) => {
+          void onImportFileSelected(event);
+        }}
+      />
+
+      <div className="btn-row">
+        <button
+          className="action-btn"
+          onClick={() => {
+            void onExport();
+          }}
+          disabled={exporting || importing}
+        >
+          {exporting ? "Export..." : "Exporter le profil"}
+        </button>
+
+        <button
+          className="action-btn secondary-btn soft-outline-btn"
+          onClick={onImport}
+          disabled={exporting || importing}
+        >
+          {importing ? "Import..." : "Importer un profil"}
+        </button>
+      </div>
+
+      <small className="help-text">
+        Note: les tokens sensibles ne sont pas inclus dans le fichier exporté.
+      </small>
+    </div>
+  ),
+);
+ProfileBackupSection.displayName = "ProfileBackupSection";
+
 import { QRCodeReader } from "./components/QRCodeReader";
 
 const DESKTOP_SERVER_HTTPS_PORT = "23456";
@@ -741,6 +841,9 @@ export default function Settings() {
   const [trustedDevicePendingId, setTrustedDevicePendingId] = useState<
     string | null
   >(null);
+  const [profileExporting, setProfileExporting] = useState(false);
+  const [profileImporting, setProfileImporting] = useState(false);
+  const profileImportInputRef = useRef<HTMLInputElement | null>(null);
   const twitchPollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
@@ -807,6 +910,104 @@ export default function Settings() {
     }
   }, []);
 
+  const exportProfile = useCallback(async () => {
+    setProfileExporting(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/profile/export");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || "Impossible d'exporter le profil.");
+      }
+
+      const blob = await response.blob();
+      const fileName =
+        parseFilenameFromDisposition(
+          response.headers.get("content-disposition"),
+        ) || buildFallbackProfileFilename();
+
+      const maybeNavigator = globalThis.navigator as Navigator & {
+        canShare?: (data: ShareData) => boolean;
+      };
+
+      const file = new File([blob], fileName, { type: "application/json" });
+      const canShareFile =
+        typeof maybeNavigator.share === "function" &&
+        typeof maybeNavigator.canShare === "function" &&
+        maybeNavigator.canShare({ files: [file] });
+
+      if (canShareFile) {
+        await maybeNavigator.share({
+          title: "NoSubVOD Profile",
+          files: [file],
+        });
+      } else {
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = fileName;
+        anchor.rel = "noopener";
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(objectUrl);
+      }
+
+      setSuccess("Profil exporté avec succès.");
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        return;
+      }
+      setError(err?.message || "Impossible d'exporter le profil.");
+    } finally {
+      setProfileExporting(false);
+    }
+  }, []);
+
+  const triggerProfileImport = useCallback(() => {
+    profileImportInputRef.current?.click();
+  }, []);
+
+  const onProfileFileSelected = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const selected = event.target.files?.[0];
+      if (!selected) {
+        return;
+      }
+
+      setProfileImporting(true);
+      setError("");
+      setSuccess("");
+
+      try {
+        const text = await selected.text();
+        JSON.parse(text);
+
+        const response = await fetch("/api/profile/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: text,
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || "Impossible d'importer le profil.");
+        }
+
+        await fetchSettingsData();
+        setSuccess("Profil importé avec succès.");
+      } catch (err: any) {
+        setError(err?.message || "Impossible d'importer le profil.");
+      } finally {
+        setProfileImporting(false);
+        event.target.value = "";
+      }
+    },
+    [fetchSettingsData],
+  );
+
   useEffect(() => {
     void fetchSettingsData();
   }, [fetchSettingsData]);
@@ -863,54 +1064,43 @@ export default function Settings() {
 
   const linkTwitch = useCallback(async () => {
     setError("");
+    setSuccess("");
+
+    if (twitchStatus && !twitchStatus.clientConfigured) {
+      setError(
+        "Configuration OAuth Twitch manquante côté serveur. Vérifie le fichier .env.",
+      );
+      return;
+    }
+
     try {
-      const startRes = await fetch("/api/auth/twitch/start");
-      if (!startRes.ok) {
-        let backendError = "";
-        try {
-          const payload = (await startRes.json()) as { error?: string };
-          backendError = payload.error || "";
-        } catch {
-          // ignore non-json payloads
-        }
-
-        setError(
-          backendError ||
-            "Impossible de demarrer l'authentification Twitch. Verifie la configuration OAuth.",
-        );
-        return;
-      }
-
-      const startPayload = (await startRes.json()) as { authUrl?: string };
-      const authUrl = (startPayload.authUrl || "").trim();
-      if (!authUrl) {
-        setError("URL Twitch invalide. Reessaie dans quelques secondes.");
-        return;
-      }
-
-      const popup = globalThis.open(authUrl, "_blank", "noopener,noreferrer");
-      if (popup) {
-        startTwitchStatusPolling();
-        return;
-      }
+      const beginUrl = `${globalThis.location.origin}/api/auth/twitch/begin`;
 
       if (isTauriRuntime()) {
         const { openUrl } = await import("@tauri-apps/plugin-opener");
-        await openUrl(authUrl);
+        await openUrl(beginUrl);
+        setSuccess("Ouverture de Twitch...");
         startTwitchStatusPolling();
         return;
       }
 
-      setError(
-        "Impossible d'ouvrir la fenetre Twitch. Fermez les bloqueurs de popups ou redemarrez l'app.",
-      );
+      // Keep OAuth opening directly tied to the user click to avoid popup blocking.
+      const popup = globalThis.open(beginUrl, "_blank", "noopener,noreferrer");
+      if (popup && !popup.closed) {
+        setSuccess("Ouverture de Twitch...");
+        startTwitchStatusPolling();
+        return;
+      }
+
+      // Last fallback for strict browsers: navigate current tab.
+      globalThis.location.assign(beginUrl);
     } catch (openError) {
       console.error("Failed to start Twitch OAuth", openError);
       setError(
         "Impossible d'ouvrir la fenetre Twitch. Verifie ta connexion ou redemarre l'app.",
       );
     }
-  }, [startTwitchStatusPolling]);
+  }, [startTwitchStatusPolling, twitchStatus]);
 
   useEffect(() => {
     const refreshAuthStatus = () => {
@@ -1058,6 +1248,14 @@ export default function Settings() {
           devices={trustedDevices}
           pendingDeviceId={trustedDevicePendingId}
           onToggleTrusted={onToggleTrusted}
+        />
+        <ProfileBackupSection
+          exporting={profileExporting}
+          importing={profileImporting}
+          onExport={exportProfile}
+          onImport={triggerProfileImport}
+          importInputRef={profileImportInputRef}
+          onImportFileSelected={onProfileFileSelected}
         />
         <ServerConnectionSection />
         <div className="card settings-card settings-footer-card">
