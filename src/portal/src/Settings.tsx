@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   ExperienceSettings,
   ProxyInfo,
@@ -719,6 +719,39 @@ export default function Settings() {
   const [trustedDevicePendingId, setTrustedDevicePendingId] = useState<
     string | null
   >(null);
+  const twitchPollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+
+  const stopTwitchPolling = useCallback(() => {
+    if (twitchPollingTimerRef.current) {
+      clearInterval(twitchPollingTimerRef.current);
+      twitchPollingTimerRef.current = null;
+    }
+    setTwitchPolling(false);
+  }, []);
+
+  const closePopupIfOpen = useCallback((popup: Window | null) => {
+    if (popup && !popup.closed) {
+      popup.close();
+    }
+  }, []);
+
+  const openTwitchAuthPage = useCallback((authUrl: string, popup: Window | null) => {
+    if (popup && !popup.closed) {
+      popup.location.href = authUrl;
+      return true;
+    }
+
+    const opened = globalThis.open(authUrl, "_blank", "noopener,noreferrer");
+    if (opened) {
+      return true;
+    }
+
+    // Last-resort fallback for strict iOS WebViews: navigate current view.
+    globalThis.location.assign(authUrl);
+    return false;
+  }, []);
 
   const fetchSettingsData = useCallback(async () => {
     try {
@@ -790,32 +823,66 @@ export default function Settings() {
   }, []);
 
   const linkTwitch = useCallback(async () => {
+    setError("");
+
+    // Must be called synchronously from the click handler to avoid popup blockers
+    // on iOS/WebKit when awaiting before opening the auth page.
+    const authWindow = globalThis.open("", "_blank", "noopener,noreferrer");
+
     try {
       const res = await fetch("/api/auth/twitch/start");
-      if (!res.ok) return;
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        setError(payload?.error || "Impossible de démarrer la liaison Twitch.");
+        closePopupIfOpen(authWindow);
+        return;
+      }
+
       const { authUrl } = await res.json();
-      window.open(authUrl, "_blank", "noopener,noreferrer");
+      if (!authUrl || typeof authUrl !== "string") {
+        setError("Réponse OAuth invalide (URL manquante).");
+        closePopupIfOpen(authWindow);
+        return;
+      }
+
+      const popupOpened = openTwitchAuthPage(authUrl, authWindow);
+      if (!popupOpened) {
+        return;
+      }
+
+      stopTwitchPolling();
       setTwitchPolling(true);
+
       let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        const r = await fetch("/api/auth/twitch/status");
-        if (!r.ok || attempts >= 60) {
-          clearInterval(poll);
-          setTwitchPolling(false);
-          return;
-        }
-        const data = await r.json();
-        setTwitchStatus(data);
-        if (data.linked) {
-          clearInterval(poll);
-          setTwitchPolling(false);
-        }
+      twitchPollingTimerRef.current = setInterval(() => {
+        void (async () => {
+          attempts++;
+          try {
+            const r = await fetch("/api/auth/twitch/status");
+            if (!r.ok || attempts >= 60) {
+              stopTwitchPolling();
+              return;
+            }
+
+            const data = await r.json();
+            setTwitchStatus(data);
+            if (data.linked) {
+              stopTwitchPolling();
+            }
+          } catch {
+            if (attempts >= 60) {
+              stopTwitchPolling();
+            }
+          }
+        })();
       }, 2000);
     } catch (e) {
       console.error("Failed to start Twitch auth", e);
+      setError("Impossible de démarrer la liaison Twitch.");
+      closePopupIfOpen(authWindow);
+      stopTwitchPolling();
     }
-  }, []);
+  }, [closePopupIfOpen, openTwitchAuthPage, setError, stopTwitchPolling]);
 
   const unlinkTwitch = useCallback(async () => {
     try {
@@ -876,6 +943,15 @@ export default function Settings() {
     },
     [],
   );
+
+  useEffect(() => {
+    return () => {
+      if (twitchPollingTimerRef.current) {
+        clearInterval(twitchPollingTimerRef.current);
+        twitchPollingTimerRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <>
