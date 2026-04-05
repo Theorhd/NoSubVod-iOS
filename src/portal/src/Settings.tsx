@@ -56,6 +56,34 @@ function buildFallbackDiagnosticsFilename(): string {
   return `nosubvod-diagnostics-backend-${yyyy}${mm}${dd}-${hh}${min}.log`;
 }
 
+function buildFallbackFrontendDiagnosticsFilename(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return `nosubvod-diagnostics-frontend-${yyyy}${mm}${dd}-${hh}${min}.json`;
+}
+
+function triggerBlobDownload(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.rel = "noopener";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+type FrontendLoggerRuntime = {
+  __NSV_LOGGER__?: {
+    exportLogs?: (reason?: string) => unknown;
+  };
+};
+
 function parseFilenameFromDisposition(
   disposition: string | null,
 ): string | null {
@@ -668,8 +696,8 @@ const DiagnosticsLogsSection = React.memo(
     <div className="card settings-card">
       <h2>Logs diagnostic</h2>
       <p className="settings-description">
-        Exporte le fichier de logs backend Rust pour analyser les crashs et
-        erreurs runtime côté serveur embarqué.
+        Exporte les logs backend Rust et les logs frontend pour analyser les
+        crashs et erreurs runtime.
       </p>
 
       <div className="btn-row">
@@ -1168,39 +1196,55 @@ export default function Settings() {
       }
 
       const blob = await response.blob();
-      const fileName =
+      const backendFileName =
         parseFilenameFromDisposition(
           response.headers.get("content-disposition"),
         ) || buildFallbackDiagnosticsFilename();
+
+      const loggerRuntime = globalThis as typeof globalThis &
+        FrontendLoggerRuntime;
+      const frontendPayload =
+        loggerRuntime.__NSV_LOGGER__?.exportLogs?.("settings-diagnostics") || {
+          schemaVersion: 1,
+          generatedAt: new Date().toISOString(),
+          reason: "settings-diagnostics-fallback",
+          loggerAvailable: false,
+          entries: [],
+        };
+
+      const frontendBlob = new Blob([JSON.stringify(frontendPayload, null, 2)], {
+        type: "application/json",
+      });
+      const frontendFileName = buildFallbackFrontendDiagnosticsFilename();
 
       const maybeNavigator = globalThis.navigator as Navigator & {
         canShare?: (data: ShareData) => boolean;
       };
 
-      const file = new File([blob], fileName, { type: "text/plain" });
+      const backendFile = new File([blob], backendFileName, {
+        type: "text/plain",
+      });
+      const frontendFile = new File([frontendBlob], frontendFileName, {
+        type: "application/json",
+      });
+      const files = [backendFile, frontendFile];
+
       const canShareFile =
         typeof maybeNavigator.share === "function" &&
-        typeof maybeNavigator.canShare === "function" &&
-        maybeNavigator.canShare({ files: [file] });
+        (typeof maybeNavigator.canShare !== "function" ||
+          maybeNavigator.canShare({ files }));
 
       if (canShareFile) {
         await maybeNavigator.share({
           title: "NoSubVOD Diagnostics",
-          files: [file],
+          files,
         });
       } else {
-        const objectUrl = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = objectUrl;
-        anchor.download = fileName;
-        anchor.rel = "noopener";
-        document.body.append(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(objectUrl);
+        triggerBlobDownload(blob, backendFileName);
+        triggerBlobDownload(frontendBlob, frontendFileName);
       }
 
-      setSuccess("Logs diagnostic exportés avec succès.");
+      setSuccess("Logs backend et frontend exportés avec succès.");
     } catch (err: any) {
       if (err?.name === "AbortError") {
         return;
