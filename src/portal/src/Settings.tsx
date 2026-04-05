@@ -46,6 +46,16 @@ function buildFallbackProfileFilename(): string {
   return `nosubvod-profile-${yyyy}${mm}${dd}-${hh}${min}.json`;
 }
 
+function buildFallbackDiagnosticsFilename(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return `nosubvod-diagnostics-backend-${yyyy}${mm}${dd}-${hh}${min}.log`;
+}
+
 function parseFilenameFromDisposition(
   disposition: string | null,
 ): string | null {
@@ -647,6 +657,42 @@ const ProfileBackupSection = React.memo(
 );
 ProfileBackupSection.displayName = "ProfileBackupSection";
 
+const DiagnosticsLogsSection = React.memo(
+  ({
+    exporting,
+    onExport,
+  }: {
+    exporting: boolean;
+    onExport: () => Promise<void>;
+  }) => (
+    <div className="card settings-card">
+      <h2>Logs diagnostic</h2>
+      <p className="settings-description">
+        Exporte le fichier de logs backend Rust pour analyser les crashs et
+        erreurs runtime côté serveur embarqué.
+      </p>
+
+      <div className="btn-row">
+        <button
+          className="action-btn"
+          onClick={() => {
+            void onExport();
+          }}
+          disabled={exporting}
+        >
+          {exporting ? "Export..." : "Exporter logs diagnostic"}
+        </button>
+      </div>
+
+      <small className="help-text">
+        Conseil: après un crash, relance l&apos;app puis exporte immédiatement
+        les logs.
+      </small>
+    </div>
+  ),
+);
+DiagnosticsLogsSection.displayName = "DiagnosticsLogsSection";
+
 import { QRCodeReader } from "./components/QRCodeReader";
 
 const DESKTOP_SERVER_HTTPS_PORT = "23456";
@@ -976,6 +1022,7 @@ export default function Settings() {
   >(null);
   const [profileExporting, setProfileExporting] = useState(false);
   const [profileImporting, setProfileImporting] = useState(false);
+  const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
   const profileImportInputRef = useRef<HTMLInputElement | null>(null);
   const twitchPollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
@@ -1104,6 +1151,64 @@ export default function Settings() {
 
   const triggerProfileImport = useCallback(() => {
     profileImportInputRef.current?.click();
+  }, []);
+
+  const exportDiagnosticLogs = useCallback(async () => {
+    setDiagnosticsExporting(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/diagnostics/logs/export");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(
+          payload?.error || "Impossible d'exporter les logs diagnostic.",
+        );
+      }
+
+      const blob = await response.blob();
+      const fileName =
+        parseFilenameFromDisposition(
+          response.headers.get("content-disposition"),
+        ) || buildFallbackDiagnosticsFilename();
+
+      const maybeNavigator = globalThis.navigator as Navigator & {
+        canShare?: (data: ShareData) => boolean;
+      };
+
+      const file = new File([blob], fileName, { type: "text/plain" });
+      const canShareFile =
+        typeof maybeNavigator.share === "function" &&
+        typeof maybeNavigator.canShare === "function" &&
+        maybeNavigator.canShare({ files: [file] });
+
+      if (canShareFile) {
+        await maybeNavigator.share({
+          title: "NoSubVOD Diagnostics",
+          files: [file],
+        });
+      } else {
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = fileName;
+        anchor.rel = "noopener";
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(objectUrl);
+      }
+
+      setSuccess("Logs diagnostic exportés avec succès.");
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        return;
+      }
+      setError(err?.message || "Impossible d'exporter les logs diagnostic.");
+    } finally {
+      setDiagnosticsExporting(false);
+    }
   }, []);
 
   const onProfileFileSelected = useCallback(
@@ -1426,6 +1531,10 @@ export default function Settings() {
           onImport={triggerProfileImport}
           importInputRef={profileImportInputRef}
           onImportFileSelected={onProfileFileSelected}
+        />
+        <DiagnosticsLogsSection
+          exporting={diagnosticsExporting}
+          onExport={exportDiagnosticLogs}
         />
         <ServerConnectionSection />
         <div className="card settings-card settings-footer-card">

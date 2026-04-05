@@ -61,7 +61,8 @@ impl AppState {
         let twitch = Arc::new(TwitchService::new());
         let download = Arc::new(DownloadManager::new());
         let screenshare = Arc::new(ScreenShareService::new());
-        let extensions = Arc::new(ExtensionManager::new(app_data_dir));
+        let extensions = Arc::new(ExtensionManager::new(app_data_dir.clone()));
+        let logs_dir = app_data_dir.join("logs");
 
         // Initial scan for extensions (synchronous scan or spawn task)
         let ext_clone = extensions.clone();
@@ -122,6 +123,7 @@ impl AppState {
             screenshare,
             extensions,
             oauth,
+            logs_dir,
             server_token,
             app_handle: None,
             download_cache,

@@ -13,25 +13,695 @@ type MemoryPerformance = Performance & {
   };
 };
 
+type LoggerLevel = "debug" | "info" | "warn" | "error";
+
+type LoggerEntry = {
+  id: number;
+  at: number;
+  isoTime: string;
+  sessionId: string;
+  level: LoggerLevel;
+  source: string;
+  message: string;
+  context?: Record<string, unknown>;
+};
+
+type LoggerExportPayload = {
+  schemaVersion: number;
+  generatedAt: string;
+  sessionId: string;
+  userAgent: string;
+  location: string;
+  reason: string;
+  totalEntries: number;
+  entries: LoggerEntry[];
+};
+
+type LoggerApi = {
+  readonly enabled: boolean;
+  readonly sessionId: string;
+  log: (
+    level: LoggerLevel,
+    source: string,
+    message: string,
+    context?: Record<string, unknown>,
+  ) => void;
+  component: (
+    componentName: string,
+    phase: string,
+    context?: Record<string, unknown>,
+  ) => void;
+  getEntries: () => LoggerEntry[];
+  exportLogs: (reason?: string) => LoggerExportPayload;
+  download: (reason?: string) => Promise<string | null>;
+  clear: () => void;
+};
+
+type NavigatorWithShare = Navigator & {
+  share?: (data: ShareData) => Promise<void>;
+  canShare?: (data: ShareData) => boolean;
+};
+
+type LoggerActiveSession = {
+  sessionId: string;
+  startedAt: string;
+  lastSeenAt: string;
+  route: string;
+  entryCount: number;
+  endedAt?: string;
+};
+
 type DebugGlobal = typeof globalThis & {
   eruda?: {
     init?: () => void;
     destroy?: () => void;
   };
   __NSV_BENCHMARK__?: BenchmarkApi;
+  __NSV_LOGGER__?: LoggerApi;
+  __NSV_EXPORT_LOGS__?: (reason?: string) => Promise<string | null>;
 };
 
 const BENCHMARK_PANEL_ID = "nsv-benchmark-panel";
 const BENCHMARK_STYLE_ID = "nsv-benchmark-style";
 const BENCHMARK_SCRIPT_ID = "nsv-eruda-script";
 
+const LOGGER_STORAGE_KEY = "nsv_logger_entries_v1";
+const LOGGER_ACTIVE_SESSION_KEY = "nsv_logger_active_session_v1";
+const LOGGER_MAX_ENTRIES = 2200;
+const LOGGER_MAX_CONTEXT_DEPTH = 4;
+const LOGGER_MAX_STRING_LENGTH = 2400;
+const LOGGER_HEARTBEAT_MS = 15000;
+const LOGGER_SCHEMA_VERSION = 1;
+
 const benchmarkStartTimes = new Map<string, number>();
 let erudaLoadPromise: Promise<void> | null = null;
 let erudaEnabled = false;
 let debugCleanups: Cleanup[] = [];
 
+let loggerEnabled = false;
+let loggerSessionId = "";
+let loggerSequence = 0;
+let loggerEntries: LoggerEntry[] = [];
+let loggerHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let loggerCleanups: Cleanup[] = [];
+let loggerInitialized = false;
+let loggerStartedAt = "";
+
+const loggerOriginalConsole: Partial<
+  Record<
+    "log" | "info" | "warn" | "error" | "debug",
+    (...args: unknown[]) => void
+  >
+> = {};
+
 function getDebugGlobal(): DebugGlobal {
   return globalThis as DebugGlobal;
+}
+
+function loggerNowIso(): string {
+  return new Date().toISOString();
+}
+
+function generateLoggerSessionId(): string {
+  const api = globalThis.crypto;
+  if (api?.randomUUID) {
+    return api.randomUUID().replaceAll("-", "");
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function safeStorageGetRaw(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSetRaw(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function safeJsonParse<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function serializeSimpleValue(value: unknown): {
+  handled: boolean;
+  serialized: unknown;
+} {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number"
+  ) {
+    return { handled: true, serialized: value };
+  }
+
+  if (typeof value === "string") {
+    if (value.length <= LOGGER_MAX_STRING_LENGTH) {
+      return { handled: true, serialized: value };
+    }
+    return {
+      handled: true,
+      serialized: `${value.slice(0, LOGGER_MAX_STRING_LENGTH)}...`,
+    };
+  }
+
+  if (typeof value === "bigint") {
+    return { handled: true, serialized: value.toString() };
+  }
+
+  if (value instanceof Date) {
+    return { handled: true, serialized: value.toISOString() };
+  }
+
+  if (value instanceof URL) {
+    return { handled: true, serialized: value.toString() };
+  }
+
+  if (value instanceof Error) {
+    return {
+      handled: true,
+      serialized: {
+        name: value.name,
+        message: value.message,
+        stack: value.stack,
+      },
+    };
+  }
+
+  if (typeof value === "function") {
+    return {
+      handled: true,
+      serialized: `[function ${value.name || "anonymous"}]`,
+    };
+  }
+
+  return { handled: false, serialized: undefined };
+}
+
+function toSerializable(
+  value: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet<object>(),
+): unknown {
+  if (depth > LOGGER_MAX_CONTEXT_DEPTH) {
+    return "[max-depth]";
+  }
+
+  const simple = serializeSimpleValue(value);
+  if (simple.handled) {
+    return simple.serialized;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 80)
+      .map((item) => toSerializable(item, depth + 1, seen));
+  }
+
+  if (typeof value === "object") {
+    const objectValue = value as Record<string, unknown>;
+    if (seen.has(objectValue)) {
+      return "[circular]";
+    }
+
+    seen.add(objectValue);
+    const output: Record<string, unknown> = {};
+    for (const [key, nested] of Object.entries(objectValue).slice(0, 120)) {
+      output[key] = toSerializable(nested, depth + 1, seen);
+    }
+    return output;
+  }
+
+  if (typeof value === "symbol") {
+    return value.toString();
+  }
+
+  return `[${typeof value}]`;
+}
+
+function sanitizeLogText(raw: string): string {
+  return raw
+    .replaceAll(
+      /([?&](?:t|token|access_token|client_secret|code)=)[^&\s]+/gi,
+      "$1<redacted>",
+    )
+    .replaceAll(/(authorization[:=]\s*bearer\s+)[\w.-]+/gi, "$1<redacted>");
+}
+
+function formatConsoleArgs(args: unknown[]): string {
+  return sanitizeLogText(
+    args
+      .map((value) => {
+        if (typeof value === "string") return value;
+        if (value instanceof Error) {
+          const stackText = value.stack ? `\n${value.stack}` : "";
+          return `${value.name}: ${value.message}${stackText}`;
+        }
+        try {
+          return JSON.stringify(toSerializable(value));
+        } catch {
+          return String(value);
+        }
+      })
+      .join(" "),
+  );
+}
+
+function loadLoggerEntriesFromStorage(): LoggerEntry[] {
+  const parsed = safeJsonParse<LoggerEntry[]>(
+    safeStorageGetRaw(LOGGER_STORAGE_KEY),
+    [],
+  );
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed
+    .filter(
+      (entry) =>
+        typeof entry?.id === "number" &&
+        typeof entry?.at === "number" &&
+        typeof entry?.isoTime === "string" &&
+        typeof entry?.sessionId === "string" &&
+        typeof entry?.level === "string" &&
+        typeof entry?.source === "string" &&
+        typeof entry?.message === "string",
+    )
+    .slice(-LOGGER_MAX_ENTRIES);
+}
+
+function persistLoggerEntries() {
+  try {
+    safeStorageSetRaw(LOGGER_STORAGE_KEY, JSON.stringify(loggerEntries));
+  } catch {
+    // localStorage quota may be reached; trim and retry once.
+    loggerEntries = loggerEntries.slice(-Math.floor(LOGGER_MAX_ENTRIES / 2));
+    try {
+      safeStorageSetRaw(LOGGER_STORAGE_KEY, JSON.stringify(loggerEntries));
+    } catch {
+      // Give up quietly.
+    }
+  }
+}
+
+function readActiveLoggerSession(): LoggerActiveSession | null {
+  return safeJsonParse<LoggerActiveSession | null>(
+    safeStorageGetRaw(LOGGER_ACTIVE_SESSION_KEY),
+    null,
+  );
+}
+
+function writeActiveLoggerSession(payload: LoggerActiveSession) {
+  safeStorageSetRaw(LOGGER_ACTIVE_SESSION_KEY, JSON.stringify(payload));
+}
+
+function markLoggerSessionEnded() {
+  const existing = readActiveLoggerSession();
+  if (existing?.sessionId !== loggerSessionId) {
+    return;
+  }
+
+  writeActiveLoggerSession({
+    ...existing,
+    endedAt: loggerNowIso(),
+    lastSeenAt: loggerNowIso(),
+    entryCount: loggerEntries.length,
+  });
+}
+
+function loggerRuntimeContext(): Record<string, unknown> {
+  return {
+    route: `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`,
+    visibility: document.visibilityState,
+    online: navigator.onLine,
+  };
+}
+
+function appendLoggerEntry(
+  level: LoggerLevel,
+  source: string,
+  message: string,
+  context?: Record<string, unknown>,
+) {
+  if (!loggerEnabled) {
+    return;
+  }
+
+  loggerSequence += 1;
+  const entry: LoggerEntry = {
+    id: loggerSequence,
+    at: Date.now(),
+    isoTime: loggerNowIso(),
+    sessionId: loggerSessionId,
+    level,
+    source,
+    message: sanitizeLogText(message),
+    context: context
+      ? (toSerializable(context) as Record<string, unknown>)
+      : undefined,
+  };
+
+  loggerEntries.push(entry);
+  if (loggerEntries.length > LOGGER_MAX_ENTRIES) {
+    loggerEntries = loggerEntries.slice(-LOGGER_MAX_ENTRIES);
+  }
+
+  persistLoggerEntries();
+}
+
+function initLoggerConsolePatch(): Cleanup {
+  const levelByMethod: Record<
+    "log" | "info" | "warn" | "error" | "debug",
+    LoggerLevel
+  > = {
+    log: "info",
+    info: "info",
+    warn: "warn",
+    error: "error",
+    debug: "debug",
+  };
+
+  const methods = ["log", "info", "warn", "error", "debug"] as const;
+  for (const method of methods) {
+    const current = console[method];
+    if (typeof current !== "function") continue;
+
+    const bound = current.bind(console) as (...args: unknown[]) => void;
+    loggerOriginalConsole[method] = bound;
+
+    (console as unknown as Record<string, (...args: unknown[]) => void>)[
+      method
+    ] = (...args: unknown[]) => {
+      appendLoggerEntry(
+        levelByMethod[method],
+        "console",
+        formatConsoleArgs(args),
+        {
+          ...loggerRuntimeContext(),
+        },
+      );
+      bound(...args);
+    };
+  }
+
+  return () => {
+    for (const method of methods) {
+      const original = loggerOriginalConsole[method];
+      if (!original) continue;
+      (console as unknown as Record<string, (...args: unknown[]) => void>)[
+        method
+      ] = original;
+    }
+  };
+}
+
+function initLoggerRuntimeEvents(): Cleanup {
+  const onError = (event: ErrorEvent) => {
+    appendLoggerEntry(
+      "error",
+      "runtime",
+      event.message || "Unhandled runtime error",
+      {
+        ...loggerRuntimeContext(),
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        error: toSerializable(event.error),
+      },
+    );
+  };
+
+  const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+    appendLoggerEntry("error", "runtime", "Unhandled promise rejection", {
+      ...loggerRuntimeContext(),
+      reason: toSerializable(event.reason),
+    });
+  };
+
+  const onVisibilityChange = () => {
+    appendLoggerEntry("info", "runtime", "visibilitychange", {
+      ...loggerRuntimeContext(),
+    });
+  };
+
+  const onOnline = () => {
+    appendLoggerEntry("info", "runtime", "network-online", {
+      ...loggerRuntimeContext(),
+    });
+  };
+
+  const onOffline = () => {
+    appendLoggerEntry("warn", "runtime", "network-offline", {
+      ...loggerRuntimeContext(),
+    });
+  };
+
+  const onPageShow = () => {
+    appendLoggerEntry("info", "runtime", "pageshow", {
+      ...loggerRuntimeContext(),
+    });
+  };
+
+  const onPageHide = () => {
+    appendLoggerEntry("info", "runtime", "pagehide", {
+      ...loggerRuntimeContext(),
+    });
+  };
+
+  const onBeforeUnload = () => {
+    markLoggerSessionEnded();
+  };
+
+  globalThis.addEventListener("error", onError);
+  globalThis.addEventListener("unhandledrejection", onUnhandledRejection);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  globalThis.addEventListener("online", onOnline);
+  globalThis.addEventListener("offline", onOffline);
+  globalThis.addEventListener("pageshow", onPageShow);
+  globalThis.addEventListener("pagehide", onPageHide);
+  globalThis.addEventListener("beforeunload", onBeforeUnload);
+
+  return () => {
+    globalThis.removeEventListener("error", onError);
+    globalThis.removeEventListener("unhandledrejection", onUnhandledRejection);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    globalThis.removeEventListener("online", onOnline);
+    globalThis.removeEventListener("offline", onOffline);
+    globalThis.removeEventListener("pageshow", onPageShow);
+    globalThis.removeEventListener("pagehide", onPageHide);
+    globalThis.removeEventListener("beforeunload", onBeforeUnload);
+  };
+}
+
+function buildLoggerExport(reason = "manual"): LoggerExportPayload {
+  return {
+    schemaVersion: LOGGER_SCHEMA_VERSION,
+    generatedAt: loggerNowIso(),
+    sessionId: loggerSessionId,
+    userAgent: navigator.userAgent,
+    location: `${globalThis.location.origin}${globalThis.location.pathname}`,
+    reason,
+    totalEntries: loggerEntries.length,
+    entries: [...loggerEntries],
+  };
+}
+
+function buildLoggerFileName(reason: string): string {
+  const compactReason =
+    reason
+      .trim()
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9_-]+/g, "-")
+      .replaceAll(/-{2,}/g, "-")
+      .replaceAll(/(^-|-$)/g, "") || "manual";
+  const stamp = loggerNowIso().replaceAll(/[:.]/g, "-");
+  return `nosubvod-logs-${compactReason}-${stamp}.json`;
+}
+
+async function downloadLogger(reason = "manual"): Promise<string | null> {
+  const payload = buildLoggerExport(reason);
+  const fileName = buildLoggerFileName(reason);
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+
+  const shareNavigator = navigator as NavigatorWithShare;
+  try {
+    if (
+      typeof File !== "undefined" &&
+      typeof shareNavigator.share === "function"
+    ) {
+      const file = new File([blob], fileName, { type: "application/json" });
+      const canShare =
+        typeof shareNavigator.canShare !== "function" ||
+        shareNavigator.canShare({ files: [file] });
+
+      if (canShare) {
+        await shareNavigator.share({
+          title: "NoSubVOD logs",
+          files: [file],
+        });
+        return fileName;
+      }
+    }
+  } catch {
+    // Ignore share failures and fallback to browser download.
+  }
+
+  try {
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.rel = "noopener";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+    return fileName;
+  } catch {
+    return null;
+  }
+}
+
+function clearLoggerEntries() {
+  loggerEntries = [];
+  loggerSequence = 0;
+  persistLoggerEntries();
+}
+
+function exposeLoggerApi() {
+  const runtimeGlobal = getDebugGlobal();
+
+  const api: LoggerApi = {
+    get enabled() {
+      return loggerEnabled;
+    },
+    get sessionId() {
+      return loggerSessionId;
+    },
+    log(level, source, message, context) {
+      appendLoggerEntry(level, source, message, context);
+    },
+    component(componentName, phase, context) {
+      appendLoggerEntry(
+        "info",
+        "component",
+        `${componentName}:${phase}`,
+        context,
+      );
+    },
+    getEntries() {
+      return [...loggerEntries];
+    },
+    exportLogs(reason = "manual") {
+      return buildLoggerExport(reason);
+    },
+    download(reason = "manual") {
+      return downloadLogger(reason);
+    },
+    clear() {
+      clearLoggerEntries();
+    },
+  };
+
+  runtimeGlobal.__NSV_LOGGER__ = api;
+  runtimeGlobal.__NSV_EXPORT_LOGS__ = (reason = "manual") =>
+    api.download(reason);
+}
+
+function teardownNSVLogger() {
+  for (const cleanup of loggerCleanups) {
+    cleanup();
+  }
+  loggerCleanups = [];
+
+  if (loggerHeartbeatTimer !== null) {
+    globalThis.clearInterval(loggerHeartbeatTimer);
+    loggerHeartbeatTimer = null;
+  }
+
+  if (loggerEnabled) {
+    markLoggerSessionEnded();
+  }
+
+  loggerEnabled = false;
+}
+
+export function initNSVLogger(enabled: boolean) {
+  teardownNSVLogger();
+
+  const hadLoggerInitialized = loggerInitialized;
+  loggerEntries = loadLoggerEntriesFromStorage();
+  loggerSequence = loggerEntries[loggerEntries.length - 1]?.id ?? 0;
+  loggerSessionId = generateLoggerSessionId();
+  loggerStartedAt = loggerNowIso();
+
+  exposeLoggerApi();
+
+  if (!enabled) {
+    loggerInitialized = false;
+    loggerStartedAt = "";
+    return;
+  }
+
+  const previousSession = readActiveLoggerSession();
+
+  loggerEnabled = true;
+  loggerInitialized = true;
+
+  writeActiveLoggerSession({
+    sessionId: loggerSessionId,
+    startedAt: loggerStartedAt,
+    lastSeenAt: loggerNowIso(),
+    route: `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`,
+    entryCount: loggerEntries.length,
+  });
+
+  loggerCleanups.push(initLoggerConsolePatch(), initLoggerRuntimeEvents());
+
+  loggerHeartbeatTimer = globalThis.setInterval(() => {
+    if (!loggerEnabled) return;
+    writeActiveLoggerSession({
+      sessionId: loggerSessionId,
+      startedAt: loggerStartedAt,
+      lastSeenAt: loggerNowIso(),
+      route: `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`,
+      entryCount: loggerEntries.length,
+    });
+  }, LOGGER_HEARTBEAT_MS);
+
+  appendLoggerEntry("info", "logger", "logger-started", {
+    ...loggerRuntimeContext(),
+    existingEntries: loggerEntries.length,
+    loggerInitializedPreviously: hadLoggerInitialized,
+  });
+
+  if (previousSession && !previousSession.endedAt) {
+    appendLoggerEntry("warn", "logger", "possible-previous-crash-detected", {
+      previousSession,
+    });
+  }
+}
+
+export function nsvComponentLog(
+  componentName: string,
+  phase: string,
+  context?: Record<string, unknown>,
+) {
+  appendLoggerEntry("info", "component", `${componentName}:${phase}`, context);
 }
 
 function ensureBenchmarkStyle() {

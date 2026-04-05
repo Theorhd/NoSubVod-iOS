@@ -40,7 +40,7 @@ use super::{
     },
 };
 use moka::future::Cache;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 async fn handle_get_extensions(State(state): State<ApiState>) -> impl IntoResponse {
     Json(state.extensions.list().await)
@@ -484,6 +484,37 @@ async fn handle_profile_export(State(state): State<ApiState>) -> AppResult<Respo
         )
         .body(Body::from(json))
         .map_err(|e| AppError::Internal(e.to_string()))
+}
+
+async fn handle_export_diagnostic_logs(State(state): State<ApiState>) -> AppResult<Response> {
+    tokio::fs::create_dir_all(&state.logs_dir)
+        .await
+        .map_err(AppError::Io)?;
+
+    let backend_log_path = state.logs_dir.join("backend.log");
+    let log_content = match tokio::fs::read_to_string(&backend_log_path).await {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            "No backend log file found yet. Logs will appear after backend activity.\n".to_string()
+        }
+        Err(error) => return Err(AppError::Io(error)),
+    };
+
+    let exported_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let file_name = format!("nosubvod-diagnostics-backend-{exported_at}.log");
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{file_name}\""),
+        )
+        .body(Body::from(log_content))
+        .map_err(|error| AppError::Internal(error.to_string()))
 }
 
 async fn handle_profile_import(
@@ -1308,6 +1339,10 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
         )
         .route("/profile/export", get(handle_profile_export))
         .route("/profile/import", post(handle_profile_import))
+        .route(
+            "/diagnostics/logs/export",
+            get(handle_export_diagnostic_logs),
+        )
         .route("/capabilities", get(handle_get_capabilities))
         .route("/screenshare/state", get(handle_get_screenshare_state))
         .route("/screenshare/ws", get(handle_screenshare_ws))
@@ -1464,6 +1499,7 @@ mod tests {
             screenshare,
             extensions,
             oauth,
+            logs_dir: std::env::temp_dir().join("nosubvod-test-logs"),
             server_token: "test_token".to_string(),
             app_handle: None,
             download_cache,
