@@ -125,6 +125,11 @@ fn resolve_target_quality_height(
     }
 }
 
+fn is_strict_quality_mode(mode: Option<&str>) -> bool {
+    let value = mode.map(str::trim).unwrap_or_default();
+    value.eq_ignore_ascii_case("strict") || value.eq_ignore_ascii_case("lock")
+}
+
 // ── Route handlers ────────────────────────────────────────────────────────────
 
 async fn handle_vod_chat(
@@ -214,7 +219,13 @@ async fn handle_vod_master(
         q.quality.as_deref(),
         settings.default_video_quality.as_deref(),
     ) {
-        body = lock_master_playlist_to_height(&body, target_height);
+        if is_strict_quality_mode(q.quality_mode.as_deref()) {
+            body = lock_master_playlist_to_height(&body, target_height);
+        } else {
+            // VOD defaults to capped ABR to preserve fallback renditions and avoid infinite
+            // buffering when the requested fixed rendition stalls on mobile networks.
+            body = cap_master_playlist_to_max_height(&body, target_height);
+        }
     }
 
     body = ensure_video_media_default(&body);

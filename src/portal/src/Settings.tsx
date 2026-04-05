@@ -245,8 +245,9 @@ const VideoPlayerSection = React.memo(
           <option value="1080">1080p</option>
         </select>
         <small className="help-text">
-          En 1080p/720p/480p, le player force cette résolution si disponible. En
-          Automatique, la qualité reste adaptative.
+          En 1080p/720p/480p, le player utilise cette valeur comme qualité
+          maximale avec fallback automatique pour plus de stabilité. En auto, il
+          adapte dynamiquement.
         </small>
       </div>
     </div>
@@ -1203,18 +1204,22 @@ export default function Settings() {
 
       const loggerRuntime = globalThis as typeof globalThis &
         FrontendLoggerRuntime;
-      const frontendPayload =
-        loggerRuntime.__NSV_LOGGER__?.exportLogs?.("settings-diagnostics") || {
-          schemaVersion: 1,
-          generatedAt: new Date().toISOString(),
-          reason: "settings-diagnostics-fallback",
-          loggerAvailable: false,
-          entries: [],
-        };
+      const frontendPayload = loggerRuntime.__NSV_LOGGER__?.exportLogs?.(
+        "settings-diagnostics",
+      ) || {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        reason: "settings-diagnostics-fallback",
+        loggerAvailable: false,
+        entries: [],
+      };
 
-      const frontendBlob = new Blob([JSON.stringify(frontendPayload, null, 2)], {
-        type: "application/json",
-      });
+      const frontendBlob = new Blob(
+        [JSON.stringify(frontendPayload, null, 2)],
+        {
+          type: "application/json",
+        },
+      );
       const frontendFileName = buildFallbackFrontendDiagnosticsFilename();
 
       const maybeNavigator = globalThis.navigator as Navigator & {

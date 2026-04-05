@@ -24,6 +24,8 @@ pub struct VariantProxyQuery {
 #[derive(Deserialize)]
 pub struct QualityQuery {
     pub quality: Option<String>,
+    #[serde(rename = "qualityMode")]
+    pub quality_mode: Option<String>,
 }
 
 #[derive(Deserialize)]
