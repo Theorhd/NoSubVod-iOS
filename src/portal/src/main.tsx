@@ -24,6 +24,11 @@ const API_INVOKE_TIMEOUT_MS = 10000;
 const API_RETRY_DELAY_MS = 250;
 const API_MAX_IDEMPOTENT_RETRIES = 1;
 
+const TWITCH_DEEP_LINK_PROTOCOL = "nosubvod:";
+const TWITCH_DEEP_LINK_HOST = "auth";
+const TWITCH_DEEP_LINK_PATH = "/twitch/callback";
+const TWITCH_OAUTH_STATUS_STORAGE_KEY = "nsv_twitch_oauth_status";
+
 type ApiInvokeCommand = "internal_api_request" | "proxy_remote_request";
 
 class ApiInvokeTimeoutError extends Error {
@@ -101,6 +106,20 @@ function buildInvokeResponse(result: InternalApiInvokeResponse): Response {
 function isTauriRuntime(): boolean {
   return Boolean(
     (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
+  );
+}
+
+function isIosFamilyRuntime(): boolean {
+  if (!isTauriRuntime()) {
+    return false;
+  }
+
+  const ua = globalThis.navigator.userAgent.toLowerCase();
+  return (
+    ua.includes("iphone") ||
+    ua.includes("ipad") ||
+    ua.includes("ipod") ||
+    (ua.includes("macintosh") && "ontouchend" in document)
   );
 }
 
@@ -374,6 +393,183 @@ function createDeviceId(): string {
   return `dev_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
 }
 
+function disableAppZoomOnIos(): void {
+  if (!isIosFamilyRuntime()) {
+    return;
+  }
+
+  const blockGesture = (event: Event) => {
+    event.preventDefault();
+  };
+
+  let lastTouchEndAt = 0;
+  const blockDoubleTap = (event: TouchEvent) => {
+    const now = Date.now();
+    if (now - lastTouchEndAt <= 300) {
+      event.preventDefault();
+    }
+    lastTouchEndAt = now;
+  };
+
+  document.addEventListener("gesturestart", blockGesture, { passive: false });
+  document.addEventListener("gesturechange", blockGesture, {
+    passive: false,
+  });
+  document.addEventListener("gestureend", blockGesture, { passive: false });
+  document.addEventListener("touchend", blockDoubleTap, { passive: false });
+}
+
+type TwitchOAuthBridgeStatus = "success" | "error";
+
+type TwitchOAuthBridgePayload = {
+  type: "nsv:twitch-auth";
+  status: TwitchOAuthBridgeStatus;
+  at: number;
+  message?: string;
+  userLogin?: string;
+  userDisplayName?: string;
+};
+
+const handledTwitchDeepLinks = new Set<string>();
+
+function parseTwitchOAuthDeepLink(rawUrl: string): URL | null {
+  try {
+    const parsed = new URL(rawUrl);
+    const isExpectedProtocol =
+      parsed.protocol.toLowerCase() === TWITCH_DEEP_LINK_PROTOCOL;
+    if (!isExpectedProtocol) {
+      return null;
+    }
+
+    const isExpectedHost =
+      parsed.hostname.toLowerCase() === TWITCH_DEEP_LINK_HOST;
+    const isExpectedPath =
+      parsed.pathname.toLowerCase() === TWITCH_DEEP_LINK_PATH;
+    const hasOAuthParams =
+      parsed.searchParams.has("code") ||
+      parsed.searchParams.has("error") ||
+      parsed.searchParams.has("state");
+
+    if ((isExpectedHost && isExpectedPath) || hasOAuthParams) {
+      return parsed;
+    }
+  } catch {
+    // Ignore invalid URLs.
+  }
+
+  return null;
+}
+
+function publishTwitchOAuthBridgePayload(payload: TwitchOAuthBridgePayload) {
+  try {
+    localStorage.setItem(
+      TWITCH_OAUTH_STATUS_STORAGE_KEY,
+      JSON.stringify(payload),
+    );
+  } catch {
+    // Ignore storage failures.
+  }
+
+  try {
+    globalThis.postMessage(payload, globalThis.location.origin);
+  } catch {
+    // Ignore dispatch failures.
+  }
+}
+
+async function exchangeTwitchOAuthFromDeepLink(rawUrl: string): Promise<void> {
+  const parsed = parseTwitchOAuthDeepLink(rawUrl);
+  if (!parsed) {
+    return;
+  }
+
+  const body = {
+    code: parsed.searchParams.get("code"),
+    state: parsed.searchParams.get("state"),
+    error: parsed.searchParams.get("error"),
+    error_description: parsed.searchParams.get("error_description"),
+  };
+
+  try {
+    const response = await fetch("/api/auth/twitch/exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+      userLogin?: string;
+      userDisplayName?: string;
+    } | null;
+
+    if (!response.ok) {
+      publishTwitchOAuthBridgePayload({
+        type: "nsv:twitch-auth",
+        status: "error",
+        at: Date.now(),
+        message:
+          payload?.error ||
+          "Impossible de finaliser la connexion Twitch depuis le deep link.",
+      });
+      return;
+    }
+
+    publishTwitchOAuthBridgePayload({
+      type: "nsv:twitch-auth",
+      status: "success",
+      at: Date.now(),
+      message: "Compte Twitch lie.",
+      userLogin: payload?.userLogin,
+      userDisplayName: payload?.userDisplayName,
+    });
+  } catch (error) {
+    publishTwitchOAuthBridgePayload({
+      type: "nsv:twitch-auth",
+      status: "error",
+      at: Date.now(),
+      message: normalizeErrorMessage(error),
+    });
+  }
+}
+
+async function setupTwitchDeepLinkBridge(): Promise<void> {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  try {
+    const { getCurrent, onOpenUrl } =
+      await import("@tauri-apps/plugin-deep-link");
+
+    const processUrls = async (urls: string[] | null | undefined) => {
+      if (!Array.isArray(urls) || urls.length === 0) {
+        return;
+      }
+
+      for (const rawUrl of urls) {
+        if (handledTwitchDeepLinks.has(rawUrl)) {
+          continue;
+        }
+
+        if (!parseTwitchOAuthDeepLink(rawUrl)) {
+          continue;
+        }
+
+        handledTwitchDeepLinks.add(rawUrl);
+        await exchangeTwitchOAuthFromDeepLink(rawUrl);
+      }
+    };
+
+    await processUrls(await getCurrent());
+    await onOpenUrl((urls) => {
+      void processUrls(urls);
+    });
+  } catch (error) {
+    console.warn("[deep-link] Twitch OAuth bridge unavailable", error);
+  }
+}
+
 (function initDeviceId() {
   const existing = safeStorageGet(localStorage, "nsv_device_id");
   if (!existing) {
@@ -544,6 +740,8 @@ async function bootstrapPortal() {
   await initializeSecureTokenStorage();
   await initAuthTokenFromUrl();
   patchFetch();
+  disableAppZoomOnIos();
+  await setupTwitchDeepLinkBridge();
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <AppErrorBoundary>

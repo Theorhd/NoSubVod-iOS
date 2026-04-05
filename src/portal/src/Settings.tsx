@@ -16,6 +16,7 @@ import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { useServer } from "./ServerContext";
 import { useInterval } from "../../shared/hooks/useInterval";
 import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
+import { isMobileDevice } from "./utils/capabilities";
 
 const defaultSettings: ExperienceSettings = {
   oneSync: false,
@@ -107,8 +108,20 @@ function normalizeTwitchAuthUrl(rawAuthUrl: string): string {
   return authUrl;
 }
 
-async function fetchTwitchAuthUrl(): Promise<string> {
-  const startRes = await fetch("/api/auth/twitch/start");
+function resolveTwitchAuthPlatformHint(): string | null {
+  if (isTauriRuntime() && isMobileDevice()) {
+    return "ios";
+  }
+  return null;
+}
+
+async function fetchTwitchAuthUrl(
+  platformHint: string | null,
+): Promise<string> {
+  const search = platformHint
+    ? `?platform=${encodeURIComponent(platformHint)}`
+    : "";
+  const startRes = await fetch(`/api/auth/twitch/start${search}`);
   if (!startRes.ok) {
     const backendError = await extractErrorMessageFromResponse(startRes);
     throw new Error(
@@ -126,14 +139,7 @@ type TwitchLaunchResult = "opened" | "redirected";
 async function openTwitchAuthFlow(
   authUrl: string,
   popup: Window | null,
-  isTauri: boolean,
 ): Promise<TwitchLaunchResult> {
-  if (isTauri) {
-    const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(authUrl);
-    return "opened";
-  }
-
   if (popup && !popup.closed) {
     popup.location.href = authUrl;
     return "opened";
@@ -1208,16 +1214,12 @@ export default function Settings() {
       return;
     }
 
-    let popup: Window | null = null;
-    const isTauri = isTauriRuntime();
-    if (!isTauri) {
-      popup = globalThis.open("", "_blank", "noopener,noreferrer");
-    }
+    const popup = globalThis.open("", "_blank", "noopener,noreferrer");
 
     try {
-      const authUrl = await fetchTwitchAuthUrl();
+      const authUrl = await fetchTwitchAuthUrl(resolveTwitchAuthPlatformHint());
       setTwitchManualAuthUrl(authUrl);
-      const launchResult = await openTwitchAuthFlow(authUrl, popup, isTauri);
+      const launchResult = await openTwitchAuthFlow(authUrl, popup);
       setSuccess("Ouverture de Twitch...");
       setTwitchError("");
       if (launchResult === "opened") {
@@ -1246,11 +1248,8 @@ export default function Settings() {
 
       try {
         const authUrl = normalizeTwitchAuthUrl(manualAuthUrl);
-        const launchResult = await openTwitchAuthFlow(
-          authUrl,
-          null,
-          isTauriRuntime(),
-        );
+        const popup = globalThis.open("", "_blank", "noopener,noreferrer");
+        const launchResult = await openTwitchAuthFlow(authUrl, popup);
         setSuccess("Ouverture de Twitch...");
         if (launchResult === "opened") {
           startTwitchStatusPolling();

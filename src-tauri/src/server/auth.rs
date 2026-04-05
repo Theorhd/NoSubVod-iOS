@@ -7,6 +7,7 @@ use once_cell::sync::Lazy;
 
 use axum::{
     extract::{Query, State},
+    http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
     Json,
 };
@@ -19,7 +20,9 @@ use super::types::SubEntry;
 
 // ── CONFIGURE YOUR TWITCH APP HERE ─────────────────────────────────────────────
 // 1. Register your app at https://dev.twitch.tv/console/apps
-// 2. Add this redirect URI: http://localhost:23400/api/auth/twitch/callback
+// 2. Add these redirect URIs:
+//    - http://localhost:23400/api/auth/twitch/callback (desktop/web fallback)
+//    - Optional iOS-specific redirect must also be HTTP/HTTPS per Twitch policy
 // 3. Required scopes: user:read:follows user:write:chat
 // 4. Set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in src-tauri/.env (see .env.example)
 pub static TWITCH_CLIENT_ID: Lazy<String> = Lazy::new(|| {
@@ -47,13 +50,54 @@ pub static TWITCH_CLIENT_SECRET: Lazy<String> = Lazy::new(|| {
         })
 });
 
-const REDIRECT_URI: &str = "http://localhost:23400/api/auth/twitch/callback";
+const DEFAULT_LOOPBACK_REDIRECT_URI: &str = "http://localhost:23400/api/auth/twitch/callback";
 const SCOPES: &str = "user:read:follows user:write:chat";
+
+fn normalize_twitch_redirect_uri(value: String, fallback: &str) -> String {
+    let trimmed = value.trim().to_string();
+    if trimmed.is_empty() {
+        return fallback.to_string();
+    }
+
+    let lowered = trimmed.to_ascii_lowercase();
+    if lowered.starts_with("http://") || lowered.starts_with("https://") {
+        return trimmed;
+    }
+
+    tracing::warn!(
+        redirect = %trimmed,
+        "Ignoring unsupported Twitch redirect URI (must be HTTP/HTTPS)"
+    );
+    fallback.to_string()
+}
+
+pub static TWITCH_REDIRECT_URI: Lazy<String> = Lazy::new(|| {
+    normalize_twitch_redirect_uri(
+        std::env::var("TWITCH_REDIRECT_URI")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| DEFAULT_LOOPBACK_REDIRECT_URI.to_string()),
+        DEFAULT_LOOPBACK_REDIRECT_URI,
+    )
+});
+
+pub static TWITCH_REDIRECT_URI_IOS: Lazy<String> = Lazy::new(|| {
+    normalize_twitch_redirect_uri(
+        std::env::var("TWITCH_REDIRECT_URI_IOS")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| TWITCH_REDIRECT_URI.as_str().to_string()),
+        TWITCH_REDIRECT_URI.as_str(),
+    )
+});
 
 // ── In-memory OAuth pending state ──────────────────────────────────────────────
 
 pub struct PendingOAuth {
     pub code_verifier: String,
+    pub redirect_uri: String,
     pub created_at: u64,
 }
 
@@ -174,7 +218,29 @@ fn twitch_client_configured() -> bool {
     !TWITCH_CLIENT_ID.trim().is_empty() && !TWITCH_CLIENT_SECRET.trim().is_empty()
 }
 
-async fn build_twitch_auth_url(state: &ApiState) -> Result<String, Response> {
+#[derive(Deserialize, Default)]
+pub struct AuthStartQuery {
+    pub platform: Option<String>,
+}
+
+fn is_ios_platform_hint(platform: Option<&str>) -> bool {
+    matches!(
+        platform
+            .map(|value| value.trim().to_ascii_lowercase())
+            .as_deref(),
+        Some("ios") | Some("iphone") | Some("ipad") | Some("mobile")
+    )
+}
+
+fn resolve_redirect_uri(platform_hint: Option<&str>) -> String {
+    if is_ios_platform_hint(platform_hint) {
+        return TWITCH_REDIRECT_URI_IOS.as_str().to_string();
+    }
+
+    TWITCH_REDIRECT_URI.as_str().to_string()
+}
+
+async fn build_twitch_auth_url(state: &ApiState, redirect_uri: String) -> Result<String, Response> {
     if !twitch_client_configured() {
         return Err(client_not_configured());
     }
@@ -195,6 +261,7 @@ async fn build_twitch_auth_url(state: &ApiState) -> Result<String, Response> {
         state_token.clone(),
         PendingOAuth {
             code_verifier,
+            redirect_uri: redirect_uri.clone(),
             created_at: now,
         },
     );
@@ -209,7 +276,7 @@ async fn build_twitch_auth_url(state: &ApiState) -> Result<String, Response> {
          &code_challenge={challenge}\
          &code_challenge_method=S256",
         client_id = TWITCH_CLIENT_ID.as_str(),
-        redirect = urlencoding::encode(REDIRECT_URI),
+        redirect = urlencoding::encode(&redirect_uri),
         scopes = urlencoding::encode(SCOPES),
         state = state_token,
         challenge = challenge,
@@ -220,25 +287,6 @@ async fn build_twitch_auth_url(state: &ApiState) -> Result<String, Response> {
 
 // ── Route handlers ─────────────────────────────────────────────────────────────
 
-/// GET /api/auth/twitch/start
-/// Returns { authUrl } — frontend opens this URL in a new tab.
-pub async fn handle_auth_start(State(state): State<ApiState>) -> Response {
-    match build_twitch_auth_url(&state).await {
-        Ok(auth_url) => Json(serde_json::json!({ "authUrl": auth_url })).into_response(),
-        Err(err_response) => err_response,
-    }
-}
-
-/// GET /api/auth/twitch/begin
-/// Immediately redirects to Twitch OAuth so frontend can open this endpoint
-/// synchronously in a separate Safari sheet/window.
-pub async fn handle_auth_begin(State(state): State<ApiState>) -> Response {
-    match build_twitch_auth_url(&state).await {
-        Ok(auth_url) => Redirect::temporary(&auth_url).into_response(),
-        Err(err_response) => err_response,
-    }
-}
-
 #[derive(Deserialize)]
 pub struct CallbackQuery {
     code: Option<String>,
@@ -247,45 +295,37 @@ pub struct CallbackQuery {
     error_description: Option<String>,
 }
 
-use crate::server::error::{AppError, AppResult};
+struct OAuthExchangeSuccess {
+    user_login: String,
+    user_display_name: String,
+}
 
-/// GET /api/auth/twitch/callback  (Twitch redirects here after user approves)
-#[instrument(skip(state, q), fields(state_token = q.state))]
-pub async fn handle_auth_callback(
-    Query(q): Query<CallbackQuery>,
-    State(state): State<ApiState>,
-) -> Response {
-    info!("Received Twitch OAuth callback");
-
+async fn complete_twitch_auth_exchange(
+    state: &ApiState,
+    q: CallbackQuery,
+) -> Result<OAuthExchangeSuccess, String> {
     // Proactive cleanup
     state.oauth.cleanup_expired().await;
 
     if let Some(err) = q.error {
         let desc = q.error_description.unwrap_or_default();
-        return close_tab_html(
-            &format!("Twitch a refusé la connexion : {err} — {desc}"),
-            false,
-        )
-        .into_response();
+        return Err(format!("Twitch a refuse la connexion : {err} — {desc}"));
     }
 
     let (code, state_token) = match (q.code, q.state) {
         (Some(c), Some(s)) => (c, s),
-        _ => return close_tab_html("Paramètres OAuth manquants.", false).into_response(),
+        _ => return Err("Parametres OAuth manquants.".to_string()),
     };
 
-    let code_verifier = {
+    let pending_auth = {
         let mut pending = state.oauth.pending.write().await;
-        match pending.remove(&state_token) {
-            Some(p) => p.code_verifier,
-            None => {
-                return close_tab_html(
-                    "État OAuth invalide ou expiré. Reconnecte-toi depuis les Settings.",
-                    false,
-                )
-                .into_response()
-            }
-        }
+        pending.remove(&state_token)
+    };
+
+    let Some(pending_auth) = pending_auth else {
+        return Err(
+            "Etat OAuth invalide ou expire. Reconnecte-toi depuis les Settings.".to_string(),
+        );
     };
 
     // ── Exchange authorization code for access token ────────────────────────
@@ -297,8 +337,8 @@ pub async fn handle_auth_callback(
             ("client_secret", TWITCH_CLIENT_SECRET.as_str()),
             ("grant_type", "authorization_code"),
             ("code", code.as_str()),
-            ("redirect_uri", REDIRECT_URI),
-            ("code_verifier", code_verifier.as_str()),
+            ("redirect_uri", pending_auth.redirect_uri.as_str()),
+            ("code_verifier", pending_auth.code_verifier.as_str()),
         ])
         .send()
         .await;
@@ -307,22 +347,16 @@ pub async fn handle_auth_callback(
         Ok(r) if r.status().is_success() => match r.json::<serde_json::Value>().await {
             Ok(body) => match body.get("access_token").and_then(|v| v.as_str()) {
                 Some(t) => t.to_string(),
-                None => {
-                    return close_tab_html("Pas de token dans la réponse Twitch.", false)
-                        .into_response()
-                }
+                None => return Err("Pas de token dans la reponse Twitch.".to_string()),
             },
-            Err(e) => {
-                return close_tab_html(&format!("Réponse invalide : {e}"), false).into_response()
-            }
+            Err(e) => return Err(format!("Reponse invalide : {e}")),
         },
         Ok(r) => {
             let status = r.status();
             let body = r.text().await.unwrap_or_default();
-            return close_tab_html(&format!("Erreur Twitch {status}: {body}"), false)
-                .into_response();
+            return Err(format!("Erreur Twitch {status}: {body}"));
         }
-        Err(e) => return close_tab_html(&format!("Erreur réseau : {e}"), false).into_response(),
+        Err(e) => return Err(format!("Erreur reseau : {e}")),
     };
 
     // ── Fetch user profile ──────────────────────────────────────────────────
@@ -359,16 +393,10 @@ pub async fn handle_auth_callback(
                         .unwrap_or("")
                         .to_string(),
                 ),
-                None => {
-                    return close_tab_html("Impossible de récupérer le profil utilisateur.", false)
-                        .into_response()
-                }
+                None => return Err("Impossible de recuperer le profil utilisateur.".to_string()),
             }
         }
-        _ => {
-            return close_tab_html("Impossible de récupérer le profil utilisateur.", false)
-                .into_response()
-        }
+        _ => return Err("Impossible de recuperer le profil utilisateur.".to_string()),
     };
 
     // ── Persist ─────────────────────────────────────────────────────────────
@@ -404,13 +432,81 @@ pub async fn handle_auth_callback(
         }
     }
 
-    close_tab_html(
-        &format!(
-            "Connecté en tant que {user_display_name} (@{user_login})\nCette fenêtre va se fermer automatiquement."
-        ),
-        true,
-    )
-    .into_response()
+    Ok(OAuthExchangeSuccess {
+        user_login,
+        user_display_name,
+    })
+}
+
+/// GET /api/auth/twitch/start
+/// Returns { authUrl } — frontend opens this URL in a new tab.
+pub async fn handle_auth_start(
+    Query(query): Query<AuthStartQuery>,
+    State(state): State<ApiState>,
+) -> Response {
+    let redirect_uri = resolve_redirect_uri(query.platform.as_deref());
+    match build_twitch_auth_url(&state, redirect_uri).await {
+        Ok(auth_url) => Json(serde_json::json!({ "authUrl": auth_url })).into_response(),
+        Err(err_response) => err_response,
+    }
+}
+
+/// GET /api/auth/twitch/begin
+/// Immediately redirects to Twitch OAuth so frontend can open this endpoint
+/// synchronously in a separate Safari sheet/window.
+pub async fn handle_auth_begin(
+    Query(query): Query<AuthStartQuery>,
+    State(state): State<ApiState>,
+) -> Response {
+    let redirect_uri = resolve_redirect_uri(query.platform.as_deref());
+    match build_twitch_auth_url(&state, redirect_uri).await {
+        Ok(auth_url) => Redirect::temporary(&auth_url).into_response(),
+        Err(err_response) => err_response,
+    }
+}
+
+use crate::server::error::{AppError, AppResult};
+
+/// GET /api/auth/twitch/callback  (Twitch redirects here after user approves)
+#[instrument(skip(state, q), fields(state_token = q.state))]
+pub async fn handle_auth_callback(
+    Query(q): Query<CallbackQuery>,
+    State(state): State<ApiState>,
+) -> Response {
+    info!("Received Twitch OAuth callback");
+
+    match complete_twitch_auth_exchange(&state, q).await {
+        Ok(success) => close_tab_html(
+            &format!(
+                "Connecte en tant que {} (@{})\nCette fenetre va se fermer automatiquement.",
+                success.user_display_name, success.user_login
+            ),
+            true,
+        )
+        .into_response(),
+        Err(message) => close_tab_html(&message, false).into_response(),
+    }
+}
+
+/// POST /api/auth/twitch/exchange
+/// Body: same fields as OAuth callback query (code/state/error/error_description).
+pub async fn handle_auth_exchange(
+    State(state): State<ApiState>,
+    Json(q): Json<CallbackQuery>,
+) -> Response {
+    match complete_twitch_auth_exchange(&state, q).await {
+        Ok(success) => Json(serde_json::json!({
+            "ok": true,
+            "userLogin": success.user_login,
+            "userDisplayName": success.user_display_name,
+        }))
+        .into_response(),
+        Err(message) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": message })),
+        )
+            .into_response(),
+    }
 }
 
 /// GET /api/auth/twitch/status
@@ -657,6 +753,7 @@ mod tests {
                 "valid".to_string(),
                 PendingOAuth {
                     code_verifier: "v1".to_string(),
+                    redirect_uri: DEFAULT_LOOPBACK_REDIRECT_URI.to_string(),
                     created_at: now - 60,
                 },
             );
@@ -665,6 +762,7 @@ mod tests {
                 "expired".to_string(),
                 PendingOAuth {
                     code_verifier: "v2".to_string(),
+                    redirect_uri: DEFAULT_LOOPBACK_REDIRECT_URI.to_string(),
                     created_at: now - 660,
                 },
             );

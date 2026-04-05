@@ -93,6 +93,25 @@ npm run dev
 
 Le portail tourne en HTTPS sur `https://localhost:5173` en mode dev.
 
+### Configuration OAuth Twitch (iOS + fallback desktop)
+
+Dans la console Twitch (`Applications > Manage`), configure un Redirect URL loopback:
+
+- `http://localhost:23400/api/auth/twitch/callback`
+
+Note: selon ton compte/app, Twitch peut imposer des Redirect URLs en HTTPS.
+Si c'est ton cas, utilise une URL HTTPS supportée par ton app et configure-la via
+`TWITCH_REDIRECT_URI` / `TWITCH_REDIRECT_URI_IOS`.
+
+Puis configure `src-tauri/.env` (voir `src-tauri/.env.example`):
+
+```bash
+TWITCH_CLIENT_ID=...
+TWITCH_CLIENT_SECRET=...
+```
+
+Optionnel: surcharge des redirects si nécessaire (`TWITCH_REDIRECT_URI`, `TWITCH_REDIRECT_URI_IOS`).
+
 ### Qualité du code
 
 ```bash
