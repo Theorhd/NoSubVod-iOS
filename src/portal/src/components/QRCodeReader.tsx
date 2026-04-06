@@ -1,5 +1,9 @@
-import React, { useEffect, useRef } from "react";
-import { Html5QrcodeScanner, Html5QrcodeScanType } from "html5-qrcode";
+import React, { useEffect, useRef, useState } from "react";
+
+type Html5QrcodeModule = typeof import("html5-qrcode");
+type Html5QrcodeScannerType = InstanceType<
+  Html5QrcodeModule["Html5QrcodeScanner"]
+>;
 
 interface QRCodeReaderProps {
   onScan: (decodedText: string) => void;
@@ -11,36 +15,65 @@ export const QRCodeReader: React.FC<QRCodeReaderProps> = ({
   onClose,
 }) => {
   const containerId = "nsv-qr-reader";
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<Html5QrcodeScannerType | null>(null);
+  const [scannerStatus, setScannerStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
 
   useEffect(() => {
-    scannerRef.current = new Html5QrcodeScanner(
-      containerId,
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-        rememberLastUsedCamera: true,
-      },
-      /* verbose= */ false,
-    );
+    let disposed = false;
+    let activeScanner: Html5QrcodeScannerType | null = null;
 
-    scannerRef.current.render(
-      (decodedText) => {
-        if (scannerRef.current) {
-          scannerRef.current.clear();
-        }
-        onScan(decodedText);
-      },
-      (_error) => {
-        // ignore periodic scan failures
-      },
-    );
+    const setupScanner = async () => {
+      try {
+        setScannerStatus("loading");
+        const { Html5QrcodeScanner, Html5QrcodeScanType } =
+          await import("html5-qrcode");
+        if (disposed) return;
+
+        const scanner = new Html5QrcodeScanner(
+          containerId,
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+            rememberLastUsedCamera: true,
+          },
+          /* verbose= */ false,
+        );
+
+        scannerRef.current = scanner;
+        activeScanner = scanner;
+
+        scanner.render(
+          (decodedText) => {
+            if (scannerRef.current) {
+              void scannerRef.current.clear();
+            }
+            onScan(decodedText);
+          },
+          (_error) => {
+            // ignore periodic scan failures
+          },
+        );
+
+        setScannerStatus("ready");
+      } catch (error) {
+        if (disposed) return;
+        setScannerStatus("error");
+        console.error("[QRCodeReader] Failed to initialize scanner", error);
+      }
+    };
+
+    void setupScanner();
 
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(console.error);
+      disposed = true;
+      const scanner = activeScanner ?? scannerRef.current;
+      if (scanner) {
+        scanner.clear().catch(console.error);
       }
+      scannerRef.current = null;
     };
   }, [onScan]);
 
@@ -93,6 +126,32 @@ export const QRCodeReader: React.FC<QRCodeReaderProps> = ({
             &times;
           </button>
         </div>
+
+        {scannerStatus === "loading" && (
+          <p
+            style={{
+              marginBottom: "12px",
+              color: "#a3a3a3",
+              fontSize: "14px",
+              textAlign: "center",
+            }}
+          >
+            Initialisation du scanner...
+          </p>
+        )}
+
+        {scannerStatus === "error" && (
+          <p
+            style={{
+              marginBottom: "12px",
+              color: "#ef4444",
+              fontSize: "14px",
+              textAlign: "center",
+            }}
+          >
+            Impossible de charger le scanner QR.
+          </p>
+        )}
 
         <div id={containerId} style={{ width: "100%", color: "#000" }}></div>
 

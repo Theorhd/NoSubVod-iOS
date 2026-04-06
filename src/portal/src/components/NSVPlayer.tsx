@@ -15,7 +15,7 @@ import {
   defaultLayoutIcons,
   DefaultVideoLayout,
 } from "@vidstack/react/player/layouts/default";
-import Hls from "hls.js/dist/hls.light.js";
+import type Hls from "hls.js";
 import { safeStorageGet } from "../../../shared/utils/storage";
 import {
   getActiveToken,
@@ -46,6 +46,12 @@ function getHlsStabilityConfig(lockToFixedQuality: boolean) {
     nudgeMaxRetry: 8,
     abrEwmaDefaultEstimate: 24_000_000,
   };
+}
+
+function loadHlsLightLibrary() {
+  return import("hls.js/dist/hls.light.js") as Promise<
+    { default: typeof Hls } | undefined
+  >;
 }
 
 function hasFixedQualityPreference(
@@ -921,7 +927,7 @@ const NSVPlayer = React.memo(
       (provider: any) => {
         if (provider?.type === "hls") {
           if (!canUseHlsJs()) return;
-          provider.library = Hls;
+          provider.library = loadHlsLightLibrary;
           const hlsConfig = getHlsStabilityConfig(
             hasFixedQualityPreference(defaultQuality),
           );

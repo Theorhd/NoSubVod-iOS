@@ -81,9 +81,7 @@ fn init_tracing(logs_dir: PathBuf) {
 
 #[cfg(not(test))]
 fn init_rustls_crypto_provider() {
-    // rustls 0.23 may require explicit provider installation when both
-    // providers are enabled through the dependency graph.
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    // Install a single crypto provider explicitly to keep startup deterministic.
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
@@ -147,6 +145,5 @@ pub fn run() {}
 #[cfg(test)]
 #[ctor::ctor]
 fn init_tests() {
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
