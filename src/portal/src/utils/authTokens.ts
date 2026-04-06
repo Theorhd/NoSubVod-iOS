@@ -75,14 +75,12 @@ async function getSecureStorage(): Promise<SecureStorageFacade | null> {
     return null;
   }
 
-  if (!secureStoragePromise) {
-    secureStoragePromise = import("tauri-plugin-secure-storage")
-      .then((module) => module.secureStorage)
-      .catch((error) => {
-        logSecureStorageWarning(error);
-        return null;
-      });
-  }
+  secureStoragePromise ??= import("tauri-plugin-secure-storage")
+    .then((module) => module.secureStorage)
+    .catch((error) => {
+      logSecureStorageWarning(error);
+      return null;
+    });
 
   return secureStoragePromise;
 }
