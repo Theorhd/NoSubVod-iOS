@@ -165,6 +165,10 @@ export default function MultiView() {
             <NSVPlayer
               source={{
                 src: (() => {
+                  if (slot.type === "live") {
+                    return `/api/live/${encodeURIComponent(slot.targetId)}/master.m3u8`;
+                  }
+
                   const quality = (
                     settings.defaultVideoQuality || "auto"
                   ).trim();
@@ -172,9 +176,7 @@ export default function MultiView() {
                     ? `?quality=${encodeURIComponent(quality)}`
                     : "";
 
-                  return slot.type === "live"
-                    ? `/api/live/${encodeURIComponent(slot.targetId)}/master.m3u8${qualityQuery}`
-                    : `/api/vod/${encodeURIComponent(slot.targetId)}/master.m3u8${qualityQuery}`;
+                  return `/api/vod/${encodeURIComponent(slot.targetId)}/master.m3u8${qualityQuery}`;
                 })(),
                 type: "application/x-mpegurl",
               }}

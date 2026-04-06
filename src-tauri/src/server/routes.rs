@@ -234,7 +234,6 @@ async fn handle_vod_master(
 
 async fn handle_live_master(
     Path(login): Path<String>,
-    Query(q): Query<QualityQuery>,
     State(state): State<ApiState>,
     headers: axum::http::HeaderMap,
 ) -> AppResult<Response> {
@@ -259,15 +258,6 @@ async fn handle_live_master(
     } else {
         m3u8
     };
-
-    if let Some(target_height) = resolve_target_quality_height(
-        q.quality.as_deref(),
-        settings.default_video_quality.as_deref(),
-    ) {
-        // Live playback keeps ABR fallbacks below the selected quality to avoid
-        // stalls on mobile networks while still honoring an upper quality bound.
-        body = cap_master_playlist_to_max_height(&body, target_height);
-    }
 
     body = ensure_video_media_default(&body);
 

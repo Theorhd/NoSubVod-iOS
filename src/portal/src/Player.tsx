@@ -825,7 +825,7 @@ function VodLivePlayer({
 
     if (liveId) {
       return {
-        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8${buildQualityQuery(normalizedDefaultQuality)}`,
+        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8`,
         type: "application/x-mpegurl",
         streamType: "live" as const,
       };
