@@ -1299,6 +1299,7 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
             header::CONTENT_TYPE,
             header::AUTHORIZATION,
             "x-nsv-token".parse().unwrap(),
+            "x-nsv-device-id".parse().unwrap(),
         ])
         .expose_headers([
             header::CONTENT_RANGE,

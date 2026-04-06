@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DownloadedFile, ActiveDownload } from "../../../shared/types";
 import { useInterval } from "../../../shared/hooks/useInterval";
+import { usePageVisibility } from "../../../shared/hooks/usePageVisibility";
 import { getActiveToken, getRemoteServerToken } from "../utils/authTokens";
 
 const DEBUG_DOWNLOADS = false;
@@ -16,11 +17,7 @@ export function useDownloadsData() {
   const [activeDownloads, setActiveDownloads] = useState<ActiveDownload[]>([]);
   const [loading, setLoading] = useState(true);
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
-  const [isPageVisible, setIsPageVisible] = useState(() =>
-    typeof document === "undefined"
-      ? true
-      : document.visibilityState === "visible",
-  );
+  const isPageVisible = usePageVisibility();
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
@@ -75,10 +72,6 @@ export function useDownloadsData() {
   }, [fetchDownloads]);
 
   useEffect(() => {
-    const onVisibilityChange = () => {
-      setIsPageVisible(document.visibilityState === "visible");
-    };
-
     const onOnline = () => {
       setIsOnline(true);
     };
@@ -87,11 +80,9 @@ export function useDownloadsData() {
       setIsOnline(false);
     };
 
-    document.addEventListener("visibilitychange", onVisibilityChange);
     globalThis.addEventListener("online", onOnline);
     globalThis.addEventListener("offline", onOffline);
     return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
       globalThis.removeEventListener("online", onOnline);
       globalThis.removeEventListener("offline", onOffline);
     };

@@ -387,6 +387,13 @@ function withTransientQuery(url: string, key: string, value: string): string {
   }
 }
 
+type WebkitPresentationVideo = HTMLVideoElement & {
+  webkitPresentationMode?: string;
+  webkitSetPresentationMode?: (
+    mode: "inline" | "fullscreen" | "picture-in-picture",
+  ) => void;
+};
+
 const NSVPlayer = React.memo(
   ({
     source,
@@ -451,6 +458,48 @@ const NSVPlayer = React.memo(
         type: source.type,
       };
     }, [source.src, source.type, useNativeResumeRefresh, resumeRevision]);
+
+    const exitPictureInPictureIfNeeded = useCallback(() => {
+      const doc = document as Document & {
+        pictureInPictureElement?: Element | null;
+        exitPictureInPicture?: () => Promise<void>;
+      };
+
+      if (
+        typeof doc.exitPictureInPicture === "function" &&
+        doc.pictureInPictureElement
+      ) {
+        void doc.exitPictureInPicture().catch(() => {
+          // Ignore when PiP is already detached while the view is unmounting.
+        });
+      }
+
+      const playerRoot = (playerRef.current?.el || playerRef.current) as
+        | HTMLElement
+        | undefined;
+      const activeVideo = playerRoot?.querySelector("video");
+      const webkitVideo = activeVideo as WebkitPresentationVideo | null;
+
+      if (
+        webkitVideo &&
+        typeof webkitVideo.webkitSetPresentationMode === "function" &&
+        webkitVideo.webkitPresentationMode === "picture-in-picture"
+      ) {
+        void Promise.resolve()
+          .then(() => {
+            webkitVideo.webkitSetPresentationMode?.("inline");
+          })
+          .catch(() => {
+            // Ignore WebKit-specific transition errors during teardown.
+          });
+      }
+    }, []);
+
+    useEffect(() => {
+      return () => {
+        exitPictureInPictureIfNeeded();
+      };
+    }, [exitPictureInPictureIfNeeded]);
 
     const effectiveMuted = muted || (autoPlay && isMobileDevice());
 

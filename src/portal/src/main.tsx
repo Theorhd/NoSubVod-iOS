@@ -23,6 +23,7 @@ type InternalApiInvokeResponse = {
 const API_INVOKE_TIMEOUT_MS = 10000;
 const API_RETRY_DELAY_MS = 250;
 const API_MAX_IDEMPOTENT_RETRIES = 1;
+const IOS_LOCAL_API_BASE_URL = "http://127.0.0.1:23400";
 
 const TWITCH_DEEP_LINK_PROTOCOL = "nosubvod:";
 const TWITCH_DEEP_LINK_HOST = "auth";
@@ -398,17 +399,11 @@ function disableAppZoomOnIos(): void {
     return;
   }
 
+  // Prevents iOS double-tap zoom without cancelling regular tap/click events.
+  document.documentElement.style.touchAction = "manipulation";
+
   const blockGesture = (event: Event) => {
     event.preventDefault();
-  };
-
-  let lastTouchEndAt = 0;
-  const blockDoubleTap = (event: TouchEvent) => {
-    const now = Date.now();
-    if (now - lastTouchEndAt <= 300) {
-      event.preventDefault();
-    }
-    lastTouchEndAt = now;
   };
 
   document.addEventListener("gesturestart", blockGesture, { passive: false });
@@ -416,7 +411,30 @@ function disableAppZoomOnIos(): void {
     passive: false,
   });
   document.addEventListener("gestureend", blockGesture, { passive: false });
-  document.addEventListener("touchend", blockDoubleTap, { passive: false });
+}
+
+function buildDirectLocalApiUrl(resolvedUrl: URL): string {
+  return `${IOS_LOCAL_API_BASE_URL}${resolvedUrl.pathname}${resolvedUrl.search}`;
+}
+
+function shouldAttemptDirectLocalApiFallback(
+  response: Response,
+  method: string,
+  shouldRouteToRemote: boolean,
+): boolean {
+  if (!isIosFamilyRuntime()) {
+    return false;
+  }
+
+  if (shouldRouteToRemote) {
+    return false;
+  }
+
+  if (!isIdempotentMethod(method)) {
+    return false;
+  }
+
+  return response.status >= 500;
 }
 
 type TwitchOAuthBridgeStatus = "success" | "error";
@@ -650,6 +668,7 @@ function patchFetch() {
       resolveApiRequestContext(url);
 
     if (isApiCall) {
+      const requestMethod = (init?.method || "GET").toUpperCase();
       const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
       const serverToken = getRemoteServerToken();
       const remoteSessionEnabled = Boolean(serverUrl && serverToken);
@@ -674,7 +693,45 @@ function patchFetch() {
         serverUrl,
       );
       if (tauriResponse) {
-        return tauriResponse;
+        return tauriResponse.then(async (response) => {
+          if (
+            !resolvedUrl ||
+            !shouldAttemptDirectLocalApiFallback(
+              response,
+              requestMethod,
+              shouldRouteToRemote,
+            )
+          ) {
+            return response;
+          }
+
+          try {
+            const fallbackResponse = await originalFetch.call(
+              globalThis,
+              buildDirectLocalApiUrl(resolvedUrl),
+              {
+                ...init,
+                headers,
+              },
+            );
+
+            if (fallbackResponse.status < 500) {
+              console.warn("[fetch-guard] recovered via direct local API", {
+                path: apiPathname,
+                invokeStatus: response.status,
+                fallbackStatus: fallbackResponse.status,
+              });
+              return fallbackResponse;
+            }
+          } catch (fallbackError) {
+            console.warn(
+              "[fetch-guard] direct local API fallback failed",
+              fallbackError,
+            );
+          }
+
+          return response;
+        });
       }
 
       init = { ...init, headers };
