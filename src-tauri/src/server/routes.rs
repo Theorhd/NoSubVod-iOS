@@ -322,17 +322,38 @@ async fn handle_proxy_segment(
     }
 
     let settings = state.history.get_settings().await;
-    let resp = if let Some(id) = q.id {
-        state.twitch.proxy_segment(&id, &settings).await?
-    } else if let Some(url) = q.url {
-        state.twitch.proxy_segment_url(&url, &settings).await?
+    let first_attempt = if let Some(id) = q.id.as_deref() {
+        state.twitch.proxy_segment(id, &settings).await
+    } else if let Some(url) = q.url.as_deref() {
+        state.twitch.proxy_segment_url(url, &settings).await
     } else {
         return Err(AppError::BadRequest(
             "Missing id or url parameter".to_string(),
         ));
     };
 
-    let mut builder = Response::builder();
+    let resp = match first_attempt {
+        Ok(resp) => resp,
+        Err(first_error) => {
+            tracing::warn!(
+                error = %first_error,
+                "Transient segment proxy failure, retrying once"
+            );
+            tokio::time::sleep(Duration::from_millis(150)).await;
+
+            if let Some(id) = q.id.as_deref() {
+                state.twitch.proxy_segment(id, &settings).await?
+            } else if let Some(url) = q.url.as_deref() {
+                state.twitch.proxy_segment_url(url, &settings).await?
+            } else {
+                return Err(AppError::BadRequest(
+                    "Missing id or url parameter".to_string(),
+                ));
+            }
+        }
+    };
+
+    let mut builder = Response::builder().status(resp.status());
     builder = builder
         .header("x-cache-status", "MISS")
         .header(header::CACHE_CONTROL, "no-store");

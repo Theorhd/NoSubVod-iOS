@@ -444,14 +444,64 @@ const NSVPlayer = React.memo(
     const lockedQualityIndexRef = useRef<number | null>(null);
     const lastLockAttemptAtRef = useRef(0);
     const lastReadySourceRef = useRef<string | null>(null);
+    const lastRecoveryAtRef = useRef(0);
+    const recoveryWindowStartedAtRef = useRef(0);
+    const recoveryAttemptsInWindowRef = useRef(0);
+    const lastPlaybackProgressRef = useRef({ time: 0, observedAt: Date.now() });
     const [resumeRevision, setResumeRevision] = useState(0);
 
     const useNativeResumeRefresh =
       isMobileDevice() && canPlayHlsNatively() && !canUseHlsJs();
 
+    const queueSourceRefreshAndResume = useCallback((reason: string) => {
+      const now = Date.now();
+      if (now - lastRecoveryAtRef.current < 2500) {
+        return;
+      }
+
+      if (
+        recoveryWindowStartedAtRef.current <= 0 ||
+        now - recoveryWindowStartedAtRef.current > 120_000
+      ) {
+        recoveryWindowStartedAtRef.current = now;
+        recoveryAttemptsInWindowRef.current = 0;
+      }
+
+      if (recoveryAttemptsInWindowRef.current >= 4) {
+        return;
+      }
+
+      recoveryAttemptsInWindowRef.current += 1;
+      lastRecoveryAtRef.current = now;
+
+      const mediaState = storeRef.current as any;
+      const currentTime = Number(mediaState.currentTime || 0);
+      const canSeek =
+        Boolean(mediaState.canSeek) && Number(mediaState.duration || 0) > 0;
+
+      pendingResumeSeekRef.current =
+        canSeek && Number.isFinite(currentTime)
+          ? Math.max(0, currentTime)
+          : null;
+      pendingResumePlayRef.current = !mediaState.paused;
+
+      if (Number.isFinite(currentTime)) {
+        lastPlaybackProgressRef.current = {
+          time: Math.max(0, currentTime),
+          observedAt: now,
+        };
+      }
+
+      setResumeRevision((prev) => prev + 1);
+
+      console.warn("[NSVPlayer] Triggering source recovery refresh", {
+        reason,
+      });
+    }, []);
+
     const src = useMemo(() => {
       let resolvedSrc = withAuthQuery(source.src);
-      if (useNativeResumeRefresh && resumeRevision > 0) {
+      if (resumeRevision > 0) {
         resolvedSrc = withTransientQuery(
           resolvedSrc,
           "_resume",
@@ -463,7 +513,7 @@ const NSVPlayer = React.memo(
         src: resolvedSrc,
         type: source.type,
       };
-    }, [source.src, source.type, useNativeResumeRefresh, resumeRevision]);
+    }, [source.src, source.type, resumeRevision]);
 
     const exitPictureInPictureIfNeeded = useCallback(() => {
       const doc = document as Document & {
@@ -530,6 +580,15 @@ const NSVPlayer = React.memo(
     }, [store.error, onError]);
 
     useEffect(() => {
+      if (!store.error) return;
+
+      const isHls = (src.type || "").toLowerCase().includes("mpegurl");
+      if (!isHls) return;
+
+      queueSourceRefreshAndResume("store-error");
+    }, [queueSourceRefreshAndResume, src.type, store.error]);
+
+    useEffect(() => {
       if (!onError) return;
       const isHls = (src.type || "").toLowerCase().includes("mpegurl");
       if (!isHls) return;
@@ -538,6 +597,53 @@ const NSVPlayer = React.memo(
         onError("This browser cannot play HLS streams on this device.");
       }
     }, [onError, src.type]);
+
+    useEffect(() => {
+      const now = Date.now();
+      const currentTime = Number(store.currentTime || 0);
+
+      if (Number.isFinite(currentTime)) {
+        const previous = lastPlaybackProgressRef.current;
+        if (Math.abs(currentTime - previous.time) >= 0.2) {
+          lastPlaybackProgressRef.current = {
+            time: currentTime,
+            observedAt: now,
+          };
+          return;
+        }
+      }
+
+      const mediaState = store as any;
+      if (mediaState.paused || mediaState.ended || mediaState.seeking) {
+        lastPlaybackProgressRef.current.observedAt = now;
+      }
+    }, [store, store.currentTime, store.paused]);
+
+    useEffect(() => {
+      const isHls = (src.type || "").toLowerCase().includes("mpegurl");
+      if (!isHls) return;
+
+      const intervalId = globalThis.setInterval(() => {
+        const mediaState = storeRef.current as any;
+        if (!mediaState) return;
+        if (mediaState.paused || mediaState.ended) return;
+        if (!mediaState.canPlay) return;
+        if (mediaState.seeking) return;
+
+        const stagnantMs =
+          Date.now() - lastPlaybackProgressRef.current.observedAt;
+        if (stagnantMs < 15_000) return;
+
+        const reason = mediaState.waiting
+          ? "playback-waiting-stall"
+          : "playback-stall";
+        queueSourceRefreshAndResume(reason);
+      }, 3000);
+
+      return () => {
+        globalThis.clearInterval(intervalId);
+      };
+    }, [queueSourceRefreshAndResume, src.type]);
 
     useEffect(() => {
       if (didSeekOnStartRef.current) return;
@@ -551,20 +657,6 @@ const NSVPlayer = React.memo(
     useEffect(() => {
       if (!useNativeResumeRefresh) return;
 
-      const triggerResumeRefresh = () => {
-        const mediaState = storeRef.current;
-        const currentTime = Number(mediaState.currentTime || 0);
-        const canSeek =
-          Boolean(mediaState.canSeek) && Number(mediaState.duration || 0) > 0;
-
-        pendingResumeSeekRef.current =
-          canSeek && Number.isFinite(currentTime)
-            ? Math.max(0, currentTime)
-            : null;
-        pendingResumePlayRef.current = !mediaState.paused;
-        setResumeRevision((prev) => prev + 1);
-      };
-
       const onVisibilityChange = () => {
         if (document.visibilityState === "hidden") {
           wasBackgroundedRef.current = true;
@@ -573,7 +665,7 @@ const NSVPlayer = React.memo(
 
         if (wasBackgroundedRef.current) {
           wasBackgroundedRef.current = false;
-          triggerResumeRefresh();
+          queueSourceRefreshAndResume("visibility-resume");
         }
       };
 
@@ -584,7 +676,7 @@ const NSVPlayer = React.memo(
       const onPageShowOrFocus = () => {
         if (!wasBackgroundedRef.current) return;
         wasBackgroundedRef.current = false;
-        triggerResumeRefresh();
+        queueSourceRefreshAndResume("pageshow-focus");
       };
 
       document.addEventListener("visibilitychange", onVisibilityChange);
@@ -598,7 +690,7 @@ const NSVPlayer = React.memo(
         globalThis.removeEventListener("pageshow", onPageShowOrFocus);
         globalThis.removeEventListener("focus", onPageShowOrFocus);
       };
-    }, [useNativeResumeRefresh]);
+    }, [queueSourceRefreshAndResume, useNativeResumeRefresh]);
 
     useEffect(() => {
       const hasPendingSeek = pendingResumeSeekRef.current !== null;
@@ -638,6 +730,10 @@ const NSVPlayer = React.memo(
       lockedQualityIndexRef.current = null;
       lastLockAttemptAtRef.current = 0;
       lastReadySourceRef.current = null;
+      lastRecoveryAtRef.current = 0;
+      recoveryWindowStartedAtRef.current = 0;
+      recoveryAttemptsInWindowRef.current = 0;
+      lastPlaybackProgressRef.current = { time: 0, observedAt: Date.now() };
 
       if (hlsInstanceRef.current) {
         try {

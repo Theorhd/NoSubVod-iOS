@@ -11,7 +11,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tauri::async_runtime;
 use tokio::sync::RwLock;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
 
 use super::http_utils::{get_text_checked, get_text_with_direct_fallback};
@@ -475,6 +475,57 @@ impl TwitchService {
         new_client
     }
 
+    async fn fetch_segment_with_fallback(
+        &self,
+        target_url: &str,
+        preferred_client: &Client,
+    ) -> AppResult<reqwest::Response> {
+        let attempts = [
+            ("preferred", preferred_client.clone()),
+            ("android_tv", self.android_tv_client.clone()),
+            ("shared", self.shared_client.clone()),
+        ];
+
+        let mut last_error: Option<AppError> = None;
+
+        for (idx, (label, client)) in attempts.into_iter().enumerate() {
+            match client.get(target_url).send().await {
+                Ok(response) if response.status().is_success() => {
+                    if idx > 0 {
+                        warn!(
+                            stage = label,
+                            "Recovered segment fetch with fallback client"
+                        );
+                    }
+                    return Ok(response);
+                }
+                Ok(response) => {
+                    let status = response.status();
+                    warn!(
+                        stage = label,
+                        %status,
+                        "Segment upstream returned non-success status"
+                    );
+                    last_error = Some(AppError::TwitchApi(format!(
+                        "Segment upstream returned {status}"
+                    )));
+                }
+                Err(fetch_error) => {
+                    warn!(
+                        stage = label,
+                        error = %fetch_error,
+                        "Segment fetch attempt failed"
+                    );
+                    last_error = Some(AppError::from(fetch_error));
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            AppError::Internal("Segment fetch failed after all fallbacks".to_string())
+        }))
+    }
+
     #[instrument(skip(self, settings), fields(proxy_id = %proxy_id))]
     pub async fn proxy_segment(
         &self,
@@ -486,10 +537,12 @@ impl TwitchService {
 
         let client = self.get_client(settings).await;
 
-        client.get(&target_url).send().await.map_err(|e| {
-            error!(error = %e, "Failed to proxy segment");
-            AppError::from(e)
-        })
+        self.fetch_segment_with_fallback(&target_url, &client)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Failed to proxy segment");
+                e
+            })
     }
 
     pub async fn proxy_segment_url(
@@ -501,10 +554,12 @@ impl TwitchService {
         let target_url = validate_variant_target_url(target_url)?;
         let client = self.get_client(settings).await;
 
-        client.get(&target_url).send().await.map_err(|e| {
-            error!(error = %e, "Failed to proxy segment by URL");
-            AppError::from(e)
-        })
+        self.fetch_segment_with_fallback(&target_url, &client)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Failed to proxy segment by URL");
+                e
+            })
     }
 
     // ── GQL helpers ──────────────────────────────────────────────────────────
