@@ -223,6 +223,33 @@ type QualityEntry = {
   height: number;
 };
 
+function inferRequestedQualityValueFromEntry(entry: any): string | null {
+  const height = Number((entry as { height?: number })?.height || 0);
+  if (Number.isFinite(height) && height > 0) {
+    return String(Math.round(height));
+  }
+
+  const label = String(
+    (entry as { id?: string; label?: string })?.id ||
+      (entry as { label?: string })?.label ||
+      "",
+  ).toLowerCase();
+
+  if (!label) {
+    return null;
+  }
+
+  if (label.includes("auto")) {
+    return "auto";
+  }
+
+  const maybeDigits = label
+    .split(/\D+/)
+    .find((chunk) => chunk && chunk.length > 0);
+
+  return maybeDigits || null;
+}
+
 function sortedQualitiesByHeightDesc(qualities: any[]): QualityEntry[] {
   return qualities
     .map((q, idx) => ({
@@ -290,6 +317,8 @@ type NSVPlayerProps = {
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
   onPlayStateChange?: (playing: boolean) => void;
+  onQualitySelection?: (quality: string) => void;
+  onSourceReady?: (sourceUrl: string) => void;
   onError?: (message: string) => void;
 };
 
@@ -366,6 +395,8 @@ const NSVPlayer = React.memo(
     onTimeUpdate,
     onDurationChange,
     onPlayStateChange,
+    onQualitySelection,
+    onSourceReady,
     onError,
   }: NSVPlayerProps) => {
     const playerRef = useRef<any>(null);
@@ -386,6 +417,11 @@ const NSVPlayer = React.memo(
     const pendingResumeSeekRef = useRef<number | null>(null);
     const pendingResumePlayRef = useRef(false);
     const wasBackgroundedRef = useRef(false);
+    const internalQualityRequestRef = useRef(false);
+    const qualityLockEnabledRef = useRef(false);
+    const lockedQualityIndexRef = useRef<number | null>(null);
+    const lastLockAttemptAtRef = useRef(0);
+    const lastReadySourceRef = useRef<string | null>(null);
     const [resumeRevision, setResumeRevision] = useState(0);
 
     const useNativeResumeRefresh =
@@ -533,6 +569,11 @@ const NSVPlayer = React.memo(
       didApplyDefaultQualityRef.current = false;
       pendingResumeSeekRef.current = null;
       pendingResumePlayRef.current = false;
+      internalQualityRequestRef.current = false;
+      qualityLockEnabledRef.current = false;
+      lockedQualityIndexRef.current = null;
+      lastLockAttemptAtRef.current = 0;
+      lastReadySourceRef.current = null;
 
       if (hlsInstanceRef.current) {
         try {
@@ -548,6 +589,34 @@ const NSVPlayer = React.memo(
     useEffect(() => {
       didApplyDefaultQualityRef.current = false;
     }, [defaultQuality, streamType]);
+
+    useEffect(() => {
+      if (!onSourceReady) return;
+      if (!store.canPlay) return;
+      if (lastReadySourceRef.current === source.src) return;
+
+      lastReadySourceRef.current = source.src;
+      onSourceReady(source.src);
+    }, [onSourceReady, source.src, store.canPlay]);
+
+    const applyQualitySelection = useCallback(
+      (qualityIdx: number) => {
+        if (!Number.isFinite(qualityIdx) || qualityIdx < 0) return;
+
+        internalQualityRequestRef.current = true;
+        try {
+          remote.changeQuality(qualityIdx);
+          if (hlsInstanceRef.current) {
+            setHlsLevelMode(hlsInstanceRef.current, qualityIdx);
+          }
+        } finally {
+          queueMicrotask(() => {
+            internalQualityRequestRef.current = false;
+          });
+        }
+      },
+      [remote],
+    );
 
     useEffect(() => {
       if (!Number.isFinite(seekTo)) return;
@@ -575,6 +644,7 @@ const NSVPlayer = React.memo(
       }
 
       try {
+        const hasFixedPreference = hasFixedQualityPreference(defaultQuality);
         const sorted = sortedQualitiesByHeightDesc(store.qualities as any[]);
         const qualityIdx = resolveRequestedQuality(sorted, defaultQuality);
 
@@ -582,13 +652,18 @@ const NSVPlayer = React.memo(
           if (hlsInstanceRef.current) {
             setHlsLevelMode(hlsInstanceRef.current, -1);
           }
+          if (!hasFixedPreference) {
+            qualityLockEnabledRef.current = false;
+            lockedQualityIndexRef.current = null;
+          }
           didApplyDefaultQualityRef.current = true;
           return;
         }
 
-        remote.changeQuality(qualityIdx);
-        if (hlsInstanceRef.current) {
-          setHlsLevelMode(hlsInstanceRef.current, qualityIdx);
+        applyQualitySelection(qualityIdx);
+        if (hasFixedPreference) {
+          qualityLockEnabledRef.current = true;
+          lockedQualityIndexRef.current = qualityIdx;
         }
         didApplyDefaultQualityRef.current = true;
       } catch (error) {
@@ -597,11 +672,114 @@ const NSVPlayer = React.memo(
       }
     }, [
       defaultQuality,
-      remote,
+      applyQualitySelection,
       store.canSetQuality,
       store.qualities,
       streamType,
     ]);
+
+    useEffect(() => {
+      if (streamType !== "on-demand") return;
+      if (!qualityLockEnabledRef.current) return;
+      if (!store.canPlay) return;
+
+      const lockedIdx = lockedQualityIndexRef.current;
+      if (lockedIdx === null || lockedIdx < 0) return;
+      if (!store.canSetQuality) return;
+      if (!store.qualities || store.qualities.length === 0) return;
+      if (lockedIdx >= store.qualities.length) return;
+
+      const qualities = store.qualities as Array<{ id?: string }>;
+      const selectedQuality = store.quality as { id?: string } | null;
+      const selectedId = selectedQuality?.id;
+      const lockedId = qualities[lockedIdx]?.id;
+
+      const shouldRestoreLock =
+        Boolean(store.autoQuality) ||
+        !selectedId ||
+        (typeof lockedId === "string" && lockedId !== selectedId);
+
+      if (!shouldRestoreLock) return;
+
+      const now = Date.now();
+      if (now - lastLockAttemptAtRef.current < 350) return;
+      lastLockAttemptAtRef.current = now;
+      applyQualitySelection(lockedIdx);
+    }, [
+      applyQualitySelection,
+      store.autoQuality,
+      store.canPlay,
+      store.canSetQuality,
+      store.qualities,
+      store.quality,
+      streamType,
+    ]);
+
+    const handleQualityChangeRequest = useCallback(
+      (event: any) => {
+        if (streamType !== "on-demand") return;
+        if (internalQualityRequestRef.current) return;
+
+        const requestedIndex = Number(event?.detail);
+        if (!Number.isFinite(requestedIndex)) return;
+
+        if (requestedIndex >= 0) {
+          qualityLockEnabledRef.current = true;
+          lockedQualityIndexRef.current = requestedIndex;
+
+          if (onQualitySelection) {
+            const qualities =
+              (storeRef.current.qualities as Array<
+                { id?: string; label?: string; height?: number } | undefined
+              >) || [];
+            const selectedEntry = qualities[requestedIndex];
+            const requestedQuality =
+              inferRequestedQualityValueFromEntry(selectedEntry);
+            if (requestedQuality) {
+              onQualitySelection(requestedQuality);
+            }
+          }
+          return;
+        }
+
+        if (onQualitySelection) {
+          onQualitySelection("auto");
+        }
+
+        if (!qualityLockEnabledRef.current) return;
+
+        const lockedIdx = lockedQualityIndexRef.current;
+        if (lockedIdx === null || lockedIdx < 0) return;
+
+        queueMicrotask(() => {
+          applyQualitySelection(lockedIdx);
+        });
+      },
+      [applyQualitySelection, onQualitySelection, streamType],
+    );
+
+    const handleQualityChange = useCallback(
+      (event: any) => {
+        if (streamType !== "on-demand") return;
+        if (!qualityLockEnabledRef.current) return;
+        if (internalQualityRequestRef.current) return;
+
+        const quality = event?.detail as { id?: string } | null | undefined;
+        const qualityId = quality?.id;
+        if (!qualityId) return;
+
+        const knownQualities =
+          (storeRef.current.qualities as Array<{ id?: string }>) || [];
+        const qualityIdx = knownQualities.findIndex((entry) => {
+          return entry?.id === qualityId;
+        });
+
+        if (qualityIdx >= 0) {
+          lockedQualityIndexRef.current = qualityIdx;
+        }
+      },
+      [streamType],
+    );
 
     const handleHlsInstance = useCallback((instance: Hls) => {
       hlsInstanceRef.current = instance;
@@ -719,6 +897,8 @@ const NSVPlayer = React.memo(
       <MediaPlayer
         onProviderChange={onProviderChange}
         onHlsInstance={handleHlsInstance}
+        onMediaQualityChangeRequest={handleQualityChangeRequest}
+        onQualityChange={handleQualityChange}
         ref={playerRef}
         className={className}
         title={title}

@@ -90,6 +90,54 @@ function parseMarkersPayload(payload: unknown): VideoMarker[] {
   return [];
 }
 
+type NormalizedQuality = "auto" | "480" | "720" | "1080";
+
+function normalizeQualitySetting(raw: string | undefined): NormalizedQuality {
+  const normalized = (raw || "auto").trim().toLowerCase();
+  if (normalized === "480" || normalized === "720" || normalized === "1080") {
+    return normalized;
+  }
+  return "auto";
+}
+
+function normalizeRequestedQualityValue(
+  raw: string | undefined,
+): string | null {
+  if (!raw) return null;
+
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "auto") return "auto";
+
+  const maybeDigits = normalized
+    .split(/\D+/)
+    .find((chunk) => chunk && chunk.length > 0);
+  if (!maybeDigits) return null;
+
+  const height = Number.parseInt(maybeDigits, 10);
+  if (!Number.isFinite(height) || height <= 0) return null;
+
+  return String(height);
+}
+
+function buildQualityQuery(
+  quality: string | undefined,
+  mode?: "lock" | "strict",
+): string {
+  const normalizedQuality = normalizeRequestedQualityValue(quality);
+  if (!normalizedQuality || normalizedQuality === "auto") {
+    return "";
+  }
+
+  const params = new URLSearchParams();
+  params.set("quality", normalizedQuality);
+  if (mode) {
+    params.set("qualityMode", mode);
+  }
+
+  return `?${params.toString()}`;
+}
+
 function extractChatMessageText(message: ChatMessage): string {
   const messagePayload = message.message as
     | {
@@ -362,9 +410,13 @@ function VodLivePlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [manualLockedQuality, setManualLockedQuality] = useState<string | null>(
+    null,
+  );
 
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
+  const pendingQualityResumeTimeRef = useRef<number | null>(null);
   const activeVodIdRef = useRef<string | null>(vodId);
   const historySyncRef = useRef<HistorySyncState>({
     inFlight: false,
@@ -576,6 +628,93 @@ function VodLivePlayer({
   const [clipEnd, setClipEnd] = useState<number | null>(null);
   const [settings, setSettings] =
     useState<ExperienceSettings>(DEFAULT_SETTINGS);
+  const [vodQualityStage, setVodQualityStage] = useState<
+    "auto" | "bootstrap" | "preferred"
+  >("auto");
+
+  const normalizedDefaultQuality = useMemo(() => {
+    return normalizeQualitySetting(settings.defaultVideoQuality);
+  }, [settings.defaultVideoQuality]);
+
+  useEffect(() => {
+    if (!vodId) {
+      setVodQualityStage("auto");
+      return;
+    }
+
+    if (normalizedDefaultQuality === "auto") {
+      setVodQualityStage("auto");
+      return;
+    }
+
+    if (normalizedDefaultQuality === "480") {
+      setVodQualityStage("preferred");
+      return;
+    }
+
+    setVodQualityStage("bootstrap");
+  }, [normalizedDefaultQuality, vodId]);
+
+  const handlePlayerSourceReady = useCallback(
+    (sourceUrl: string) => {
+      if (!vodId) return;
+
+      const pendingResumeTime = pendingQualityResumeTimeRef.current;
+      if (pendingResumeTime !== null) {
+        pendingQualityResumeTimeRef.current = null;
+        setSeekTo(Math.max(0, pendingResumeTime));
+      }
+
+      if (vodQualityStage !== "bootstrap") return;
+
+      const expectedBootstrapSource = `/api/vod/${vodId}/master.m3u8?quality=480`;
+      if (sourceUrl !== expectedBootstrapSource) return;
+
+      setVodQualityStage("preferred");
+    },
+    [vodId, vodQualityStage],
+  );
+
+  const handlePlayerQualitySelection = useCallback(
+    (requestedQuality: string) => {
+      if (!vodId) return;
+
+      const normalizedRequested =
+        normalizeRequestedQualityValue(requestedQuality);
+      if (!normalizedRequested || normalizedRequested === "auto") {
+        return;
+      }
+
+      const hasPreferredBaseLock =
+        vodQualityStage === "preferred" && normalizedDefaultQuality !== "auto";
+      let activeLockedQuality: string | null = null;
+      if (manualLockedQuality) {
+        activeLockedQuality =
+          normalizeRequestedQualityValue(manualLockedQuality);
+      } else if (hasPreferredBaseLock) {
+        activeLockedQuality = normalizedDefaultQuality;
+      }
+
+      if (activeLockedQuality === normalizedRequested) {
+        pendingQualityResumeTimeRef.current = null;
+        return;
+      }
+
+      const resumeTime = Math.max(
+        0,
+        Number(
+          historySyncRef.current.lastObservedTime ||
+            currentTimeRef.current ||
+            0,
+        ),
+      );
+      pendingQualityResumeTimeRef.current = resumeTime;
+
+      setVodQualityStage("preferred");
+      setManualLockedQuality(normalizedRequested);
+    },
+    [manualLockedQuality, normalizedDefaultQuality, vodId, vodQualityStage],
+  );
 
   const playerTitle = useMemo(
     () => resolvePlayerTitle(vodId, liveId),
@@ -583,14 +722,31 @@ function VodLivePlayer({
   );
 
   const source = useMemo(() => {
-    const quality = (settings.defaultVideoQuality || "auto").trim();
-    const qualityQuery = quality
-      ? `?quality=${encodeURIComponent(quality)}`
-      : "";
-
     if (vodId) {
+      const normalizedManualLock = normalizeRequestedQualityValue(
+        manualLockedQuality || undefined,
+      );
+
+      if (normalizedManualLock && normalizedManualLock !== "auto") {
+        return {
+          src: `/api/vod/${vodId}/master.m3u8${buildQualityQuery(normalizedManualLock, "lock")}`,
+          type: "application/x-mpegurl",
+          streamType: "on-demand" as const,
+        };
+      }
+
+      let vodQuality: NormalizedQuality = normalizedDefaultQuality;
+      if (vodQualityStage === "bootstrap") {
+        vodQuality = "480";
+      }
+
+      const qualityMode =
+        vodQualityStage === "preferred" && vodQuality !== "auto"
+          ? "lock"
+          : undefined;
+
       return {
-        src: `/api/vod/${vodId}/master.m3u8${qualityQuery}`,
+        src: `/api/vod/${vodId}/master.m3u8${buildQualityQuery(vodQuality, qualityMode)}`,
         type: "application/x-mpegurl",
         streamType: "on-demand" as const,
       };
@@ -598,14 +754,20 @@ function VodLivePlayer({
 
     if (liveId) {
       return {
-        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8${qualityQuery}`,
+        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8${buildQualityQuery(normalizedDefaultQuality)}`,
         type: "application/x-mpegurl",
         streamType: "live" as const,
       };
     }
 
     return null;
-  }, [vodId, liveId, settings.defaultVideoQuality]);
+  }, [
+    liveId,
+    manualLockedQuality,
+    normalizedDefaultQuality,
+    vodId,
+    vodQualityStage,
+  ]);
 
   const playerMediaSource = useMemo(
     () => (source ? { src: source.src, type: source.type } : null),
@@ -703,6 +865,8 @@ function VodLivePlayer({
 
   const handlePlayerTimeUpdate = useCallback(
     (time: number) => {
+      currentTimeRef.current = time;
+
       if (vodId) {
         const syncState = historySyncRef.current;
         const previousObserved = syncState.lastObservedTime;
@@ -785,12 +949,15 @@ function VodLivePlayer({
     setSeekTo(null);
     setClipStart(null);
     setClipEnd(null);
+    setManualLockedQuality(null);
+    setVodQualityStage("auto");
     setShowDownloadMenu(false);
     lastChatOffsetRef.current = -1;
     lastRenderedSecondRef.current = -1;
     lastRequestedOffsetRef.current = -1;
     markersLoadedVodRef.current = null;
     markersLoadingRef.current = false;
+    pendingQualityResumeTimeRef.current = null;
     pendingChatOffsetsRef.current.clear();
     historySyncRef.current = {
       inFlight: false,
@@ -1113,13 +1280,15 @@ function VodLivePlayer({
               title={vodInfo?.title || liveInfo?.title || playerTitle}
               startTime={initialTime}
               seekTo={seekTo}
-              defaultQuality={settings.defaultVideoQuality}
+              defaultQuality={normalizedDefaultQuality}
               isMobileLayout={isMobileLayout}
               autoPlay
               className="nsv-main-player"
               onTimeUpdate={handlePlayerTimeUpdate}
               onDurationChange={setDuration}
               onPlayStateChange={setIsPlaying}
+              onQualitySelection={handlePlayerQualitySelection}
+              onSourceReady={handlePlayerSourceReady}
               onError={setPlayerError}
             />
 
