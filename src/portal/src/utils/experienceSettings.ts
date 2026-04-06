@@ -1,9 +1,12 @@
 import { ExperienceSettings } from "../../../shared/types";
 
-const QUALITY_ALIASES: Record<string, "auto" | "480" | "720" | "1080"> = {
+const QUALITY_ALIASES: Record<
+  string,
+  "auto" | "480" | "720" | "1080" | "source"
+> = {
   auto: "auto",
-  source: "1080",
-  chunked: "1080",
+  source: "source",
+  chunked: "source",
   "1080": "1080",
   "1080p": "1080",
   "1080p60": "1080",

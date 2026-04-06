@@ -90,13 +90,18 @@ function parseMarkersPayload(payload: unknown): VideoMarker[] {
   return [];
 }
 
-type NormalizedQuality = "auto" | "480" | "720" | "1080";
+type NormalizedQuality = "auto" | "480" | "720" | "1080" | "source";
 
 function normalizeQualitySetting(raw: string | undefined): NormalizedQuality {
   const normalized = (raw || "auto").trim().toLowerCase();
+  if (normalized === "source" || normalized === "chunked") {
+    return "source";
+  }
+
   if (normalized === "480" || normalized === "720" || normalized === "1080") {
     return normalized;
   }
+
   return "auto";
 }
 
@@ -108,6 +113,15 @@ function normalizeRequestedQualityValue(
   const normalized = raw.trim().toLowerCase();
   if (!normalized) return null;
   if (normalized === "auto") return "auto";
+
+  if (
+    normalized === "source" ||
+    normalized === "chunked" ||
+    normalized.includes("source") ||
+    normalized.includes("chunked")
+  ) {
+    return "source";
+  }
 
   const maybeDigits = normalized
     .split(/\D+/)
@@ -417,6 +431,7 @@ function VodLivePlayer({
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
   const pendingQualityResumeTimeRef = useRef<number | null>(null);
+  const previousFullscreenBoostStateRef = useRef(false);
   const activeVodIdRef = useRef<string | null>(vodId);
   const historySyncRef = useRef<HistorySyncState>({
     inFlight: false,
@@ -636,6 +651,56 @@ function VodLivePlayer({
     return normalizeQualitySetting(settings.defaultVideoQuality);
   }, [settings.defaultVideoQuality]);
 
+  const normalizedManualLockedQuality = useMemo(() => {
+    return normalizeRequestedQualityValue(manualLockedQuality || undefined);
+  }, [manualLockedQuality]);
+
+  const shouldBoostVodQualityForFullscreen = useMemo(() => {
+    if (!vodId || !isFullscreen) {
+      return false;
+    }
+
+    if (normalizedDefaultQuality !== "auto") {
+      return false;
+    }
+
+    if (
+      normalizedManualLockedQuality &&
+      normalizedManualLockedQuality !== "auto"
+    ) {
+      return false;
+    }
+
+    return true;
+  }, [
+    isFullscreen,
+    normalizedDefaultQuality,
+    normalizedManualLockedQuality,
+    vodId,
+  ]);
+
+  useEffect(() => {
+    if (!vodId) {
+      previousFullscreenBoostStateRef.current =
+        shouldBoostVodQualityForFullscreen;
+      return;
+    }
+
+    const previous = previousFullscreenBoostStateRef.current;
+    if (previous === shouldBoostVodQualityForFullscreen) {
+      return;
+    }
+
+    previousFullscreenBoostStateRef.current =
+      shouldBoostVodQualityForFullscreen;
+    pendingQualityResumeTimeRef.current = Math.max(
+      0,
+      Number(
+        historySyncRef.current.lastObservedTime || currentTimeRef.current || 0,
+      ),
+    );
+  }, [shouldBoostVodQualityForFullscreen, vodId]);
+
   useEffect(() => {
     if (!vodId) {
       setVodQualityStage("auto");
@@ -723,13 +788,19 @@ function VodLivePlayer({
 
   const source = useMemo(() => {
     if (vodId) {
-      const normalizedManualLock = normalizeRequestedQualityValue(
-        manualLockedQuality || undefined,
-      );
+      const normalizedManualLock = normalizedManualLockedQuality;
 
       if (normalizedManualLock && normalizedManualLock !== "auto") {
         return {
           src: `/api/vod/${vodId}/master.m3u8${buildQualityQuery(normalizedManualLock, "lock")}`,
+          type: "application/x-mpegurl",
+          streamType: "on-demand" as const,
+        };
+      }
+
+      if (shouldBoostVodQualityForFullscreen) {
+        return {
+          src: `/api/vod/${vodId}/master.m3u8${buildQualityQuery("source", "lock")}`,
           type: "application/x-mpegurl",
           streamType: "on-demand" as const,
         };
@@ -763,8 +834,9 @@ function VodLivePlayer({
     return null;
   }, [
     liveId,
-    manualLockedQuality,
+    normalizedManualLockedQuality,
     normalizedDefaultQuality,
+    shouldBoostVodQualityForFullscreen,
     vodId,
     vodQualityStage,
   ]);

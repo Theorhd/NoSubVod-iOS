@@ -2652,8 +2652,7 @@ impl TwitchService {
 
         for (res_key, resolution, fps, stream_url, codec) in probed_variants.into_iter().flatten() {
             let quality = if res_key == "chunked" {
-                let height = resolution.split('x').nth(1).unwrap_or("1080");
-                format!("{height}p")
+                "source".to_string()
             } else {
                 res_key.to_string()
             };

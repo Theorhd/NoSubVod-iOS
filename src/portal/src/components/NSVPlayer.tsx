@@ -224,11 +224,6 @@ type QualityEntry = {
 };
 
 function inferRequestedQualityValueFromEntry(entry: any): string | null {
-  const height = Number((entry as { height?: number })?.height || 0);
-  if (Number.isFinite(height) && height > 0) {
-    return String(Math.round(height));
-  }
-
   const label = String(
     (entry as { id?: string; label?: string })?.id ||
       (entry as { label?: string })?.label ||
@@ -241,6 +236,15 @@ function inferRequestedQualityValueFromEntry(entry: any): string | null {
 
   if (label.includes("auto")) {
     return "auto";
+  }
+
+  if (label.includes("source") || label.includes("chunked")) {
+    return "source";
+  }
+
+  const height = Number((entry as { height?: number })?.height || 0);
+  if (Number.isFinite(height) && height > 0) {
+    return String(Math.round(height));
   }
 
   const maybeDigits = label
@@ -268,11 +272,16 @@ function resolveRequestedQuality(
     return -1;
   }
 
-  if (!defaultQuality || defaultQuality === "auto") {
+  const normalizedQuality = (defaultQuality || "").trim().toLowerCase();
+  if (!normalizedQuality || normalizedQuality === "auto") {
     return -1;
   }
 
-  const requestedHeight = Number.parseInt(defaultQuality, 10);
+  if (normalizedQuality === "source" || normalizedQuality === "chunked") {
+    return sorted[0]?.idx ?? -1;
+  }
+
+  const requestedHeight = Number.parseInt(normalizedQuality, 10);
   if (Number.isNaN(requestedHeight)) {
     return -1;
   }

@@ -240,14 +240,16 @@ const VideoPlayerSection = React.memo(
           }}
         >
           <option value="auto">Automatique</option>
+          <option value="source">Source (chunked)</option>
           <option value="480">480p</option>
           <option value="720">720p</option>
           <option value="1080">1080p</option>
         </select>
         <small className="help-text">
-          En 1080p/720p/480p, le player utilise cette valeur comme qualité
-          maximale avec fallback automatique pour plus de stabilité. En auto, il
-          adapte dynamiquement.
+          Source (chunked) force la meilleure qualité disponible. En
+          1080p/720p/480p, le player utilise cette valeur comme qualité maximale
+          avec fallback automatique pour plus de stabilité. En auto, il adapte
+          dynamiquement.
         </small>
       </div>
     </div>
