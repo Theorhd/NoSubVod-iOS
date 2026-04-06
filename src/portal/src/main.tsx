@@ -501,6 +501,29 @@ async function exchangeTwitchOAuthFromDeepLink(rawUrl: string): Promise<void> {
     return;
   }
 
+  const bridgeStatusRaw =
+    parsed.searchParams.get("status")?.trim().toLowerCase() || "";
+  const bridgeStatus: TwitchOAuthBridgeStatus | null =
+    bridgeStatusRaw === "success" || bridgeStatusRaw === "error"
+      ? bridgeStatusRaw
+      : null;
+
+  if (bridgeStatus) {
+    publishTwitchOAuthBridgePayload({
+      type: "nsv:twitch-auth",
+      status: bridgeStatus,
+      at: Date.now(),
+      message:
+        parsed.searchParams.get("message") ||
+        (bridgeStatus === "success"
+          ? "Compte Twitch lie."
+          : "La connexion Twitch a echoue."),
+      userLogin: parsed.searchParams.get("userLogin") || undefined,
+      userDisplayName: parsed.searchParams.get("userDisplayName") || undefined,
+    });
+    return;
+  }
+
   const body = {
     code: parsed.searchParams.get("code"),
     state: parsed.searchParams.get("state"),

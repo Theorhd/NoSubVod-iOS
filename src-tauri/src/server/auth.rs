@@ -165,19 +165,24 @@ fn close_tab_html(msg: &str, success: bool) -> Html<String> {
         ("✗", "#ff4a4a")
     };
     let status = if success { "success" } else { "error" };
+    let app_return_url = format!("nosubvod://auth/twitch/callback?status={status}");
     Html(format!(
-        r#"<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+        r#"<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
         body{{background:#0e0e10;color:#efeff1;font-family:Inter,Helvetica,sans-serif;
                 display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:16px;box-sizing:border-box}}
         .icon{{font-size:3rem;margin-bottom:12px}}.msg{{color:{color};font-size:1rem;max-width:420px;line-height:1.5}}
                 .hint{{opacity:.85;font-size:.9rem;margin-top:10px;max-width:420px}}
                 .btn{{margin-top:14px;background:#2f81f7;color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:.95rem}}
         </style></head><body><div><div class="icon">{icon}</div><p class="msg">{msg}</p></div>
-                <p class="hint">Si cette fenetre ne se ferme pas automatiquement, revenez a NoSubVOD via le bouton "Terminer" de Safari.</p>
-                <button class="btn" id="nsv-close">Fermer</button>
+                <p class="hint">Si cette fenetre ne se ferme pas automatiquement, utilisez le bouton ci-dessous pour revenir dans NoSubVOD.</p>
+                <button class="btn" id="nsv-close">Fermer et revenir</button>
                 <script>
                 (function() {{
                     const payload = {{ type: "nsv:twitch-auth", status: "{status}", at: Date.now() }};
+                    const returnUrl = "{app_return_url}";
+                    const ua = (navigator.userAgent || "").toLowerCase();
+                    const shouldReturnToApp = ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod");
+
                     try {{
                         if (window.opener && !window.opener.closed) {{
                             window.opener.postMessage(payload, "*");
@@ -191,12 +196,23 @@ fn close_tab_html(msg: &str, success: bool) -> Html<String> {
                         try {{ window.close(); }} catch (_err) {{}}
                     }};
 
+                    const returnToApp = function () {{
+                        if (!shouldReturnToApp) return;
+                        try {{ window.location.href = returnUrl; }} catch (_err) {{}}
+                    }};
+
+                    const finishFlow = function () {{
+                        returnToApp();
+                        setTimeout(closeNow, shouldReturnToApp ? 320 : 0);
+                    }};
+
                     const button = document.getElementById("nsv-close");
                     if (button) {{
-                        button.addEventListener("click", closeNow);
+                        button.addEventListener("click", finishFlow);
                     }}
 
-                    setTimeout(closeNow, 1800);
+                    setTimeout(finishFlow, shouldReturnToApp ? 700 : 1800);
+                    setTimeout(closeNow, 2600);
                 }})();
                 </script></body></html>"#
     ))

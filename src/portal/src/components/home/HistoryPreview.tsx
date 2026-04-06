@@ -115,7 +115,11 @@ const HistoryPreview = React.memo(({ historyPreview }: HistoryPreviewProps) => {
                     style={{
                       margin: 0,
                       fontSize: "0.95rem",
-                      whiteSpace: "nowrap",
+                      whiteSpace: "normal",
+                      lineHeight: 1.35,
+                      display: "-webkit-box",
+                      WebkitBoxOrient: "vertical",
+                      WebkitLineClamp: 2,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                     }}

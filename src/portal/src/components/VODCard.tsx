@@ -1,8 +1,7 @@
 import React from "react";
 import { VOD, HistoryEntry } from "../../../shared/types";
 import { formatTime, formatViews } from "../../../shared/utils/formatters";
-import { Download as DownloadIcon, Clock, Users, Play } from "lucide-react";
-import DownloadMenu from "./DownloadMenu";
+import { Clock, Users, Play } from "lucide-react";
 
 export type VODCardProps = {
   vod: VOD;
@@ -10,34 +9,10 @@ export type VODCardProps = {
   onAddToWatchlist?: (e: React.MouseEvent, vod: VOD) => void;
   historyEntry?: HistoryEntry;
   showOwner?: boolean;
-  hideDownload?: boolean;
 };
 
 export const VODCard = React.memo<VODCardProps>(
-  ({
-    vod,
-    onWatch,
-    onAddToWatchlist,
-    historyEntry,
-    showOwner,
-    hideDownload,
-  }) => {
-    const [menuOpen, setMenuOpen] = React.useState(false);
-    const [anchorRect, setAnchorRect] = React.useState<DOMRect | null>(null);
-
-    const handleDownloadClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      e.preventDefault();
-      if (menuOpen) {
-        setMenuOpen(false);
-      } else {
-        setAnchorRect(
-          (e.currentTarget as HTMLButtonElement).getBoundingClientRect(),
-        );
-        setMenuOpen(true);
-      }
-    };
-
+  ({ vod, onWatch, onAddToWatchlist, historyEntry, showOwner }) => {
     const progress =
       historyEntry && historyEntry.duration > 0
         ? Math.min(100, (historyEntry.timecode / historyEntry.duration) * 100)
@@ -192,34 +167,6 @@ export const VODCard = React.memo<VODCardProps>(
                 {formatViews(vod.viewCount)}
               </span>
             </div>
-
-            {!hideDownload && (
-              <div style={{ position: "relative", zIndex: 5 }}>
-                <button
-                  type="button"
-                  onClick={handleDownloadClick}
-                  className="secondary-btn"
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    padding: 0,
-                    borderRadius: "50%",
-                  }}
-                  title="Télécharger"
-                >
-                  <DownloadIcon size={14} />
-                </button>
-                {menuOpen && anchorRect && (
-                  <DownloadMenu
-                    vodId={vod.id}
-                    title={vod.title}
-                    duration={vod.lengthSeconds}
-                    anchorRect={anchorRect}
-                    onClose={() => setMenuOpen(false)}
-                  />
-                )}
-              </div>
-            )}
           </div>
           <div
             style={{

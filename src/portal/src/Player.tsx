@@ -32,8 +32,9 @@ const DEFAULT_SETTINGS: ExperienceSettings = {
   defaultVideoQuality: "auto",
 };
 
-const CHAT_MESSAGES_BEFORE = 100;
-const CHAT_MESSAGES_AFTER = 170;
+const CHAT_REPLAY_VISIBLE_MESSAGES = 170;
+const CHAT_REPLAY_FUTURE_TOLERANCE_SECONDS = 0.35;
+const CHAT_REPLAY_SEEK_RESET_SECONDS = 2;
 const MAX_CHAT_MESSAGES = 700;
 const CHAT_HISTORY_SECONDS = 10 * 60;
 const HISTORY_SYNC_INTERVAL_MS = 6000;
@@ -132,6 +133,19 @@ function normalizeRequestedQualityValue(
   if (!Number.isFinite(height) || height <= 0) return null;
 
   return String(height);
+}
+
+function normalizeArtworkUrl(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl) return null;
+
+  const normalized = rawUrl
+    .replaceAll("%{width}", "1280")
+    .replaceAll("%{height}", "720")
+    .replaceAll("{width}", "1280")
+    .replaceAll("{height}", "720")
+    .trim();
+
+  return normalized || null;
 }
 
 function buildQualityQuery(
@@ -423,7 +437,6 @@ function VodLivePlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [manualLockedQuality, setManualLockedQuality] = useState<string | null>(
     null,
   );
@@ -846,27 +859,52 @@ function VodLivePlayer({
     [source],
   );
 
+  const playerPoster = useMemo(() => {
+    if (vodId) {
+      return (
+        normalizeArtworkUrl(vodInfo?.previewThumbnailURL) ||
+        normalizeArtworkUrl(vodInfo?.owner?.profileImageURL) ||
+        undefined
+      );
+    }
+
+    if (liveId) {
+      return (
+        normalizeArtworkUrl(liveInfo?.previewImageURL) ||
+        normalizeArtworkUrl(liveInfo?.broadcaster?.profileImageURL) ||
+        undefined
+      );
+    }
+
+    return undefined;
+  }, [liveId, liveInfo, vodId, vodInfo]);
+
   const shouldLoadChat = Boolean(vodId && showChat && !isFullscreen);
   const shouldUpdateUiTime = showMarkers || shouldLoadChat || downloadMode;
 
-  const visibleChat = useMemo(() => {
+  const replayChatMessages = useMemo(() => {
     if (!shouldLoadChat) return [];
     if (chatMessages.length === 0) return [];
 
     const firstFutureIndex = chatMessages.findIndex(
-      (m) => m.contentOffsetSeconds > currentTime,
+      (m) =>
+        m.contentOffsetSeconds >
+        currentTime + CHAT_REPLAY_FUTURE_TOLERANCE_SECONDS,
     );
-    const pivotIndex =
+    const replayEndIndex =
       firstFutureIndex === -1 ? chatMessages.length : firstFutureIndex;
-    const start = Math.max(0, pivotIndex - CHAT_MESSAGES_BEFORE);
-    const end = Math.min(chatMessages.length, pivotIndex + CHAT_MESSAGES_AFTER);
-    return chatMessages.slice(start, end);
+    const replayStartIndex = Math.max(
+      0,
+      replayEndIndex - CHAT_REPLAY_VISIBLE_MESSAGES,
+    );
+
+    return chatMessages.slice(replayStartIndex, replayEndIndex);
   }, [chatMessages, currentTime, shouldLoadChat]);
 
   const dispatchedChatIds = useRef(new Set<string>());
   useEffect(() => {
     if (liveId || !shouldLoadChat) return;
-    for (const msg of visibleChat) {
+    for (const msg of replayChatMessages) {
       if (!dispatchedChatIds.current.has(msg.id)) {
         dispatchedChatIds.current.add(msg.id);
         globalThis.dispatchEvent(
@@ -886,7 +924,7 @@ function VodLivePlayer({
         if (dropped >= toDrop) break;
       }
     }
-  }, [visibleChat, liveId, shouldLoadChat]);
+  }, [replayChatMessages, liveId, shouldLoadChat]);
 
   const fetchVodChatChunk = useCallback(
     async (offset: number) => {
@@ -937,7 +975,15 @@ function VodLivePlayer({
 
   const handlePlayerTimeUpdate = useCallback(
     (time: number) => {
+      const previousTime = currentTimeRef.current;
       currentTimeRef.current = time;
+
+      if (
+        shouldLoadChat &&
+        Math.abs(time - previousTime) >= CHAT_REPLAY_SEEK_RESET_SECONDS
+      ) {
+        dispatchedChatIds.current.clear();
+      }
 
       if (vodId) {
         const syncState = historySyncRef.current;
@@ -996,7 +1042,7 @@ function VodLivePlayer({
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
-  }, [visibleChat, shouldLoadChat]);
+  }, [replayChatMessages, shouldLoadChat]);
 
   useEffect(() => {
     const onFullScreenChanged = () =>
@@ -1023,7 +1069,6 @@ function VodLivePlayer({
     setClipEnd(null);
     setManualLockedQuality(null);
     setVodQualityStage("auto");
-    setShowDownloadMenu(false);
     lastChatOffsetRef.current = -1;
     lastRenderedSecondRef.current = -1;
     lastRequestedOffsetRef.current = -1;
@@ -1031,6 +1076,7 @@ function VodLivePlayer({
     markersLoadingRef.current = false;
     pendingQualityResumeTimeRef.current = null;
     pendingChatOffsetsRef.current.clear();
+    dispatchedChatIds.current.clear();
     historySyncRef.current = {
       inFlight: false,
       queued: null,
@@ -1350,6 +1396,7 @@ function VodLivePlayer({
               source={playerMediaSource as { src: string; type?: string }}
               streamType={source.streamType}
               title={vodInfo?.title || liveInfo?.title || playerTitle}
+              poster={playerPoster}
               startTime={initialTime}
               seekTo={seekTo}
               defaultQuality={normalizedDefaultQuality}
@@ -1448,13 +1495,7 @@ function VodLivePlayer({
             )}
 
             {!isFullscreen && (vodInfo || liveInfo) && (
-              <PlayerInfo
-                vodInfo={vodInfo}
-                liveInfo={liveInfo}
-                duration={duration}
-                showDownloadMenu={showDownloadMenu}
-                onDownloadMenuToggle={(show) => setShowDownloadMenu(show)}
-              />
+              <PlayerInfo vodInfo={vodInfo} liveInfo={liveInfo} />
             )}
 
             {playerError && (
@@ -1519,7 +1560,7 @@ function VodLivePlayer({
                   ref={chatScrollRef}
                   style={{ flex: 1, overflowY: "auto", padding: "16px" }}
                 >
-                  {visibleChat.map((message) => (
+                  {replayChatMessages.map((message) => (
                     <div
                       key={message.id}
                       style={{
