@@ -1,0 +1,46 @@
+# cargo-audit configuration for CI
+# We keep strict mode (`--deny warnings`) in workflow and explicitly ignore
+# advisories currently introduced transitively by Tauri/wry GTK3 stack or
+# upstream crates without a practical fix at app level.
+
+[advisories]
+ignore = [
+  # GTK3 stack from tauri/wry on Linux targets (unmaintained advisories)
+  "RUSTSEC-2024-0411",
+  "RUSTSEC-2024-0412",
+  "RUSTSEC-2024-0413",
+  "RUSTSEC-2024-0414",
+  "RUSTSEC-2024-0415",
+  "RUSTSEC-2024-0416",
+  "RUSTSEC-2024-0417",
+  "RUSTSEC-2024-0418",
+  "RUSTSEC-2024-0419",
+  "RUSTSEC-2024-0420",
+
+  # GTK/glib ecosystem advisory pulled transitively via tauri/wry
+  "RUSTSEC-2024-0429",
+
+  # Transitive macro/tooling crates currently required by upstream deps
+  "RUSTSEC-2024-0370",
+  "RUSTSEC-2025-0057",
+
+  # rustls-pemfile unmaintained (axum-server transitive)
+  "RUSTSEC-2025-0134",
+
+  # unic* crates pulled by tauri-utils/urlpattern
+  "RUSTSEC-2025-0075",
+  "RUSTSEC-2025-0080",
+  "RUSTSEC-2025-0081",
+  "RUSTSEC-2025-0098",
+  "RUSTSEC-2025-0100",
+]
+
+# Keep informational categories visible in output for transparency.
+informational_warnings = ["unmaintained", "unsound", "notice"]
+
+[output]
+# CI should fail on any warning/advisory not explicitly ignored.
+deny = ["warnings"]
+format = "terminal"
+quiet = false
+show_tree = true
