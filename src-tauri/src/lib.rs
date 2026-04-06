@@ -44,8 +44,14 @@ static TRACING_FILE_GUARD: Lazy<Mutex<Option<WorkerGuard>>> = Lazy::new(|| Mutex
 
 #[cfg(not(test))]
 fn init_tracing(logs_dir: PathBuf) {
+    let default_filter = if cfg!(debug_assertions) {
+        "nosubvod_ios_lib=debug,tower_http=debug"
+    } else {
+        "nosubvod_ios_lib=info,tower_http=warn"
+    };
+
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| "nosubvod_ios_lib=debug,tower_http=debug".into());
+        .unwrap_or_else(|_| default_filter.into());
 
     let file_layer = (|| {
         std::fs::create_dir_all(&logs_dir).ok()?;

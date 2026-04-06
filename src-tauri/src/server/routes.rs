@@ -11,7 +11,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tauri::Emitter;
 use tower::ServiceExt;
 use tower_http::compression::CompressionLayer;
@@ -1186,29 +1185,6 @@ async fn handle_start_download(
     Ok(Json(serde_json::json!({ "message": "Download started" })).into_response())
 }
 
-async fn handle_dev_sysinfo() -> impl IntoResponse {
-    let mut sys = System::new_with_specifics(
-        RefreshKind::new()
-            .with_cpu(CpuRefreshKind::everything())
-            .with_memory(MemoryRefreshKind::everything()),
-    );
-    // Need some wait for CPU stats to be valid
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    sys.refresh_all();
-
-    let cpu_load = sys.global_cpu_usage();
-    let memory_used = sys.used_memory();
-    let memory_total = sys.total_memory();
-
-    Json(serde_json::json!({
-        "cpuLoad": cpu_load,
-        "memoryUsed": memory_used,
-        "memoryTotal": memory_total,
-        "osName": System::name(),
-        "osVersion": System::os_version(),
-    }))
-}
-
 #[derive(Deserialize, Serialize, Clone)]
 struct DevNotifyBody {
     title: String,
@@ -1431,7 +1407,6 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
         .with_state(state.clone());
 
     let dev = Router::new()
-        .route("/sysinfo", get(handle_dev_sysinfo))
         .route("/notify", post(handle_dev_notify))
         .route("/log", post(handle_dev_log))
         .layer(middleware::from_fn_with_state(

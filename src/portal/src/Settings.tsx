@@ -28,6 +28,11 @@ const defaultSettings: ExperienceSettings = {
   enabledExtensions: [],
 };
 
+const LazyQRCodeReader = React.lazy(async () => {
+  const module = await import("./components/QRCodeReader");
+  return { default: module.QRCodeReader };
+});
+
 function isTauriRuntime(): boolean {
   const runtime = globalThis as {
     __TAURI_INTERNALS__?: unknown;
@@ -724,8 +729,6 @@ const DiagnosticsLogsSection = React.memo(
 );
 DiagnosticsLogsSection.displayName = "DiagnosticsLogsSection";
 
-import { QRCodeReader } from "./components/QRCodeReader";
-
 const DESKTOP_SERVER_HTTPS_PORT = "23456";
 
 function isDesktopServerOrigin(origin: string): boolean {
@@ -1020,10 +1023,33 @@ const ServerConnectionSection = React.memo(() => {
       )}
 
       {showQRScanner && (
-        <QRCodeReader
-          onScan={handleQRScan}
-          onClose={() => setShowQRScanner(false)}
-        />
+        <React.Suspense
+          fallback={
+            <div
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0,0,0,0.8)",
+                zIndex: 9999,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#a3a3a3",
+                fontSize: "14px",
+              }}
+            >
+              Chargement du scanner...
+            </div>
+          }
+        >
+          <LazyQRCodeReader
+            onScan={handleQRScan}
+            onClose={() => setShowQRScanner(false)}
+          />
+        </React.Suspense>
       )}
     </div>
   );
