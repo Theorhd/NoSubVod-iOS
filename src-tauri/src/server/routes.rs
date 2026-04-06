@@ -202,12 +202,12 @@ async fn handle_vod_master(
         .unwrap_or("localhost")
         .to_string();
 
+    let settings = state.history.get_settings().await;
+
     let playlist = state
         .twitch
-        .generate_master_playlist(&vod_id, &host, &state.server_token)
+        .generate_master_playlist(&vod_id, &host, &settings, &state.server_token)
         .await?;
-
-    let settings = state.history.get_settings().await;
 
     let mut body = if is_legacy_ios_request(&headers) {
         filter_hevc_variants_for_ios(&playlist)

@@ -2510,9 +2510,10 @@ impl TwitchService {
         &self,
         vod_id: &str,
         _host: &str,
-        token: &str,
+        settings: &ExperienceSettings,
+        server_token: &str,
     ) -> AppResult<String> {
-        let cache_key = format!("master:{}:{}", vod_id.trim(), token.trim());
+        let cache_key = format!("master:{}:{}", vod_id.trim(), server_token.trim());
         if let Some(cached) = self.master_playlist_cache.get(&cache_key).await {
             return Ok(cached);
         }
@@ -2520,6 +2521,52 @@ impl TwitchService {
         let safe_vod_id = gql_escape(vod_id.trim());
         if !RE_VOD_ID_SAFE.is_match(vod_id.trim()) {
             return Err(AppError::BadRequest("Invalid VOD identifier".to_string()));
+        }
+
+        if let Ok((playback_value, playback_sig)) =
+            self.fetch_vod_playback_token(vod_id, settings).await
+        {
+            let random_p = rand_u32() % 1_000_000;
+            let source_url = format!(
+                "https://usher.ttvnw.net/vod/{}.m3u8?allow_source=true&allow_audio_only=true&playlist_include_framerate=true&player_backend=mediaplayer&player=twitchweb&p={random_p}&nauth={}&nauthsig={}",
+                urlencoding_simple(vod_id.trim()),
+                urlencoding_simple(&playback_value),
+                urlencoding_simple(&playback_sig)
+            );
+
+            let client = self.get_client(settings).await;
+            match get_text_with_direct_fallback(
+                &client,
+                &self.android_tv_client,
+                &source_url,
+                "vod master",
+            )
+            .await
+            {
+                Ok(master) => {
+                    let rewritten = rewrite_master_with_proxy(
+                        &master,
+                        _host,
+                        &source_url,
+                        &self.variant_cache,
+                        server_token,
+                    )
+                    .await;
+
+                    self.master_playlist_cache
+                        .insert(cache_key.clone(), rewritten.clone())
+                        .await;
+
+                    return Ok(rewritten);
+                }
+                Err(error) => {
+                    eprintln!(
+                        "[vod] usher master request failed ({error}), falling back to inferred quality URLs"
+                    );
+                }
+            }
+        } else {
+            eprintln!("[vod] failed to fetch VOD playback token, using inferred quality URLs");
         }
 
         let body = format!(
@@ -2620,7 +2667,7 @@ impl TwitchService {
             let proxy_url = format!(
                 "/api/stream/variant.m3u8?id={}&t={}",
                 urlencoding_simple(&proxy_id),
-                token
+                server_token
             );
             let bandwidth = quality_bandwidth_bps(&res_key, fps, &resolution);
 
@@ -2684,6 +2731,123 @@ impl TwitchService {
             server_token,
         )
         .await)
+    }
+
+    async fn fetch_vod_playback_token(
+        &self,
+        vod_id: &str,
+        settings: &ExperienceSettings,
+    ) -> AppResult<(String, String)> {
+        let sanitized_vod_id = vod_id.trim();
+        if sanitized_vod_id.is_empty() || !RE_VOD_ID_SAFE.is_match(sanitized_vod_id) {
+            return Err(AppError::BadRequest("Invalid VOD identifier".to_string()));
+        }
+
+        let build_body = |platform: &str| {
+            serde_json::json!({
+                "operationName": "PlaybackAccessToken_Template",
+                "query": format!(
+                    "query PlaybackAccessToken_Template($vodID: ID!) {{ videoPlaybackAccessToken(id: $vodID, params: {{platform: \"{}\", playerBackend: \"mediaplayer\", playerType: \"site\"}}) {{ value signature }} }}",
+                    platform
+                ),
+                "variables": { "vodID": sanitized_vod_id }
+            })
+        };
+
+        let device_id = create_device_id();
+        let session_id = create_serving_id();
+
+        let primary_body = build_body("web");
+        let ios_fallback_body = build_body("ios");
+
+        let client = self.get_client(settings).await;
+
+        let make_req = |c: &Client, body: &Value| {
+            let mut r = c
+                .post("https://gql.twitch.tv/gql")
+                .header("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
+                .header("X-Device-Id", &device_id)
+                .header("Client-Session-Id", &session_id);
+
+            if settings.adblock_enabled {
+                r = r.header("Client-Adblock-Extension", "ttv-lol-pro");
+            }
+            r.json(body)
+        };
+
+        let mut data_opt: Option<Value> = None;
+
+        if let Ok(resp) = make_req(&client, &primary_body).send().await {
+            if resp.status().is_success() {
+                if let Ok(json) = resp.json::<Value>().await {
+                    if !json["data"]["videoPlaybackAccessToken"].is_null() {
+                        data_opt = Some(json);
+                    }
+                }
+            }
+        }
+
+        if data_opt.is_none() && settings.adblock_enabled {
+            if let Ok(resp) = make_req(&client, &ios_fallback_body).send().await {
+                if resp.status().is_success() {
+                    if let Ok(json) = resp.json::<Value>().await {
+                        if !json["data"]["videoPlaybackAccessToken"].is_null() {
+                            data_opt = Some(json);
+                        }
+                    }
+                }
+            }
+        }
+
+        let data = match data_opt {
+            Some(d) => d,
+            None => {
+                let resp = self
+                    .android_tv_client
+                    .post("https://gql.twitch.tv/gql")
+                    .header("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
+                    .header("X-Device-Id", &device_id)
+                    .header("Client-Session-Id", &session_id)
+                    .json(&primary_body)
+                    .send()
+                    .await?;
+
+                if !resp.status().is_success() {
+                    return Err(AppError::Internal(format!(
+                        "Failed to fetch VOD playback token ({})",
+                        resp.status()
+                    )));
+                }
+                resp.json().await?
+            }
+        };
+
+        let token = &data["data"]["videoPlaybackAccessToken"];
+        if token.is_null() {
+            return Err(AppError::Internal(
+                "Missing videoPlaybackAccessToken in response".to_string(),
+            ));
+        }
+
+        let value = if token["value"].is_string() {
+            token["value"].as_str().unwrap_or_default().to_string()
+        } else {
+            token["value"].to_string()
+        };
+
+        let sig = if token["signature"].is_string() {
+            token["signature"].as_str().unwrap_or_default().to_string()
+        } else {
+            token["signature"].to_string()
+        };
+
+        if value.is_empty() || value == "null" || sig.is_empty() || sig == "null" {
+            return Err(AppError::Internal(
+                "Missing VOD token value or signature".to_string(),
+            ));
+        }
+
+        Ok((value, sig))
     }
 
     async fn fetch_live_playback_token(
