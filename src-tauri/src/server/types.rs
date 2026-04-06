@@ -250,6 +250,8 @@ pub struct ExperienceSettings {
 /// Root of the persisted JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PersistedData {
+    #[serde(rename = "schemaVersion", default = "default_schema_version")]
+    pub schema_version: u32,
     #[serde(default)]
     pub history: HashMap<String, HistoryEntry>,
     #[serde(default)]
@@ -267,4 +269,35 @@ pub struct PersistedData {
         skip_serializing_if = "Option::is_none"
     )]
     pub twitch_token: Option<String>,
+}
+
+const fn default_schema_version() -> u32 {
+    1
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProfileData {
+    #[serde(default)]
+    pub history: HashMap<String, HistoryEntry>,
+    #[serde(default)]
+    pub watchlist: Vec<WatchlistEntry>,
+    #[serde(default)]
+    pub subs: Vec<SubEntry>,
+    #[serde(default)]
+    pub settings: ExperienceSettings,
+    #[serde(rename = "trustedDevices", default)]
+    pub trusted_devices: Vec<TrustedDevice>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileBackupFile {
+    #[serde(rename = "formatVersion", default = "default_profile_format_version")]
+    pub format_version: u32,
+    #[serde(rename = "exportedAt")]
+    pub exported_at: u64,
+    pub profile: ProfileData,
+}
+
+const fn default_profile_format_version() -> u32 {
+    1
 }

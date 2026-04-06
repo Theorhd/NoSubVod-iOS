@@ -1,80 +1,21 @@
-# 🚀 NoSubVOD Desktop
+# 🚀 NoSubVOD iOS
 
-NoSubVOD Desktop est une application locale pour regarder des VODs et des lives Twitch depuis n’importe quel appareil du réseau local (mobile, tablette, TV, PC), avec historique, watchlist et portail web intégré.
+NoSubVOD iOS est le client mobile de NoSubVOD, basé sur Tauri v2 avec un backend Rust embarqué pour lire des VODs et des lives Twitch depuis une interface React adaptée au mobile.
+NoSubVOD iOS est dérivé de NoSubVOD-Desktop. La version 0.3.7 de NSV iOS est le fruit d'un travail de refactorisation d'un code initialement prévu pour des machines Linux et Windows vers la plateforme iOS.
 
-## 🆕 v0.3.5 — Extensions, Multi-View, Chat Search et Auto-Update
+## 🆕 v0.3.7 — Auth Twitch, robustesse streaming et CI IPA fiabilisée
 
-La version 0.3.5 introduit un système d'extensions intégré, une première extension DevTool Explorer, le mode Multi-View avec recherche chat, ainsi que l'intégration des mises à jour automatiques de l'application.
+La version 0.3.7 se concentre sur la fiabilité, la stabilité du player/chat et la reproductibilité des builds iOS en CI.
 
-### Points clés v0.3.5
+### Points clés v0.3.7
 
-- **Système d'extensions** : architecture d'extensions complète (manager, contexte, API), activation/désactivation dans les settings.
-- **DevTool Explorer** : nouvelle extension intégrée pour le monitoring avec UI/UX améliorée.
-- **Multi-View + Chat Search** : navigation enrichie avec vue multiple et recherche chat intégrée.
-- **Auto-Update** : plugin updater intégré avec configuration de clé publique pour les releases desktop.
-- **Qualité & CI** : améliorations backend/tests et exclusion de `extensions/**` des checks CI/CodeQL.
+- **Auth Twitch renforcée** : flux OAuth avec polling/popup et gestion de token plus robuste côté middleware.
+- **Chat VOD stabilisé** : alignement sur la contrainte Twitch API (`first` entre `1` et `100`) pour éviter les erreurs de replay.
+- **Streaming/serveur mobile** : normalisation des playlists HLS et ajustements d'URL serveur local.
+- **Build IPA CI durci** : no-signing forcé, sélection Xcode résiliente et collecte d'artefact avec fallback.
+- **Maintenance iOS** : suppression de plugins/dépendances Tauri inutilisés et nettoyage global du code.
 
-## 🆕 v0.3.4 — Remote Control, qualité player renforcée et Screen Share Windows amélioré
-
-La version 0.3.4 améliore le pilotage à distance du player, la stabilité de lecture HLS, la sélection de qualité vidéo, et la robustesse du mode Screen Share sur Windows.
-
-### Points clés v0.3.4
-
-- **Contrôle distant playback** : ajout des commandes Play/Pause/Seek/Volume/Mute et d'un panneau de contrôle avec infos de session.
-- **Player plus stable** : gestion des événements distants fiabilisée dans NSVPlayer pour un comportement plus constant.
-- **Qualité vidéo optimisée** : tri/sélection des qualités amélioré avec configuration HLS orientée stabilité.
-- **Screen Share Windows renforcé** : compatibilité améliorée côté service + ajustements CSS responsives.
-- **Maintenance** : refactors structurels, nettoyage de styles et bump de version global vers 0.3.4.
-
-## 🆕 v0.3.3 — Fiabilite streaming, optimisations Rust et backend durci
-
-La version 0.3.3 se concentre sur la stabilite de lecture VOD/Live, l'optimisation du backend Rust et l'amelioration de la maintenabilite globale.
-
-### Points clés v0.3.3
-
-- **Streaming plus fiable** : correction des 404 intermittents sur le proxy HLS (`/api/stream/variant.*`) avec support du proxy segment via URL directe validee.
-- **Perf backend Rust** : regex lazy, selection proxy optimisee, client HTTP partage dans TwitchService/routes, taches async harmonisees.
-- **Memoire et I/O** : optimisations `Arc`/`Cow`, download manager avec verrouillage granulaire, historique en buffered I/O.
-- **Pagination et etat** : pagination history/watchlist backend+frontend, state management consolide (ScreenShareService, OAuth pending cleanup).
-- **Securite et robustesse** : middleware/validation renforces, refactor global de la gestion d'erreurs.
-- **Qualite projet** : compression async, tracing/logging etendus, tests unitaires supplementaires, lint cleanup.
-
-## 🆕 v0.3.2 — Screen Share WebRTC, PlayerRTC immersif & navigation dock
-
-La version 0.3.2 introduit le partage d'ecran en temps reel via WebRTC, rapproche l'experience PlayerRTC du player principal, et modernise la navigation sur tablette/desktop avec un rendu dock flottant.
-
-### Points clés v0.3.2
-
-- **Screen Share WebRTC (Windows)** : nouveau module de partage d'ecran local avec roles host/viewer et signalisation WebSocket.
-- **Controle distant interactif** : transmission souris/clavier vers l'hote selon les permissions de session.
-- **PlayerRTC ameliore** : plein ecran immersif, controle du son (mute + volume) et masquage automatique des controles apres inactivite.
-- **Navigation modernisee** : navbar mobile conservee et adaptation tablette/desktop/laptop en dock centre type macOS.
-- **Portail LAN HTTPS** : support HTTPS via certificats auto-signes et parcours de connexion mobile ameliore (QR code).
-- **Stabilite & qualite** : nettoyage lint, corrections UI/UX et harmonisation des composants Screen Share / PlayerRTC / Player.
-- **Versioning** : montee de version globale en `0.3.2`.
-
-## 🆕 v0.2.2 — Contrôle Qualité, Raccourcis & Chat Amélioré
-
-La version 0.2.2 transforme l'expérience de visionnage avec un contrôle total sur la qualité vidéo, des raccourcis clavier et une intégration du chat plus robuste.
-
-### Points clés v0.2.2
-
-- **Contrôle Qualité**: Sélection manuelle, qualité préférée et qualité minimale garanties (même sur iOS/iPadOS).
-- **Raccourcis Clavier**: Contrôle complet au clavier (F pour plein écran, Espace pour pause, flèches pour volume/seek).
-- **Chat Relais**: Intégration du chat Twitch sur Desktop et système de secours intelligent pour les connexions via IP locale (réseau local).
-- **Infos Streamer**: Nouvel encart dynamique avec titre, catégorie, viewers, uptime et profil.
-- **Adblock Renforcé**: Proxy GQL, spoofing iOS et gestion des discontinuités pour éviter les freezes d'écran.
-- **Fiabilité**: Correction des erreurs 500 sur les flux longs et fallback automatique si les proxys échouent.
-
-## 🆕 v0.2.1 — Adblocking live + fiabilité Search/Channel
-
-La version 0.2.0 migre le desktop vers **Tauri**.
-
-- **Poids de l’ancienne installation**: `701 Mo`
-- **Poids de la nouvelle installation**: `16,3 Mo`
-- **Économie mémoire**: consommation RAM **divisée par 8**
-
-Résultat: démarrage plus rapide, binaire bien plus léger et meilleure stabilité générale.
+Voir la note complète: [releasenotes/0.3.7.md](releasenotes/0.3.7.md)
 
 ---
 
@@ -82,73 +23,61 @@ Résultat: démarrage plus rapide, binaire bien plus léger et meilleure stabili
 
 ### 🔓 VOD + Live Twitch
 
-- Lecture des VOD via HLS généré côté serveur local.
-- Lecture des lives via endpoint local `/api/live/:login/master.m3u8`.
-- Sélecteur de qualité (Auto + niveaux manuels) dans le player.
-- Adblocking live expérimental (configurable dans Settings).
-
-### 🏠 Portail local multi-appareils
-
-- Serveur local accessible sur le LAN.
-- QR code affiché côté desktop pour ouverture rapide du portail.
-- Navigation: Home, Live, Search, Trends, Channel, Player, Multi-View, History, Settings.
-
-### 🧩 Extensions
-
-- Système d'extensions local intégré avec activation/désactivation depuis les settings.
-- Extension DevTool Explorer incluse pour le monitoring et l'exploration d'outils.
-
-### 🖥️ Screen Share local
-
-- Diffusion d'ecran/fenetre en temps reel via WebRTC (Windows).
-- Session partagee sur le reseau local avec etat host/viewer.
-- Mode interactif pour piloter l'ecran distant (souris + clavier) selon configuration.
+- Lecture des VODs via un proxy HLS du backend local.
+- Lecture des lives via des endpoints API locaux.
+- Navigation complète: Home, Live, Search, Trends, Channel, Player, Multi-View.
 
 ### 🎬 Expérience player
 
-- Player desktop complet (lecture, seek, volume, vitesse, qualité, fullscreen).
-- Fallback natif iOS/iPadOS.
-- Contrôles auto-masqués après inactivité, réaffichage au mouvement.
+- Contrôles playback complets (play/pause, seek, volume, fullscreen selon contexte).
+- Gestion de la qualité vidéo (Auto + sélection manuelle).
+- Comportement optimisé pour un usage iPhone/iPad.
 
-### 💾 Données utilisateur
+### 💬 Chat, historique et données
 
+- Replay chat pour VOD.
 - Historique de lecture avec reprise.
-- Watchlist.
-- Synchronisation locale optionnelle (OneSync).
-- Paramètres serveur persistants (dont adblock proxy/mode).
+- Watchlist et données locales persistantes.
 
-### ⬆️ Mise à jour application
+### 🖥️ Fonctionnalités LAN / pairing
 
-- Intégration d'un mécanisme d'auto-update desktop via plugin updater.
+- Backend local iOS accessible en HTTP `23400` et HTTPS `23401`.
+- Mode pairé avec Desktop: découverte via `23456` et routage ciblé de certaines APIs (screen share/downloads).
+
+### 🧩 Modules intégrés
+
+- Screen Share.
+- Downloads.
+- Auth Twitch.
 
 ---
 
 ## 🧱 Stack technique
 
-- **Desktop shell**: Tauri v2 (Rust)
+- **Shell mobile**: Tauri v2
 - **Backend local**: Rust (`src-tauri/src/server`)
-- **Portail LAN**: React + Vite + TypeScript (`src/portal`)
-- **UI desktop**: React + Vite + TypeScript (`src/renderer`)
+- **Frontend portal**: React + Vite + TypeScript (`src/portal`)
+- **Code partagé**: TypeScript (`src/shared`)
 
 ---
 
 ## 📁 Architecture du repo
 
-- `src/portal/` : application web servie aux appareils du réseau local
-- `src/renderer/` : interface desktop (fenêtre principale)
-- `src/shared/` : types partagés TypeScript
-- `src-tauri/src/` : cœur Rust (commands Tauri, serveur local, routes Twitch, historique)
-- `src-tauri/tauri.conf.json` : configuration packaging/resources
+- `src/portal/` : interface web principale (mobile-first)
+- `src/shared/` : types, hooks et utilitaires partagés
+- `src-tauri/src/` : coeur Rust (serveur local, routes API, auth, history, download, screenshare)
+- `src-tauri/tauri.conf.json` : configuration app/build Tauri
 
 ---
 
 ## 🛠 Développement
 
-### Prérequis SideStore/AltStore
+### Prérequis
 
 - Node.js 20+
 - Rust stable
 - npm
+- Xcode (pour build iOS local)
 
 ### Installation
 
@@ -162,60 +91,65 @@ npm ci
 npm run dev
 ```
 
-Le portail LAN tourne en **HTTPS** sur le port `5173` pour autoriser l'acces camera sur mobile (iOS/Android).
-Au premier acces, le navigateur peut afficher un avertissement de certificat local: acceptez-le pour continuer.
+Le portail tourne en HTTPS sur `https://localhost:5173` en mode dev.
 
-URL type a ouvrir sur mobile:
+### Configuration OAuth Twitch (iOS + fallback desktop)
 
-```text
-https://<ip-locale-du-pc>:5173
+Dans la console Twitch (`Applications > Manage`), configure un Redirect URL loopback:
+
+- `http://localhost:23400/api/auth/twitch/callback`
+
+Note: selon ton compte/app, Twitch peut imposer des Redirect URLs en HTTPS.
+Si c'est ton cas, utilise une URL HTTPS supportée par ton app et configure-la via
+`TWITCH_REDIRECT_URI` / `TWITCH_REDIRECT_URI_IOS`.
+
+Puis configure `src-tauri/.env` (voir `src-tauri/.env.example`):
+
+```bash
+TWITCH_CLIENT_ID=...
+TWITCH_CLIENT_SECRET=...
 ```
 
-### Qualité code
+Optionnel: surcharge des redirects si nécessaire (`TWITCH_REDIRECT_URI`, `TWITCH_REDIRECT_URI_IOS`).
+
+### Qualité du code
 
 ```bash
 npm run lint
 npm run type-check
 ```
 
-### Build desktop
-
-```bash
-npm run build
-```
-
-### Build iOS (local)
+### Build iOS local
 
 ```bash
 npm run build:portal
 npx tauri ios init
-npx tauri ios build --export-method ad-hoc
+npx tauri ios build --export-method debugging
 ```
 
-## 🍎 iOS IPA (CI) — modes de build
+---
 
-Le workflow [NoSubVod-IOS/.github/workflows/ios-ipa.yml](.github/workflows/ios-ipa.yml) produit une **IPA non signée** (unsigned) destinée a etre re-signee par SideStore/AltStore.
+## 🍎 IPA CI (unsigned)
 
-### Prérequis
+Le workflow [.github/workflows/ios-ipa.yml](.github/workflows/ios-ipa.yml) produit une IPA non signée destinée à être re-signée via SideStore/AltStore.
 
-- Aucun compte Apple Developer payant requis pour generer l'artefact CI.
-- Pour installation sur iPhone/iPad, la signature finale est faite via SideStore/AltStore avec ton compte Apple personnel.
+### Prérequis CI
 
-### Artefacts CI
+- Secrets GitHub obligatoires: `TWITCH_CLIENT_ID` et `TWITCH_CLIENT_SECRET`.
 
-- Unsigned IPA: `NoSubVOD-iOS-unsigned.ipa` (pour SideStore/AltStore)
-- Unsigned app zip: `NoSubVOD-iOS-unsigned-app.zip` (debug)
-- Artifact GitHub: `nosubvod-ios-unsigned-<run>-<sha>`
+### Artefact
 
-Avec un compte Apple gratuit, la signature doit etre renouvelee periodiquement (limitation Apple).
+- Artifact GitHub: `nosubvod-ios-<run>-<sha>`
+- Fichier principal: `NoSubVOD-iOS.ipa`
+
+Avec un compte Apple gratuit, la signature SideStore/AltStore doit être renouvelée périodiquement.
 
 ---
 
 ## ⚠️ Notes
 
-- Le portail local doit être accessible sur le même réseau local que l’appareil client.
-- Certaines disponibilités de contenus dépendent des endpoints Twitch.
-- En build desktop (.exe), le portail public mobile est servi en HTTPS sur `23456` et l'API interne reste en HTTP sur `23455`.
+- Certaines fonctionnalités dépendent des endpoints Twitch et de leurs limites API.
+- En mode pairé, garder le même réseau local entre l'app iOS et l'instance Desktop.
 
 ---
 

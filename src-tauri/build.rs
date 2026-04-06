@@ -59,7 +59,10 @@ fn main() {
 
     println!("cargo:rerun-if-env-changed=TWITCH_CLIENT_ID");
     println!("cargo:rerun-if-env-changed=TWITCH_CLIENT_SECRET");
-    println!("cargo:rerun-if-changed={}", manifest_dir.join(".env").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir.join(".env").display()
+    );
 
     emit_rustc_env_from_file(&manifest_dir, "TWITCH_CLIENT_ID");
     emit_rustc_env_from_file(&manifest_dir, "TWITCH_CLIENT_SECRET");

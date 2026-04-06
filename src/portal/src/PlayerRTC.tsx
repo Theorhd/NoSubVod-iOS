@@ -8,21 +8,16 @@ import type {
 } from "../../shared/types";
 import { useWebRTCViewer } from "./hooks/useWebRTCViewer";
 import { usePlayerControls } from "./hooks/usePlayerControls";
+import { navigateBackInApp } from "./utils/navigation";
+import { buildAuthQuery, getRemoteServerToken } from "./utils/authTokens";
 
 const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
 
 function getAuthQueryFromStorage(): string {
-  const standaloneToken =
-    globalThis.sessionStorage.getItem("nsv_token") ||
-    globalThis.localStorage.getItem("nsv_token");
-  const pairedToken = globalThis.localStorage.getItem("nsv_server_token");
+  const pairedToken = getRemoteServerToken();
   const serverUrl = globalThis.localStorage.getItem("nsv_server_url");
-  const token = pairedToken && serverUrl ? pairedToken : standaloneToken;
-  const deviceId = globalThis.localStorage.getItem("nsv_device_id");
-  const params = new URLSearchParams();
-  if (token) params.set("t", token);
-  if (deviceId) params.set("d", deviceId);
-  return params.toString();
+  const authTarget = pairedToken && serverUrl ? "remote" : "local";
+  return buildAuthQuery(authTarget);
 }
 
 function normalizeRelayOrigin(input: string): string {
@@ -952,11 +947,7 @@ export default function PlayerRTC() {
   };
 
   const handleBack = () => {
-    if (globalThis.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate("/screen-share");
-    }
+    navigateBackInApp(navigate, "/screen-share");
   };
 
   return renderPlayerRTCView({

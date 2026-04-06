@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use futures::stream::{self, StreamExt};
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use reqwest::Client;
@@ -338,10 +339,16 @@ pub struct TwitchService {
     live_page_cache: Cache<String, LiveStreamsPage>,
     related_channels_cache: Cache<String, Vec<String>>,
     generic_value_cache: Cache<String, Value>,
+    master_playlist_cache: Cache<String, String>,
 
     /// Short-lived cache for variant proxy targets (UUID -> sanitized URL).
     variant_cache: Cache<String, String>,
 }
+
+const LIVE_STATUS_CONCURRENCY: usize = 12;
+const RELATED_CHANNELS_CONCURRENCY: usize = 8;
+const TRENDING_GAMES_CONCURRENCY: usize = 8;
+const TRENDING_CHANNELS_CONCURRENCY: usize = 10;
 
 impl Default for TwitchService {
     fn default() -> Self {
@@ -392,6 +399,10 @@ impl TwitchService {
                 .build(),
             generic_value_cache: Cache::builder()
                 .max_capacity(100)
+                .time_to_live(Duration::from_secs(120))
+                .build(),
+            master_playlist_cache: Cache::builder()
+                .max_capacity(600)
                 .time_to_live(Duration::from_secs(120))
                 .build(),
             variant_cache: Cache::builder()
@@ -1903,17 +1914,18 @@ impl TwitchService {
         }
 
         let mut result: HashMap<String, LiveStream> = HashMap::new();
-        let mut futures = Vec::new();
+        let results = stream::iter(normalized.iter().cloned())
+            .map(|login| async move {
+                let res = self.fetch_user_live_stream(&login).await;
+                (login, res)
+            })
+            .buffer_unordered(LIVE_STATUS_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
 
-        for login in &normalized {
-            futures.push(self.fetch_user_live_stream(login));
-        }
-
-        let results = futures::future::join_all(futures).await;
-
-        for (login, res) in normalized.iter().zip(results) {
+        for (login, res) in results {
             if let Ok(Some(stream)) = res {
-                result.insert(login.clone(), stream);
+                result.insert(login, stream);
             }
         }
 
@@ -2363,11 +2375,11 @@ impl TwitchService {
         };
 
         // Fetch related channels for top channels
-        let mut related_futures = Vec::new();
-        for channel in &top_channels {
-            related_futures.push(self.fetch_related_channels(channel, 3));
-        }
-        let related_results = futures::future::join_all(related_futures).await;
+        let related_results = stream::iter(top_channels.iter().cloned())
+            .map(|channel| async move { self.fetch_related_channels(&channel, 3).await })
+            .buffer_unordered(RELATED_CHANNELS_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
         let mut related_channels_set: HashSet<String> = HashSet::new();
         for res in related_results {
             for ch in res {
@@ -2380,10 +2392,10 @@ impl TwitchService {
 
         // ── Step 2: Fetch all candidate VODs concurrently ──
 
-        let mut game_futures = Vec::new();
+        let mut game_inputs: Vec<(String, Option<Vec<String>>)> = Vec::new();
         for game in &top_games {
-            game_futures.push(self.fetch_game_vods(game, Some(vec!["fr".to_string()]), 40));
-            game_futures.push(self.fetch_game_vods(game, None, 40));
+            game_inputs.push((game.clone(), Some(vec!["fr".to_string()])));
+            game_inputs.push((game.clone(), None));
         }
 
         let mut channels_to_fetch: HashSet<String> = HashSet::new();
@@ -2397,15 +2409,20 @@ impl TwitchService {
             channels_to_fetch.insert(ch.clone());
         }
 
-        let channel_futures: Vec<_> = channels_to_fetch
-            .iter()
-            .map(|login| self.fetch_user_vods(login))
-            .collect();
+        let game_results =
+            stream::iter(game_inputs.into_iter())
+                .map(|(game, lang_filter)| async move {
+                    self.fetch_game_vods(&game, lang_filter, 40).await
+                })
+                .buffer_unordered(TRENDING_GAMES_CONCURRENCY)
+                .collect::<Vec<_>>()
+                .await;
 
-        let (game_results, channel_results) = tokio::join!(
-            futures::future::join_all(game_futures),
-            futures::future::join_all(channel_futures),
-        );
+        let channel_results = stream::iter(channels_to_fetch.into_iter())
+            .map(|login| async move { self.fetch_user_vods(&login).await })
+            .buffer_unordered(TRENDING_CHANNELS_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
 
         let all_candidates: Vec<Vod> = game_results
             .into_iter()
@@ -2493,11 +2510,63 @@ impl TwitchService {
         &self,
         vod_id: &str,
         _host: &str,
-        token: &str,
+        settings: &ExperienceSettings,
+        server_token: &str,
     ) -> AppResult<String> {
+        let cache_key = format!("master:{}:{}", vod_id.trim(), server_token.trim());
+        if let Some(cached) = self.master_playlist_cache.get(&cache_key).await {
+            return Ok(cached);
+        }
+
         let safe_vod_id = gql_escape(vod_id.trim());
         if !RE_VOD_ID_SAFE.is_match(vod_id.trim()) {
             return Err(AppError::BadRequest("Invalid VOD identifier".to_string()));
+        }
+
+        if let Ok((playback_value, playback_sig)) =
+            self.fetch_vod_playback_token(vod_id, settings).await
+        {
+            let random_p = rand_u32() % 1_000_000;
+            let source_url = format!(
+                "https://usher.ttvnw.net/vod/{}.m3u8?allow_source=true&allow_audio_only=true&playlist_include_framerate=true&player_backend=mediaplayer&player=twitchweb&p={random_p}&nauth={}&nauthsig={}",
+                urlencoding_simple(vod_id.trim()),
+                urlencoding_simple(&playback_value),
+                urlencoding_simple(&playback_sig)
+            );
+
+            let client = self.get_client(settings).await;
+            match get_text_with_direct_fallback(
+                &client,
+                &self.android_tv_client,
+                &source_url,
+                "vod master",
+            )
+            .await
+            {
+                Ok(master) => {
+                    let rewritten = rewrite_master_with_proxy(
+                        &master,
+                        _host,
+                        &source_url,
+                        &self.variant_cache,
+                        server_token,
+                    )
+                    .await;
+
+                    self.master_playlist_cache
+                        .insert(cache_key.clone(), rewritten.clone())
+                        .await;
+
+                    return Ok(rewritten);
+                }
+                Err(error) => {
+                    eprintln!(
+                        "[vod] usher master request failed ({error}), falling back to inferred quality URLs"
+                    );
+                }
+            }
+        } else {
+            eprintln!("[vod] failed to fetch VOD playback token, using inferred quality URLs");
         }
 
         let body = format!(
@@ -2542,7 +2611,9 @@ impl TwitchService {
         );
         let mut inserted_variants = 0usize;
 
-        for (res_key, resolution, fps) in &resolutions {
+        let mut probe_set = tokio::task::JoinSet::new();
+
+        for (index, (res_key, resolution, fps)) in resolutions.iter().enumerate() {
             let stream_url = build_stream_url(
                 &domain,
                 &vod_special_id,
@@ -2553,21 +2624,39 @@ impl TwitchService {
                 channel_login,
             );
 
-            let codec = match is_valid_quality(&self.android_tv_client, &stream_url).await {
-                Some(c) => Some(c),
-                None => is_valid_quality(&self.shared_client, &stream_url).await,
-            };
-            let Some(codec) = codec else {
-                continue;
-            };
+            let android_tv_client = self.android_tv_client.clone();
+            let shared_client = self.shared_client.clone();
+            let res_key = (*res_key).to_string();
+            let resolution = (*resolution).to_string();
+            let fps = *fps;
 
-            let quality = if *res_key == "chunked" {
-                let height = resolution.split('x').nth(1).unwrap_or("1080");
-                format!("{height}p")
+            probe_set.spawn(async move {
+                let codec = match is_valid_quality(&android_tv_client, &stream_url).await {
+                    Some(c) => Some(c),
+                    None => is_valid_quality(&shared_client, &stream_url).await,
+                };
+
+                (index, res_key, resolution, fps, stream_url, codec)
+            });
+        }
+
+        type ProbedVariant = (String, String, u32, String, String);
+
+        let mut probed_variants: Vec<Option<ProbedVariant>> = vec![None; resolutions.len()];
+
+        while let Some(joined) = probe_set.join_next().await {
+            if let Ok((index, res_key, resolution, fps, stream_url, Some(codec))) = joined {
+                probed_variants[index] = Some((res_key, resolution, fps, stream_url, codec));
+            }
+        }
+
+        for (res_key, resolution, fps, stream_url, codec) in probed_variants.into_iter().flatten() {
+            let quality = if res_key == "chunked" {
+                "source".to_string()
             } else {
                 res_key.to_string()
             };
-            let enabled = if *res_key == "chunked" { "YES" } else { "NO" };
+            let enabled = if res_key == "chunked" { "YES" } else { "NO" };
 
             let proxy_id =
                 match register_variant_proxy_target(&self.variant_cache, &stream_url).await {
@@ -2577,9 +2666,9 @@ impl TwitchService {
             let proxy_url = format!(
                 "/api/stream/variant.m3u8?id={}&t={}",
                 urlencoding_simple(&proxy_id),
-                token
+                server_token
             );
-            let bandwidth = quality_bandwidth_bps(res_key, *fps, resolution);
+            let bandwidth = quality_bandwidth_bps(&res_key, fps, &resolution);
 
             playlist.push_str(&format!(
                 "\n#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID=\"{quality}\",NAME=\"{quality}\",AUTOSELECT={enabled},DEFAULT={enabled}\n#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},CODECS=\"{codec},mp4a.40.2\",RESOLUTION={resolution},VIDEO=\"{quality}\",FRAME-RATE={fps}\n{proxy_url}"
@@ -2592,6 +2681,10 @@ impl TwitchService {
                 "No playable VOD qualities available for this video".to_string(),
             ));
         }
+
+        self.master_playlist_cache
+            .insert(cache_key, playlist.clone())
+            .await;
 
         Ok(playlist)
     }
@@ -2637,6 +2730,123 @@ impl TwitchService {
             server_token,
         )
         .await)
+    }
+
+    async fn fetch_vod_playback_token(
+        &self,
+        vod_id: &str,
+        settings: &ExperienceSettings,
+    ) -> AppResult<(String, String)> {
+        let sanitized_vod_id = vod_id.trim();
+        if sanitized_vod_id.is_empty() || !RE_VOD_ID_SAFE.is_match(sanitized_vod_id) {
+            return Err(AppError::BadRequest("Invalid VOD identifier".to_string()));
+        }
+
+        let build_body = |platform: &str| {
+            serde_json::json!({
+                "operationName": "PlaybackAccessToken_Template",
+                "query": format!(
+                    "query PlaybackAccessToken_Template($vodID: ID!) {{ videoPlaybackAccessToken(id: $vodID, params: {{platform: \"{}\", playerBackend: \"mediaplayer\", playerType: \"site\"}}) {{ value signature }} }}",
+                    platform
+                ),
+                "variables": { "vodID": sanitized_vod_id }
+            })
+        };
+
+        let device_id = create_device_id();
+        let session_id = create_serving_id();
+
+        let primary_body = build_body("web");
+        let ios_fallback_body = build_body("ios");
+
+        let client = self.get_client(settings).await;
+
+        let make_req = |c: &Client, body: &Value| {
+            let mut r = c
+                .post("https://gql.twitch.tv/gql")
+                .header("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
+                .header("X-Device-Id", &device_id)
+                .header("Client-Session-Id", &session_id);
+
+            if settings.adblock_enabled {
+                r = r.header("Client-Adblock-Extension", "ttv-lol-pro");
+            }
+            r.json(body)
+        };
+
+        let mut data_opt: Option<Value> = None;
+
+        if let Ok(resp) = make_req(&client, &primary_body).send().await {
+            if resp.status().is_success() {
+                if let Ok(json) = resp.json::<Value>().await {
+                    if !json["data"]["videoPlaybackAccessToken"].is_null() {
+                        data_opt = Some(json);
+                    }
+                }
+            }
+        }
+
+        if data_opt.is_none() && settings.adblock_enabled {
+            if let Ok(resp) = make_req(&client, &ios_fallback_body).send().await {
+                if resp.status().is_success() {
+                    if let Ok(json) = resp.json::<Value>().await {
+                        if !json["data"]["videoPlaybackAccessToken"].is_null() {
+                            data_opt = Some(json);
+                        }
+                    }
+                }
+            }
+        }
+
+        let data = match data_opt {
+            Some(d) => d,
+            None => {
+                let resp = self
+                    .android_tv_client
+                    .post("https://gql.twitch.tv/gql")
+                    .header("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
+                    .header("X-Device-Id", &device_id)
+                    .header("Client-Session-Id", &session_id)
+                    .json(&primary_body)
+                    .send()
+                    .await?;
+
+                if !resp.status().is_success() {
+                    return Err(AppError::Internal(format!(
+                        "Failed to fetch VOD playback token ({})",
+                        resp.status()
+                    )));
+                }
+                resp.json().await?
+            }
+        };
+
+        let token = &data["data"]["videoPlaybackAccessToken"];
+        if token.is_null() {
+            return Err(AppError::Internal(
+                "Missing videoPlaybackAccessToken in response".to_string(),
+            ));
+        }
+
+        let value = if token["value"].is_string() {
+            token["value"].as_str().unwrap_or_default().to_string()
+        } else {
+            token["value"].to_string()
+        };
+
+        let sig = if token["signature"].is_string() {
+            token["signature"].as_str().unwrap_or_default().to_string()
+        } else {
+            token["signature"].to_string()
+        };
+
+        if value.is_empty() || value == "null" || sig.is_empty() || sig == "null" {
+            return Err(AppError::Internal(
+                "Missing VOD token value or signature".to_string(),
+            ));
+        }
+
+        Ok((value, sig))
     }
 
     async fn fetch_live_playback_token(

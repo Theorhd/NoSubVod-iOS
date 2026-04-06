@@ -1,6 +1,7 @@
 import React, { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Monitor } from "lucide-react";
+import { navigateBackInApp } from "../utils/navigation";
 
 export interface TopBarProps {
   title?: ReactNode;
@@ -26,7 +27,11 @@ export const TopBar = React.memo(
         >
           {(mode === "back" || mode === "home") && (
             <button
-              onClick={() => (mode === "back" ? navigate(-1) : navigate("/"))}
+              onClick={() =>
+                mode === "back"
+                  ? navigateBackInApp(navigate, "/")
+                  : navigate("/")
+              }
               className="secondary-btn"
               style={{
                 width: "40px",

@@ -31,6 +31,15 @@
   /* -- Transitions -- */
   --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* -- iOS Safe Area -- */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+}
+
+@supports (top: constant(safe-area-inset-top)) {
+  :root {
+    --safe-area-top: constant(safe-area-inset-top);
+  }
 }
 
 /* === Global Resets === */
@@ -250,6 +259,7 @@ body {
   top: 0;
   z-index: 90;
   padding: 12px 16px;
+  padding-top: calc(12px + var(--safe-area-top));
   background: rgba(7, 8, 15, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -2060,6 +2070,7 @@ button {
 @media (max-width: 480px) {
   .top-bar {
     padding: 10px 12px;
+    padding-top: calc(10px + var(--safe-area-top));
   }
 
   .container {
@@ -2103,7 +2114,7 @@ button {
 /* === Toast Notifications === */
 .toast-container {
   position: fixed;
-  top: 20px;
+  top: calc(20px + var(--safe-area-top));
   right: 20px;
   z-index: 9999;
   display: flex;

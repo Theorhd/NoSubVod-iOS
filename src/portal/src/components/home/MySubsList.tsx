@@ -20,7 +20,7 @@ const MySubsList = React.memo(
       <div style={{ marginBottom: "32px" }}>
         <div className="section-header">
           <h2>
-            <Users size={20} /> Your Channels
+            <Users size={20} /> Your Subs
           </h2>
         </div>
 

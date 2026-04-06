@@ -12,6 +12,8 @@ import type {
   RemoteControlPayload,
   WsMessage,
 } from "../../../shared/types";
+import { usePageVisibility } from "../../../shared/hooks/usePageVisibility";
+import { buildAuthQuery, getRemoteServerToken } from "../utils/authTokens";
 
 const rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -33,6 +35,7 @@ export function useWebRTCViewer(
   remoteVideoRef: React.RefObject<HTMLVideoElement | null>,
   relayOrigin: string | null = null,
 ) {
+  const isPageVisible = usePageVisibility();
   const [signalStatus, setSignalStatus] = useState("Disconnected");
   const [rtcStatus, setRtcStatus] = useState("Idle");
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
@@ -144,21 +147,10 @@ export function useWebRTCViewer(
   );
 
   const getAuthQuery = useCallback(() => {
-    const standaloneToken =
-      globalThis.sessionStorage.getItem("nsv_token") ||
-      globalThis.localStorage.getItem("nsv_token");
-    const pairedToken = globalThis.localStorage.getItem("nsv_server_token");
+    const pairedToken = getRemoteServerToken();
     const serverUrl = globalThis.localStorage.getItem("nsv_server_url");
-    const token = pairedToken && serverUrl ? pairedToken : standaloneToken;
-    const deviceId = globalThis.localStorage.getItem("nsv_device_id");
-    const params = new URLSearchParams();
-    if (token) {
-      params.set("t", token);
-    }
-    if (deviceId) {
-      params.set("d", deviceId);
-    }
-    return params.toString();
+    const authTarget = pairedToken && serverUrl ? "remote" : "local";
+    return buildAuthQuery(authTarget);
   }, []);
 
   const sendWs = useCallback((payload: object) => {
@@ -557,7 +549,7 @@ export function useWebRTCViewer(
   }, [hasRemoteStream, recoverRemotePlayback]);
 
   useEffect(() => {
-    if (!hasRemoteStream) {
+    if (!hasRemoteStream || !isPageVisible) {
       frozenTickCountRef.current = 0;
       lastPlaybackTimeRef.current = 0;
       return;
@@ -565,7 +557,7 @@ export function useWebRTCViewer(
 
     const timer = globalThis.setInterval(() => {
       const video = remoteVideoRef.current;
-      if (!video || document.visibilityState !== "visible") {
+      if (!video) {
         return;
       }
       evaluatePlaybackHealth(video);
@@ -574,7 +566,7 @@ export function useWebRTCViewer(
     return () => {
       globalThis.clearInterval(timer);
     };
-  }, [evaluatePlaybackHealth, hasRemoteStream, remoteVideoRef]);
+  }, [evaluatePlaybackHealth, hasRemoteStream, remoteVideoRef, isPageVisible]);
 
   return {
     signalStatus: requiresRelay ? "Unavailable" : signalStatus,

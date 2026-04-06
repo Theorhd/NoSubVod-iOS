@@ -1,8 +1,15 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { UserInfo } from "../../shared/types";
 import { formatViewers } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
+import { navigateToPlayer } from "./utils/navigation";
 
 type SearchGame = {
   id: string;
@@ -25,12 +32,18 @@ type SearchResult = SearchGame | SearchUser;
 
 export default function Search() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const lastRestoredQueryRef = useRef("");
+  const urlQuery = useMemo(
+    () => new URLSearchParams(location.search).get("q") || "",
+    [location.search],
+  );
 
   const channels = useMemo(
     () =>
@@ -51,31 +64,63 @@ export default function Search() {
     [results],
   );
 
-  const handleSearch = async (e: React.SyntheticEvent) => {
+  const runSearch = useCallback(
+    async (rawQuery: string, persistInUrl: boolean) => {
+      const q = rawQuery.trim();
+      if (!q) {
+        setResults([]);
+        setHasSearched(false);
+        return;
+      }
+
+      setIsSearching(true);
+      setHasSearched(true);
+
+      try {
+        const res = await fetch(
+          `/api/search/global?q=${encodeURIComponent(q)}`,
+        );
+        if (!res.ok) throw new Error("Failed to search");
+        const data = (await res.json()) as SearchResult[];
+        setResults(data);
+
+        if (persistInUrl) {
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("q", q);
+            return next;
+          });
+        }
+      } catch (error) {
+        console.error(error);
+        setResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [setSearchParams],
+  );
+
+  const handleSearch = (e: React.SyntheticEvent) => {
     e.preventDefault();
-    const q = query.trim();
-    if (!q) return;
-
-    setIsSearching(true);
-    setHasSearched(true);
-
-    try {
-      const res = await fetch(`/api/search/global?q=${encodeURIComponent(q)}`);
-      if (!res.ok) throw new Error("Failed to search");
-      const data = (await res.json()) as SearchResult[];
-      setResults(data);
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("q", q);
-        return next;
-      });
-    } catch (error) {
-      console.error(error);
-      setResults([]);
-    } finally {
-      setIsSearching(false);
-    }
+    void runSearch(query, true);
   };
+
+  useEffect(() => {
+    const restoredQuery = urlQuery.trim();
+    if (!restoredQuery) {
+      return;
+    }
+
+    if (lastRestoredQueryRef.current === restoredQuery) {
+      return;
+    }
+    lastRestoredQueryRef.current = restoredQuery;
+
+    setQuery((prev) => (prev.trim() ? prev : restoredQuery));
+
+    void runSearch(restoredQuery, false);
+  }, [runSearch, urlQuery]);
 
   return (
     <>
@@ -174,9 +219,9 @@ export default function Search() {
                           cursor: "pointer",
                         }}
                         onClick={() =>
-                          navigate(
-                            `/player?live=${encodeURIComponent(user.login)}`,
-                          )
+                          navigateToPlayer(navigate, {
+                            liveId: user.login,
+                          })
                         }
                       >
                         {user.stream?.title}

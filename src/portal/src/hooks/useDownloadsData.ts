@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { DownloadedFile, ActiveDownload } from "../../../shared/types";
 import { useInterval } from "../../../shared/hooks/useInterval";
+import { usePageVisibility } from "../../../shared/hooks/usePageVisibility";
+import { getActiveToken, getRemoteServerToken } from "../utils/authTokens";
 
 const DEBUG_DOWNLOADS = false;
 const MAX_POLLING_DELAY_MS = 60000;
@@ -15,11 +17,7 @@ export function useDownloadsData() {
   const [activeDownloads, setActiveDownloads] = useState<ActiveDownload[]>([]);
   const [loading, setLoading] = useState(true);
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
-  const [isPageVisible, setIsPageVisible] = useState(() =>
-    typeof document === "undefined"
-      ? true
-      : document.visibilityState === "visible",
-  );
+  const isPageVisible = usePageVisibility();
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
@@ -74,10 +72,6 @@ export function useDownloadsData() {
   }, [fetchDownloads]);
 
   useEffect(() => {
-    const onVisibilityChange = () => {
-      setIsPageVisible(document.visibilityState === "visible");
-    };
-
     const onOnline = () => {
       setIsOnline(true);
     };
@@ -86,11 +80,9 @@ export function useDownloadsData() {
       setIsOnline(false);
     };
 
-    document.addEventListener("visibilitychange", onVisibilityChange);
     globalThis.addEventListener("online", onOnline);
     globalThis.addEventListener("offline", onOffline);
     return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
       globalThis.removeEventListener("online", onOnline);
       globalThis.removeEventListener("offline", onOffline);
     };
@@ -129,9 +121,8 @@ export function useDownloadsData() {
     else if (url.startsWith("/")) resolved = `/api${url}`;
     else resolved = `/api/${url}`;
 
-    const standaloneToken =
-      sessionStorage.getItem("nsv_token") || localStorage.getItem("nsv_token");
-    const pairedToken = localStorage.getItem("nsv_server_token");
+    const standaloneToken = getActiveToken("local");
+    const pairedToken = getRemoteServerToken();
     const serverUrl = localStorage.getItem("nsv_server_url") || "";
 
     const isRemoteDownloadPath =
@@ -139,7 +130,8 @@ export function useDownloadsData() {
       resolved.startsWith("/api/downloads/") ||
       resolved.startsWith("/api/shared-downloads/");
 
-    const useRemoteDownloads = Boolean(serverUrl && pairedToken) && isRemoteDownloadPath;
+    const useRemoteDownloads =
+      Boolean(serverUrl && pairedToken) && isRemoteDownloadPath;
 
     if (useRemoteDownloads) {
       resolved = `${serverUrl.replace(/\/$/, "")}${resolved}`;

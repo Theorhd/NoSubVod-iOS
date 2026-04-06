@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -16,8 +17,11 @@ use sha2::{Digest, Sha256};
 
 use super::error::{AppError, AppResult};
 use super::types::{
-    ExperienceSettings, HistoryEntry, PersistedData, SubEntry, TrustedDevice, WatchlistEntry,
+    ExperienceSettings, HistoryEntry, PersistedData, ProfileBackupFile, ProfileData, SubEntry,
+    TrustedDevice, WatchlistEntry,
 };
+
+const CURRENT_PERSISTED_SCHEMA_VERSION: u32 = 1;
 
 // ── Token encryption helpers ───────────────────────────────────────────────────
 // Uses a machine-specific key derived from the data dir path + a salt.
@@ -33,6 +37,89 @@ fn derive_key(data_dir: &std::path::Path) -> Vec<u8> {
         hasher.update(name.as_bytes());
     }
     hasher.finalize().to_vec()
+}
+
+fn backup_path_for(file_path: &Path) -> PathBuf {
+    let file_name = file_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("history.json");
+    file_path.with_file_name(format!("{file_name}.bak"))
+}
+
+fn temp_path_for(file_path: &Path) -> PathBuf {
+    let file_name = file_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("history.json");
+    file_path.with_file_name(format!("{file_name}.tmp"))
+}
+
+fn load_persisted_file(file_path: &Path) -> AppResult<Option<PersistedData>> {
+    match std::fs::File::open(file_path) {
+        Ok(file) => {
+            let reader = std::io::BufReader::new(file);
+            let data = serde_json::from_reader::<_, PersistedData>(reader)?;
+            Ok(Some(data))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(AppError::Io(e)),
+    }
+}
+
+fn load_with_backup(primary_path: &Path, backup_path: &Path) -> PersistedData {
+    match load_persisted_file(primary_path) {
+        Ok(Some(data)) => data,
+        Ok(None) => match load_persisted_file(backup_path) {
+            Ok(Some(backup_data)) => {
+                eprintln!(
+                    "[history] Primary store missing; restored from backup at {}",
+                    backup_path.display()
+                );
+                backup_data
+            }
+            Ok(None) => PersistedData::default(),
+            Err(err_backup) => {
+                eprintln!(
+                    "[history] Backup store load failed ({}): {:?}. Using defaults.",
+                    backup_path.display(),
+                    err_backup
+                );
+                PersistedData::default()
+            }
+        },
+        Err(err_primary) => {
+            eprintln!(
+                "[history] Primary store load failed ({}): {:?}. Trying backup.",
+                primary_path.display(),
+                err_primary
+            );
+            match load_persisted_file(backup_path) {
+                Ok(Some(backup_data)) => {
+                    eprintln!(
+                        "[history] Restored persisted state from backup at {}",
+                        backup_path.display()
+                    );
+                    backup_data
+                }
+                Ok(None) => {
+                    eprintln!(
+                        "[history] No backup file found at {}. Using defaults.",
+                        backup_path.display()
+                    );
+                    PersistedData::default()
+                }
+                Err(err_backup) => {
+                    eprintln!(
+                        "[history] Backup store load failed ({}): {:?}. Using defaults.",
+                        backup_path.display(),
+                        err_backup
+                    );
+                    PersistedData::default()
+                }
+            }
+        }
+    }
 }
 
 fn encrypt_token(token: &str, key: &[u8]) -> AppResult<String> {
@@ -92,16 +179,14 @@ impl HistoryStore {
     /// Load from disk synchronously (file is small – safe to block on startup).
     pub fn load(data_dir: PathBuf) -> AppResult<Self> {
         let file_path = data_dir.join("history.json");
+        let backup_path = backup_path_for(&file_path);
         let token_key = derive_key(&data_dir);
 
-        let mut data = match std::fs::File::open(&file_path) {
-            Ok(file) => {
-                let reader = std::io::BufReader::new(file);
-                serde_json::from_reader::<_, PersistedData>(reader)?
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => PersistedData::default(),
-            Err(e) => return Err(AppError::Io(e)),
-        };
+        let mut data = load_with_backup(&file_path, &backup_path);
+
+        if data.schema_version == 0 {
+            data.schema_version = CURRENT_PERSISTED_SCHEMA_VERSION;
+        }
 
         // Decrypt token from disk format
         if let Some(ref encrypted) = data.twitch_token {
@@ -154,12 +239,15 @@ impl HistoryStore {
         token_key: &[u8],
     ) -> AppResult<()> {
         let mut disk_data = data_lock.read().await.clone();
+        disk_data.schema_version = CURRENT_PERSISTED_SCHEMA_VERSION;
 
         if let Some(parent) = file_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
 
         let file_path_clone = file_path.to_path_buf();
+        let backup_path = backup_path_for(file_path);
+        let temp_path = temp_path_for(file_path);
         let token_key_clone = token_key.to_vec();
 
         tokio::task::spawn_blocking(move || {
@@ -168,9 +256,28 @@ impl HistoryStore {
                 disk_data.twitch_token = Some(encrypt_token(plaintext, &token_key_clone)?);
             }
 
-            let file = std::fs::File::create(file_path_clone)?;
-            let writer = std::io::BufWriter::new(file);
-            serde_json::to_writer_pretty(writer, &disk_data)?;
+            let temp_file = std::fs::File::create(&temp_path)?;
+            let mut writer = std::io::BufWriter::new(temp_file);
+            serde_json::to_writer_pretty(&mut writer, &disk_data)?;
+            writer.flush()?;
+            writer.get_ref().sync_all()?;
+
+            if file_path_clone.exists() {
+                if let Err(copy_error) = std::fs::copy(&file_path_clone, &backup_path) {
+                    eprintln!(
+                        "[history] Failed to refresh backup {}: {}",
+                        backup_path.display(),
+                        copy_error
+                    );
+                }
+            }
+
+            #[cfg(target_os = "windows")]
+            if file_path_clone.exists() {
+                std::fs::remove_file(&file_path_clone)?;
+            }
+
+            std::fs::rename(&temp_path, &file_path_clone)?;
             Ok::<(), AppError>(())
         })
         .await
@@ -629,6 +736,62 @@ impl HistoryStore {
         }
 
         Ok(updated)
+    }
+
+    pub async fn export_profile_backup(&self) -> ProfileBackupFile {
+        let data = self.data.read().await;
+        let exported_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or(0);
+
+        ProfileBackupFile {
+            format_version: 1,
+            exported_at,
+            profile: ProfileData {
+                history: data.history.clone(),
+                watchlist: data.watchlist.clone(),
+                subs: data.subs.clone(),
+                settings: data.settings.clone(),
+                trusted_devices: data.trusted_devices.clone(),
+            },
+        }
+    }
+
+    pub async fn import_profile_backup(&self, profile: ProfileData) -> AppResult<()> {
+        {
+            let mut data = self.data.write().await;
+
+            let existing_twitch_token = data.twitch_token.clone();
+            let existing_twitch_user_id = data.settings.twitch_user_id.clone();
+            let existing_twitch_user_login = data.settings.twitch_user_login.clone();
+            let existing_twitch_user_display_name = data.settings.twitch_user_display_name.clone();
+            let existing_twitch_user_avatar = data.settings.twitch_user_avatar.clone();
+
+            data.history = profile.history;
+            data.watchlist = profile.watchlist;
+            data.subs = profile.subs;
+            data.settings = profile.settings;
+            data.trusted_devices = profile.trusted_devices;
+            data.schema_version = CURRENT_PERSISTED_SCHEMA_VERSION;
+
+            if let Some(token) = existing_twitch_token {
+                data.twitch_token = Some(token);
+                data.settings.twitch_user_id = existing_twitch_user_id;
+                data.settings.twitch_user_login = existing_twitch_user_login;
+                data.settings.twitch_user_display_name = existing_twitch_user_display_name;
+                data.settings.twitch_user_avatar = existing_twitch_user_avatar;
+            } else {
+                data.twitch_token = None;
+                data.settings.twitch_user_id = None;
+                data.settings.twitch_user_login = None;
+                data.settings.twitch_user_display_name = None;
+                data.settings.twitch_user_avatar = None;
+            }
+        }
+
+        self.schedule_save();
+        Ok(())
     }
 }
 

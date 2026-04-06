@@ -5,6 +5,7 @@ import NSVPlayer from "./components/NSVPlayer";
 import { ExperienceSettings } from "../../shared/types";
 import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
+import { navigateBackInApp } from "./utils/navigation";
 
 interface MultiPlayerSlot {
   id: string;
@@ -82,7 +83,7 @@ export default function MultiView() {
           }}
         >
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigateBackInApp(navigate, "/")}
             className="secondary-btn"
             style={{
               width: "40px",
@@ -163,10 +164,20 @@ export default function MultiView() {
           >
             <NSVPlayer
               source={{
-                src:
-                  slot.type === "live"
-                    ? `/api/live/${encodeURIComponent(slot.targetId)}/master.m3u8`
-                    : `/api/vod/${slot.targetId}/master.m3u8`,
+                src: (() => {
+                  if (slot.type === "live") {
+                    return `/api/live/${encodeURIComponent(slot.targetId)}/master.m3u8`;
+                  }
+
+                  const quality = (
+                    settings.defaultVideoQuality || "auto"
+                  ).trim();
+                  const qualityQuery = quality
+                    ? `?quality=${encodeURIComponent(quality)}`
+                    : "";
+
+                  return `/api/vod/${encodeURIComponent(slot.targetId)}/master.m3u8${qualityQuery}`;
+                })(),
                 type: "application/x-mpegurl",
               }}
               streamType={slot.type === "live" ? "live" : "on-demand"}

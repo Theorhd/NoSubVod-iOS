@@ -11,7 +11,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tauri::Emitter;
 use tower::ServiceExt;
 use tower_http::compression::CompressionLayer;
@@ -26,19 +25,21 @@ use super::{
     },
     dto::{
         ChatQuery, ChatSendBody, DownloadRequest, DownloadedFile, HistoryBody, HistoryListQuery,
-        LiveCategoryQuery, LiveQuery, LiveSearchQuery, LiveStatusQuery, PagedQuery,
+        LiveCategoryQuery, LiveQuery, LiveSearchQuery, LiveStatusQuery, PagedQuery, QualityQuery,
         SearchCategoryQuery, SearchQuery, SettingsPatch, TrustedDevicePatch, VariantProxyQuery,
     },
     error::{AppError, AppResult},
     middleware::{auth_middleware, security_headers_middleware},
     state::ApiState,
-    types::{SubEntry, WatchlistEntry},
+    types::{ProfileBackupFile, ProfileData, SubEntry, WatchlistEntry},
     validation::{
+        cap_master_playlist_to_max_height, ensure_video_media_default,
         filter_hevc_variants_for_ios, is_legacy_ios_request, is_valid_id, is_valid_login,
+        lock_master_playlist_to_height, preferred_quality_height,
     },
 };
 use moka::future::Cache;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 async fn handle_get_extensions(State(state): State<ApiState>) -> impl IntoResponse {
     Json(state.extensions.list().await)
@@ -94,6 +95,9 @@ fn m3u8_response(mut body: String) -> Response {
 
     Response::builder()
         .header(header::CONTENT_TYPE, "application/vnd.apple.mpegurl")
+        .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate")
+        .header("Pragma", "no-cache")
+        .header("Expires", "0")
         .body(Body::from(body))
         .unwrap_or_else(|_| {
             (
@@ -102,6 +106,27 @@ fn m3u8_response(mut body: String) -> Response {
             )
                 .into_response()
         })
+}
+
+fn resolve_target_quality_height(
+    query_quality: Option<&str>,
+    settings_quality: Option<&str>,
+) -> Option<u32> {
+    let requested = query_quality
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    match requested {
+        Some(value) if value.eq_ignore_ascii_case("auto") => None,
+        Some(value) => preferred_quality_height(Some(value))
+            .or_else(|| preferred_quality_height(settings_quality)),
+        None => preferred_quality_height(settings_quality),
+    }
+}
+
+fn is_strict_quality_mode(mode: Option<&str>) -> bool {
+    let value = mode.map(str::trim).unwrap_or_default();
+    value.eq_ignore_ascii_case("strict") || value.eq_ignore_ascii_case("lock")
 }
 
 // ── Route handlers ────────────────────────────────────────────────────────────
@@ -163,6 +188,7 @@ async fn handle_vod_info(
 
 async fn handle_vod_master(
     Path(vod_id): Path<String>,
+    Query(q): Query<QualityQuery>,
     State(state): State<ApiState>,
     headers: axum::http::HeaderMap,
 ) -> AppResult<Response> {
@@ -175,16 +201,34 @@ async fn handle_vod_master(
         .unwrap_or("localhost")
         .to_string();
 
+    let settings = state.history.get_settings().await;
+
     let playlist = state
         .twitch
-        .generate_master_playlist(&vod_id, &host, &state.server_token)
+        .generate_master_playlist(&vod_id, &host, &settings, &state.server_token)
         .await?;
 
-    let body = if is_legacy_ios_request(&headers) {
+    let mut body = if is_legacy_ios_request(&headers) {
         filter_hevc_variants_for_ios(&playlist)
     } else {
         playlist
     };
+
+    if let Some(target_height) = resolve_target_quality_height(
+        q.quality.as_deref(),
+        settings.default_video_quality.as_deref(),
+    ) {
+        if is_strict_quality_mode(q.quality_mode.as_deref()) {
+            body = lock_master_playlist_to_height(&body, target_height);
+        } else {
+            // VOD defaults to capped ABR to preserve fallback renditions and avoid infinite
+            // buffering when the requested fixed rendition stalls on mobile networks.
+            body = cap_master_playlist_to_max_height(&body, target_height);
+        }
+    }
+
+    body = ensure_video_media_default(&body);
+
     Ok(m3u8_response(body))
 }
 
@@ -209,11 +253,14 @@ async fn handle_live_master(
         .generate_live_master_playlist(&login, &host, &settings, &state.server_token)
         .await?;
 
-    let body = if is_legacy_ios_request(&headers) {
+    let mut body = if is_legacy_ios_request(&headers) {
         filter_hevc_variants_for_ios(&m3u8)
     } else {
         m3u8
     };
+
+    body = ensure_video_media_default(&body);
+
     Ok(m3u8_response(body))
 }
 
@@ -416,6 +463,83 @@ async fn handle_update_settings(
             .await?,
     )
     .into_response())
+}
+
+async fn handle_profile_export(State(state): State<ApiState>) -> AppResult<Response> {
+    let backup = state.history.export_profile_backup().await;
+    let json = serde_json::to_string_pretty(&backup)?;
+
+    let file_name = if backup.exported_at > 0 {
+        format!("nosubvod-profile-{}.json", backup.exported_at)
+    } else {
+        "nosubvod-profile-export.json".to_string()
+    };
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/json; charset=utf-8")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{file_name}\""),
+        )
+        .body(Body::from(json))
+        .map_err(|e| AppError::Internal(e.to_string()))
+}
+
+async fn handle_export_diagnostic_logs(State(state): State<ApiState>) -> AppResult<Response> {
+    tokio::fs::create_dir_all(&state.logs_dir)
+        .await
+        .map_err(AppError::Io)?;
+
+    let backend_log_path = state.logs_dir.join("backend.log");
+    let log_content = match tokio::fs::read_to_string(&backend_log_path).await {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            "No backend log file found yet. Logs will appear after backend activity.\n".to_string()
+        }
+        Err(error) => return Err(AppError::Io(error)),
+    };
+
+    let exported_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let file_name = format!("nosubvod-diagnostics-backend-{exported_at}.log");
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{file_name}\""),
+        )
+        .body(Body::from(log_content))
+        .map_err(|error| AppError::Internal(error.to_string()))
+}
+
+async fn handle_profile_import(
+    State(state): State<ApiState>,
+    Json(payload): Json<Value>,
+) -> AppResult<Response> {
+    let profile_data = if let Some(profile_value) = payload.get("profile") {
+        serde_json::from_value::<ProfileData>(profile_value.clone()).map_err(|e| {
+            AppError::BadRequest(format!(
+                "Invalid profile payload in file (profile field): {}",
+                e
+            ))
+        })?
+    } else if serde_json::from_value::<ProfileBackupFile>(payload.clone()).is_ok() {
+        serde_json::from_value::<ProfileBackupFile>(payload)
+            .map_err(|e| AppError::BadRequest(format!("Invalid profile backup file: {}", e)))?
+            .profile
+    } else {
+        serde_json::from_value::<ProfileData>(payload)
+            .map_err(|e| AppError::BadRequest(format!("Invalid profile data: {}", e)))?
+    };
+
+    state.history.import_profile_backup(profile_data).await?;
+
+    Ok(Json(serde_json::json!({ "ok": true })).into_response())
 }
 
 async fn handle_get_subs(
@@ -1051,29 +1175,6 @@ async fn handle_start_download(
     Ok(Json(serde_json::json!({ "message": "Download started" })).into_response())
 }
 
-async fn handle_dev_sysinfo() -> impl IntoResponse {
-    let mut sys = System::new_with_specifics(
-        RefreshKind::new()
-            .with_cpu(CpuRefreshKind::everything())
-            .with_memory(MemoryRefreshKind::everything()),
-    );
-    // Need some wait for CPU stats to be valid
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    sys.refresh_all();
-
-    let cpu_load = sys.global_cpu_usage();
-    let memory_used = sys.used_memory();
-    let memory_total = sys.total_memory();
-
-    Json(serde_json::json!({
-        "cpuLoad": cpu_load,
-        "memoryUsed": memory_used,
-        "memoryTotal": memory_total,
-        "osName": System::name(),
-        "osVersion": System::os_version(),
-    }))
-}
-
 #[derive(Deserialize, Serialize, Clone)]
 struct DevNotifyBody {
     title: String,
@@ -1164,6 +1265,7 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
             header::CONTENT_TYPE,
             header::AUTHORIZATION,
             "x-nsv-token".parse().unwrap(),
+            "x-nsv-device-id".parse().unwrap(),
         ])
         .expose_headers([
             header::CONTENT_RANGE,
@@ -1213,6 +1315,12 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
             "/settings",
             get(handle_get_settings).post(handle_update_settings),
         )
+        .route("/profile/export", get(handle_profile_export))
+        .route("/profile/import", post(handle_profile_import))
+        .route(
+            "/diagnostics/logs/export",
+            get(handle_export_diagnostic_logs),
+        )
         .route("/capabilities", get(handle_get_capabilities))
         .route("/screenshare/state", get(handle_get_screenshare_state))
         .route("/screenshare/ws", get(handle_screenshare_ws))
@@ -1244,8 +1352,16 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
             get(crate::server::auth::handle_auth_start),
         )
         .route(
+            "/auth/twitch/begin",
+            get(crate::server::auth::handle_auth_begin),
+        )
+        .route(
             "/auth/twitch/status",
             get(crate::server::auth::handle_auth_status),
+        )
+        .route(
+            "/auth/twitch/exchange",
+            post(crate::server::auth::handle_auth_exchange),
         )
         .route(
             "/auth/twitch",
@@ -1281,7 +1397,6 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
         .with_state(state.clone());
 
     let dev = Router::new()
-        .route("/sysinfo", get(handle_dev_sysinfo))
         .route("/notify", post(handle_dev_notify))
         .route("/log", post(handle_dev_log))
         .layer(middleware::from_fn_with_state(
@@ -1361,6 +1476,7 @@ mod tests {
             screenshare,
             extensions,
             oauth,
+            logs_dir: std::env::temp_dir().join("nosubvod-test-logs"),
             server_token: "test_token".to_string(),
             app_handle: None,
             download_cache,

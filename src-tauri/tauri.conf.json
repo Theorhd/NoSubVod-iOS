@@ -25,7 +25,16 @@
       "csp": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://static-cdn.jtvnw.net https://clips-media-assets2.twitch.tv; media-src 'self' blob: http://127.0.0.1:23400 http://localhost:23400; connect-src 'self' https://cdn.jsdelivr.net http://127.0.0.1:23400 http://localhost:23400; font-src 'self'; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'"
     }
   },
-  "plugins": {},
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        {
+          "scheme": ["nosubvod"],
+          "appLink": false
+        }
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

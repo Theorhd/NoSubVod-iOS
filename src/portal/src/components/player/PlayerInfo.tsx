@@ -1,14 +1,9 @@
 import React from "react";
-import { Download as DownloadIcon } from "lucide-react";
 import { VOD, LiveStream } from "../../../../shared/types";
-import DownloadMenu from "../DownloadMenu";
 
 interface PlayerInfoProps {
   vodInfo: VOD | null;
   liveInfo: LiveStream | null;
-  duration: number;
-  showDownloadMenu: boolean;
-  onDownloadMenuToggle: (show: boolean) => void;
 }
 
 const Uptime: React.FC<{ startedAt: string }> = ({ startedAt }) => {
@@ -31,13 +26,7 @@ const Uptime: React.FC<{ startedAt: string }> = ({ startedAt }) => {
   return <span>{uptime}</span>;
 };
 
-const PlayerInfo: React.FC<PlayerInfoProps> = ({
-  vodInfo,
-  liveInfo,
-  duration,
-  showDownloadMenu,
-  onDownloadMenuToggle,
-}) => {
+const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
   if (!vodInfo && !liveInfo) return null;
 
   return (
@@ -83,49 +72,6 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
             >
               {liveInfo ? liveInfo.title : vodInfo?.title}
             </h1>
-
-            {vodInfo && (
-              <div style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  className="action-btn"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "8px 16px",
-                    borderRadius: "8px",
-                    background: "#9146ff",
-                    color: "#fff",
-                    border: "none",
-                    fontWeight: "bold",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => onDownloadMenuToggle(!showDownloadMenu)}
-                >
-                  <DownloadIcon size={18} />
-                  Download
-                </button>
-                {showDownloadMenu && vodInfo && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: "100%",
-                      right: 0,
-                      marginBottom: "8px",
-                      zIndex: 10,
-                    }}
-                  >
-                    <DownloadMenu
-                      vodId={vodInfo.id}
-                      title={vodInfo.title}
-                      duration={duration}
-                      onClose={() => onDownloadMenuToggle(false)}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           <div
