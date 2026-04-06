@@ -648,7 +648,7 @@ const NSVPlayer = React.memo(
         }
         hlsInstanceRef.current = null;
       }
-    }, [src.src]);
+    }, [source.src, source.type]);
 
     useEffect(() => {
       didApplyDefaultQualityRef.current = false;
