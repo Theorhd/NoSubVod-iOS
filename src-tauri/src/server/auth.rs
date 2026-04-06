@@ -156,6 +156,15 @@ fn pkce_challenge(verifier: &str) -> String {
     base64url(&hasher.finalize())
 }
 
+fn escape_html(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 // ── Shared HTML helper ─────────────────────────────────────────────────────────
 
 fn close_tab_html(msg: &str, success: bool) -> Html<String> {
@@ -166,16 +175,18 @@ fn close_tab_html(msg: &str, success: bool) -> Html<String> {
     };
     let status = if success { "success" } else { "error" };
     let app_return_url = format!("nosubvod://auth/twitch/callback?status={status}");
+    let safe_msg = escape_html(msg).replace('\n', "<br>");
     Html(format!(
         r#"<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
         body{{background:#0e0e10;color:#efeff1;font-family:Inter,Helvetica,sans-serif;
-                display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:16px;box-sizing:border-box}}
+            display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:20px;box-sizing:border-box;gap:10px}}
+        .panel{{max-width:460px;width:100%;display:flex;flex-direction:column;align-items:center}}
         .icon{{font-size:3rem;margin-bottom:12px}}.msg{{color:{color};font-size:1rem;max-width:420px;line-height:1.5}}
-                .hint{{opacity:.85;font-size:.9rem;margin-top:10px;max-width:420px}}
-                .btn{{margin-top:14px;background:#2f81f7;color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:.95rem}}
-        </style></head><body><div><div class="icon">{icon}</div><p class="msg">{msg}</p></div>
-                <p class="hint">Si cette fenetre ne se ferme pas automatiquement, utilisez le bouton ci-dessous pour revenir dans NoSubVOD.</p>
-                <button class="btn" id="nsv-close">Fermer et revenir</button>
+            .hint{{opacity:.85;font-size:.9rem;margin-top:6px;max-width:420px;line-height:1.45}}
+            .btn{{margin-top:8px;background:#2f81f7;color:#fff;border:none;border-radius:10px;padding:12px 16px;font-size:1rem;text-decoration:none;display:inline-block;font-weight:600}}
+        </style></head><body><div class="panel"><div class="icon">{icon}</div><p class="msg">{safe_msg}</p>
+            <p class="hint">Si cette fenetre ne se ferme pas automatiquement, touchez le bouton pour revenir dans NoSubVOD.</p>
+            <a class="btn" id="nsv-close" href="{app_return_url}">Fermer et revenir</a></div>
                 <script>
                 (function() {{
                     const payload = {{ type: "nsv:twitch-auth", status: "{status}", at: Date.now() }};
@@ -196,23 +207,39 @@ fn close_tab_html(msg: &str, success: bool) -> Html<String> {
                         try {{ window.close(); }} catch (_err) {{}}
                     }};
 
-                    const returnToApp = function () {{
+                    const returnToApp = function (aggressive) {{
                         if (!shouldReturnToApp) return;
-                        try {{ window.location.href = returnUrl; }} catch (_err) {{}}
+                        try {{ window.location.assign(returnUrl); }} catch (_err) {{}}
+                        try {{ if (window.top && window.top !== window) {{ window.top.location.href = returnUrl; }} }} catch (_err) {{}}
+
+                        if (!aggressive) return;
+                        try {{
+                            const iframe = document.createElement("iframe");
+                            iframe.style.display = "none";
+                            iframe.src = returnUrl;
+                            document.body.appendChild(iframe);
+                            setTimeout(function () {{
+                                try {{ iframe.remove(); }} catch (_err) {{}}
+                            }}, 1200);
+                        }} catch (_err) {{}}
                     }};
 
-                    const finishFlow = function () {{
-                        returnToApp();
-                        setTimeout(closeNow, shouldReturnToApp ? 320 : 0);
+                    const finishFlow = function (aggressive) {{
+                        if (shouldReturnToApp) {{
+                            returnToApp(Boolean(aggressive));
+                        }}
+                        setTimeout(closeNow, shouldReturnToApp ? 480 : 0);
                     }};
 
                     const button = document.getElementById("nsv-close");
                     if (button) {{
-                        button.addEventListener("click", finishFlow);
+                        button.addEventListener("click", function () {{
+                            setTimeout(closeNow, 480);
+                        }});
                     }}
 
-                    setTimeout(finishFlow, shouldReturnToApp ? 700 : 1800);
-                    setTimeout(closeNow, 2600);
+                    setTimeout(function () {{ finishFlow(true); }}, shouldReturnToApp ? 1200 : 1800);
+                    setTimeout(closeNow, shouldReturnToApp ? 3200 : 2600);
                 }})();
                 </script></body></html>"#
     ))

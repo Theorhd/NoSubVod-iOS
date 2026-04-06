@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, type NavigateFunction } from "react-router-dom";
 import { HistoryVodEntry } from "../../shared/types";
-import { Download as DownloadIcon } from "lucide-react";
-import DownloadMenu from "./components/DownloadMenu";
 import { formatRelative } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
 import { navigateToPlayer } from "./utils/navigation";
@@ -13,26 +11,10 @@ type HistoryItemProps = Readonly<{
 }>;
 
 function HistoryItemComponent({ entry, navigate }: HistoryItemProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
-
   const progress =
     entry.duration > 0
       ? Math.min(100, Math.max(0, (entry.timecode / entry.duration) * 100))
       : 0;
-
-  const handleDownloadClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (menuOpen) {
-      setMenuOpen(false);
-    } else {
-      setAnchorRect(
-        (e.currentTarget as HTMLButtonElement).getBoundingClientRect(),
-      );
-      setMenuOpen(true);
-    }
-  };
 
   return (
     <div className="history-item" style={{ position: "relative" }}>
@@ -66,25 +48,6 @@ function HistoryItemComponent({ entry, navigate }: HistoryItemProps) {
           </div>
         </div>
       </button>
-      <div style={{ position: "absolute", bottom: "16px", right: "16px" }}>
-        <button
-          onClick={handleDownloadClick}
-          className="action-btn secondary-btn"
-          style={{ padding: "6px", borderRadius: "50%" }}
-          title="Télécharger"
-        >
-          <DownloadIcon size={20} />
-        </button>
-        {menuOpen && anchorRect && (
-          <DownloadMenu
-            vodId={entry.vodId}
-            title={entry.vod?.title}
-            duration={entry.duration}
-            anchorRect={anchorRect}
-            onClose={() => setMenuOpen(false)}
-          />
-        )}
-      </div>
     </div>
   );
 }

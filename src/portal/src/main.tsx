@@ -459,16 +459,28 @@ function parseTwitchOAuthDeepLink(rawUrl: string): URL | null {
       return null;
     }
 
-    const isExpectedHost =
-      parsed.hostname.toLowerCase() === TWITCH_DEEP_LINK_HOST;
-    const isExpectedPath =
-      parsed.pathname.toLowerCase() === TWITCH_DEEP_LINK_PATH;
+    const normalizedHost = parsed.hostname.toLowerCase();
+    const normalizedPath = parsed.pathname.toLowerCase().replace(/\/+$/, "");
+
+    const isExpectedHost = normalizedHost === TWITCH_DEEP_LINK_HOST;
+    const isExpectedPath = normalizedPath === TWITCH_DEEP_LINK_PATH;
+    const isCompatibleCallbackPath =
+      normalizedPath === "/auth/twitch/callback" ||
+      normalizedPath.endsWith("/twitch/callback") ||
+      `${normalizedHost}${normalizedPath}`.includes("auth/twitch/callback");
+
     const hasOAuthParams =
       parsed.searchParams.has("code") ||
       parsed.searchParams.has("error") ||
       parsed.searchParams.has("state");
+    const hasBridgeStatusParam = parsed.searchParams.has("status");
 
-    if ((isExpectedHost && isExpectedPath) || hasOAuthParams) {
+    if (
+      (isExpectedHost && isExpectedPath) ||
+      isCompatibleCallbackPath ||
+      hasOAuthParams ||
+      hasBridgeStatusParam
+    ) {
       return parsed;
     }
   } catch {
