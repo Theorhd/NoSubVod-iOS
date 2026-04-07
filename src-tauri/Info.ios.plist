@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>NoSubVOD scanne votre reseau local pour detecter et associer votre serveur Desktop afin d'acceder aux downloads.</string>
   <key>UIBackgroundModes</key>
   <array>
     <string>audio</string>

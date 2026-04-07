@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::stream::{self, StreamExt};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::RwLock;
@@ -27,6 +27,19 @@ struct SubNotificationCursor {
 struct AppNotificationPayload {
     title: String,
     message: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemotePushRequest {
+    title: String,
+    message: String,
+    device_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RemotePushResponse {
+    delivered: Option<bool>,
 }
 
 #[derive(Clone)]
@@ -102,6 +115,8 @@ impl SubNotificationService {
 
         let latest_vods_by_login = self.fetch_latest_vods(vod_targets).await;
 
+        let mut pending_notifications: Vec<(String, String)> = Vec::new();
+
         let mut cursors = self.cursors.write().await;
         for entry in &tracked_subs {
             let login = normalize_login(&entry.login);
@@ -123,14 +138,14 @@ impl SubNotificationService {
                     let has_changed = cursor.last_live_id.as_deref() != Some(stream.id.as_str());
                     if has_changed {
                         cursor.last_live_id = Some(stream.id.clone());
-                        self.emit_notification(
-                            "Live demarre",
+                        pending_notifications.push((
+                            "Live demarre".to_string(),
                             format!(
                                 "{} est en live: {}",
                                 display_name_for(entry),
                                 truncate_text(&stream.title, 100)
                             ),
-                        );
+                        ));
                     }
                 }
             }
@@ -140,20 +155,25 @@ impl SubNotificationService {
                     let has_changed = cursor.last_vod_id.as_deref() != Some(vod.id.as_str());
                     if has_changed {
                         cursor.last_vod_id = Some(vod.id.clone());
-                        self.emit_notification(
-                            "Nouvelle VOD",
+                        pending_notifications.push((
+                            "Nouvelle VOD".to_string(),
                             format!(
                                 "{} vient de publier: {}",
                                 display_name_for(entry),
                                 truncate_text(&vod.title, 100)
                             ),
-                        );
+                        ));
                     }
                 }
             }
         }
 
         cursors.retain(|login, _| tracked_logins.contains(login));
+
+        for (title, message) in pending_notifications {
+            self.dispatch_notification(&title, message).await;
+        }
+
         Ok(())
     }
 
@@ -182,7 +202,99 @@ impl SubNotificationService {
             .await
     }
 
-    fn emit_notification(&self, title: &str, message: String) {
+    async fn dispatch_notification(&self, title: &str, message: String) {
+        if self.try_forward_remote_notification(title, &message).await {
+            return;
+        }
+
+        self.emit_local_notification(title, message);
+    }
+
+    async fn try_forward_remote_notification(&self, title: &str, message: &str) -> bool {
+        let settings = self.history.get_settings().await;
+
+        if !settings.desktop_pairing_enabled || !settings.desktop_pairing_push_override {
+            return false;
+        }
+
+        let Some(server_url) = settings
+            .desktop_pairing_server_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return false;
+        };
+
+        let Some(server_token) = settings
+            .desktop_pairing_server_token
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return false;
+        };
+
+        let request_body = RemotePushRequest {
+            title: title.to_string(),
+            message: message.to_string(),
+            device_id: settings
+                .desktop_pairing_device_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned),
+        };
+
+        let endpoint = format!("{}/api/pairing/remote-push", server_url.trim_end_matches('/'));
+
+        let client = match reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .timeout(Duration::from_secs(6))
+            .build()
+        {
+            Ok(client) => client,
+            Err(error) => {
+                tracing::warn!(error = %error, "Failed to build remote push HTTP client");
+                return false;
+            }
+        };
+
+        let mut request = client
+            .post(endpoint)
+            .header("x-nsv-token", server_token)
+            .json(&request_body);
+
+        if let Some(device_id) = request_body.device_id.as_deref() {
+            request = request.header("x-nsv-device-id", device_id);
+        }
+
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(error) => {
+                tracing::warn!(error = %error, "Remote push forwarding request failed");
+                return false;
+            }
+        };
+
+        if !response.status().is_success() {
+            tracing::warn!(
+                status = %response.status(),
+                "Remote push endpoint returned non-success status"
+            );
+            return false;
+        }
+
+        match response.json::<RemotePushResponse>().await {
+            Ok(payload) => payload.delivered.unwrap_or(false),
+            Err(error) => {
+                tracing::warn!(error = %error, "Failed to parse remote push response payload");
+                false
+            }
+        }
+    }
+
+    fn emit_local_notification(&self, title: &str, message: String) {
         let payload = AppNotificationPayload {
             title: title.to_string(),
             message,

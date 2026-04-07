@@ -174,6 +174,7 @@ const REMOTE_API_PATH_PREFIXES = [
   "/api/downloads",
   "/api/download/start",
   "/api/shared-downloads",
+  "/api/pairing",
 ];
 
 function normalizeApiPathname(pathname: string): string {

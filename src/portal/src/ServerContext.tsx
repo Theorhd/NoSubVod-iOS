@@ -8,7 +8,11 @@ import React, {
   ReactNode,
 } from "react";
 import { safeStorageGet, safeStorageSet } from "../../shared/utils/storage";
-import { getRemoteServerToken, setRemoteServerToken } from "./utils/authTokens";
+import {
+  getDeviceId,
+  getRemoteServerToken,
+  setRemoteServerToken,
+} from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
 
 const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
@@ -85,6 +89,31 @@ export function ServerProvider({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void checkStatus();
   }, [checkStatus]);
+
+  useEffect(() => {
+    const connected = Boolean(tokenValue && serverUrlState);
+    const payload = connected
+      ? {
+          desktopPairingEnabled: true,
+          desktopPairingServerUrl: serverUrlState,
+          desktopPairingServerToken: tokenValue,
+          desktopPairingDeviceId: getDeviceId(),
+        }
+      : {
+          desktopPairingEnabled: false,
+          desktopPairingServerUrl: null,
+          desktopPairingServerToken: null,
+          desktopPairingDeviceId: null,
+        };
+
+    void fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => {
+      // Ignore sync failures; the next state update will retry.
+    });
+  }, [serverUrlState, tokenValue]);
 
   const value = useMemo(
     () => ({

@@ -117,6 +117,12 @@ export interface ExperienceSettings {
   preferredVideoQuality?: string;
   downloadLocalPath?: string;
   downloadNetworkSharedPath?: string;
+  desktopPairingEnabled?: boolean;
+  desktopPairingServerUrl?: string;
+  desktopPairingServerToken?: string;
+  desktopPairingDeviceId?: string;
+  desktopPairingApnsToken?: string;
+  desktopPairingPushOverride?: boolean;
   twitchImportFollows?: boolean;
   launchAtLogin?: boolean;
   autoUpdate?: boolean;
@@ -145,6 +151,9 @@ export interface TrustedDevice {
   lastSeenAt: number;
   lastIp?: string;
   userAgent?: string;
+  platform?: string;
+  apnsToken?: string;
+  pushEnabled?: boolean;
   trusted: boolean;
 }
 

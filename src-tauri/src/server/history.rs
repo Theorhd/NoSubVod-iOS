@@ -447,6 +447,12 @@ impl HistoryStore {
         preferred_video_quality: Option<Option<String>>,
         download_local_path: Option<Option<String>>,
         download_network_shared_path: Option<Option<String>>,
+        desktop_pairing_enabled: Option<bool>,
+        desktop_pairing_server_url: Option<Option<String>>,
+        desktop_pairing_server_token: Option<Option<String>>,
+        desktop_pairing_device_id: Option<Option<String>>,
+        desktop_pairing_apns_token: Option<Option<String>>,
+        desktop_pairing_push_override: Option<bool>,
         launch_at_login: Option<bool>,
         auto_update: Option<bool>,
         enabled_extensions: Option<Vec<String>>,
@@ -479,6 +485,24 @@ impl HistoryStore {
             }
             if let Some(v) = download_network_shared_path {
                 data.settings.download_network_shared_path = v;
+            }
+            if let Some(v) = desktop_pairing_enabled {
+                data.settings.desktop_pairing_enabled = v;
+            }
+            if let Some(v) = desktop_pairing_server_url {
+                data.settings.desktop_pairing_server_url = v;
+            }
+            if let Some(v) = desktop_pairing_server_token {
+                data.settings.desktop_pairing_server_token = v;
+            }
+            if let Some(v) = desktop_pairing_device_id {
+                data.settings.desktop_pairing_device_id = v;
+            }
+            if let Some(v) = desktop_pairing_apns_token {
+                data.settings.desktop_pairing_apns_token = v;
+            }
+            if let Some(v) = desktop_pairing_push_override {
+                data.settings.desktop_pairing_push_override = v;
             }
             if let Some(v) = launch_at_login {
                 data.settings.launch_at_login = v;
@@ -723,6 +747,9 @@ impl HistoryStore {
                     last_seen_at: now,
                     last_ip: ip,
                     user_agent: ua,
+                    platform: None,
+                    apns_token: None,
+                    push_enabled: false,
                     trusted: false,
                 });
                 should_save = true;
