@@ -246,7 +246,10 @@ impl SubNotificationService {
                 .map(ToOwned::to_owned),
         };
 
-        let endpoint = format!("{}/api/pairing/remote-push", server_url.trim_end_matches('/'));
+        let endpoint = format!(
+            "{}/api/pairing/remote-push",
+            server_url.trim_end_matches('/')
+        );
 
         let client = match reqwest::Client::builder()
             .danger_accept_invalid_certs(true)

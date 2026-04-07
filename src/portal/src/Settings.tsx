@@ -786,29 +786,29 @@ const ServerConnectionSection = React.memo(() => {
   );
 
   const registerRemotePairing = useCallback(async () => {
-      const deviceId = getDeviceId();
-      if (!deviceId) {
-        throw new Error("Device ID indisponible pour le pairing.");
-      }
+    const deviceId = getDeviceId();
+    if (!deviceId) {
+      throw new Error("Device ID indisponible pour le pairing.");
+    }
 
-      const response = await fetch("/api/pairing/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deviceId,
-          platform: "ios",
-          apnsToken: pairingApnsToken.trim() || null,
-          pushEnabled: pairingPushOverride,
-        }),
-      });
+    const response = await fetch("/api/pairing/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceId,
+        platform: "ios",
+        apnsToken: pairingApnsToken.trim() || null,
+        pushEnabled: pairingPushOverride,
+      }),
+    });
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(payload?.error || "Pairing Desktop refuse.");
-      }
-    }, [pairingApnsToken, pairingPushOverride]);
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(payload?.error || "Pairing Desktop refuse.");
+    }
+  }, [pairingApnsToken, pairingPushOverride]);
 
   const unregisterRemotePairing = useCallback(async () => {
     const deviceId = getDeviceId();
@@ -843,10 +843,18 @@ const ServerConnectionSection = React.memo(() => {
 
   useEffect(() => {
     const enabled = Boolean(serverUrl && token);
-    void persistPairingConfig(enabled, serverUrl || null, token || null).catch(() => {
-      // Ignore autosave failures, connection flow will retry explicit sync.
-    });
-  }, [persistPairingConfig, pairingApnsToken, pairingPushOverride, serverUrl, token]);
+    void persistPairingConfig(enabled, serverUrl || null, token || null).catch(
+      () => {
+        // Ignore autosave failures, connection flow will retry explicit sync.
+      },
+    );
+  }, [
+    persistPairingConfig,
+    pairingApnsToken,
+    pairingPushOverride,
+    serverUrl,
+    token,
+  ]);
 
   const scanNetwork = async () => {
     setScanning(true);
