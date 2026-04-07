@@ -27,6 +27,33 @@ const TWITCH_DEEP_LINK_PROTOCOL = "nosubvod:";
 const TWITCH_DEEP_LINK_HOST = "auth";
 const TWITCH_DEEP_LINK_PATH = "/twitch/callback";
 const TWITCH_OAUTH_STATUS_STORAGE_KEY = "nsv_twitch_oauth_status";
+const APP_READY_EVENT_NAME = "nsv-app-ready";
+const LAUNCH_LOADER_ID = "nsv-launch-loader";
+const LAUNCH_LOADER_HIDING_CLASS = "is-hiding";
+const LAUNCH_LOADER_TRANSITION_MS = 760;
+const LAUNCH_LOADER_FALLBACK_TIMEOUT_MS = 15000;
+
+let hasDismissedLaunchLoader = false;
+
+function dismissLaunchLoader(): void {
+  if (hasDismissedLaunchLoader) {
+    return;
+  }
+
+  hasDismissedLaunchLoader = true;
+  const loader = document.getElementById(LAUNCH_LOADER_ID);
+  if (!loader) {
+    return;
+  }
+
+  const cleanup = () => {
+    loader.remove();
+  };
+
+  loader.classList.add(LAUNCH_LOADER_HIDING_CLASS);
+  loader.addEventListener("transitionend", cleanup, { once: true });
+  globalThis.setTimeout(cleanup, LAUNCH_LOADER_TRANSITION_MS + 80);
+}
 
 type ApiInvokeCommand = "internal_api_request" | "proxy_remote_request";
 
@@ -825,6 +852,11 @@ class AppErrorBoundary extends React.Component<
 
 // Expose React globally for extensions to avoid bundling it
 (globalThis as any).React = React;
+
+globalThis.addEventListener(APP_READY_EVENT_NAME, dismissLaunchLoader, {
+  once: true,
+});
+globalThis.setTimeout(dismissLaunchLoader, LAUNCH_LOADER_FALLBACK_TIMEOUT_MS);
 
 async function bootstrapPortal() {
   await initializeSecureTokenStorage();

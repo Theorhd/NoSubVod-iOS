@@ -43,6 +43,7 @@ const MultiView = lazy(() => import("./MultiView"));
 const ScreenShare = lazy(() => import("./ScreenShare.tsx"));
 
 const SUSPEND_EXTENSION_LOADING = true;
+const APP_READY_EVENT_NAME = "nsv-app-ready";
 
 type NavItem = {
   path: string;
@@ -88,6 +89,27 @@ function isSwipeBackBlockedTarget(target: EventTarget | null): boolean {
       "input, textarea, select, button, [contenteditable='true'], [data-disable-swipe-back='true']",
     ),
   );
+}
+
+function AppReadySignal() {
+  const hasEmittedRef = useRef(false);
+
+  useEffect(() => {
+    if (hasEmittedRef.current) {
+      return;
+    }
+
+    hasEmittedRef.current = true;
+    const frame = globalThis.requestAnimationFrame(() => {
+      globalThis.dispatchEvent(new Event(APP_READY_EVENT_NAME));
+    });
+
+    return () => {
+      globalThis.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  return null;
 }
 
 function IosSwipeBackBridge() {
@@ -363,6 +385,7 @@ function AppContent() {
               </div>
             }
           >
+            <AppReadySignal />
             <div className="content-wrap">
               <IosSwipeBackBridge />
               <Routes>

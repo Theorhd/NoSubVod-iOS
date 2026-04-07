@@ -7,9 +7,95 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        min-height: 100%;
+        background: #000;
+      }
+
+      #root {
+        min-height: 100vh;
+      }
+
+      #nsv-launch-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        background: #000;
+        transition:
+          transform 0.72s cubic-bezier(0.2, 0.92, 0.2, 1),
+          border-top-left-radius 0.72s cubic-bezier(0.2, 0.92, 0.2, 1),
+          border-top-right-radius 0.72s cubic-bezier(0.2, 0.92, 0.2, 1),
+          opacity 0.72s ease;
+      }
+
+      #nsv-launch-loader::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          circle at center,
+          rgba(255, 255, 255, 0.06) 0%,
+          rgba(0, 0, 0, 0.98) 62%
+        );
+        pointer-events: none;
+      }
+
+      #nsv-launch-loader img {
+        width: min(34vw, 132px);
+        height: auto;
+        display: block;
+        position: relative;
+        z-index: 1;
+        animation: nsv-loader-pulse 1.7s ease-in-out infinite;
+        filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.2));
+      }
+
+      #nsv-launch-loader.is-hiding {
+        transform: translateY(108%);
+        border-top-left-radius: 46px;
+        border-top-right-radius: 46px;
+        opacity: 0.98;
+        pointer-events: none;
+      }
+
+      @keyframes nsv-loader-pulse {
+        0%,
+        100% {
+          opacity: 0.9;
+          transform: scale(0.98);
+        }
+
+        50% {
+          opacity: 1;
+          transform: scale(1.02);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #nsv-launch-loader,
+        #nsv-launch-loader img {
+          animation: none;
+          transition: none;
+        }
+
+        #nsv-launch-loader.is-hiding {
+          opacity: 0;
+          transform: none;
+        }
+      }
+    </style>
     <title>NoSubVod</title>
   </head>
   <body>
+    <div id="nsv-launch-loader" aria-hidden="true">
+      <img src="/icon.png" alt="NoSubVod" />
+    </div>
     <div id="root"></div>
     <script type="module">
       import { initDebugTools, initNSVLogger } from "./src/utils/debug.ts";

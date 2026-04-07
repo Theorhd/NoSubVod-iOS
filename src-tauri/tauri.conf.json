@@ -18,7 +18,7 @@
         "height": 860,
         "resizable": true,
         "fullscreen": false,
-        "backgroundColor": "#18181b"
+        "backgroundColor": "#000000"
       }
     ],
     "security": {
@@ -38,6 +38,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "iOS": {
+      "infoPlist": "Info.ios.plist"
+    },
     "icon": ["icons/icon.png"]
   }
 }

@@ -628,6 +628,7 @@ const NSVPlayer = React.memo(
       const intervalId = globalThis.setInterval(() => {
         const mediaState = storeRef.current as any;
         if (!mediaState) return;
+        if (document.visibilityState === "hidden") return;
         if (mediaState.paused || mediaState.ended) return;
         if (!mediaState.canPlay) return;
         if (mediaState.seeking) return;
