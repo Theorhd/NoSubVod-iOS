@@ -254,7 +254,9 @@ export const QRCodeReader: React.FC<QRCodeReaderProps> = ({
             <video
               ref={videoRef}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
+            >
+              <track kind="captions" />
+            </video>
             <div
               style={{
                 position: "absolute",
