@@ -151,8 +151,8 @@ pub fn run() {
             tracing::info!("App resumed from background, network stack should be active");
         }
         #[cfg(mobile)]
-        tauri::RunEvent::Suspended => {
-            tracing::info!("App suspended, background tasks might be limited by iOS");
+        tauri::RunEvent::ExitRequested { .. } => {
+            tracing::info!("App exit requested, background tasks should stop gracefully");
         }
         _ => {}
     });
