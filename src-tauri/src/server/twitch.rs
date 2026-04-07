@@ -1801,7 +1801,7 @@ impl TwitchService {
         }
 
         let body = format!(
-            r#"{{"query":"query {{ user(login: \"{}\") {{ id, login, displayName, profileImageURL(width: 300) }} }}"}}"#,
+            r#"{{"query":"query {{ user(login: \"{}\") {{ id, login, displayName, profileImageURL(width: 300), createdAt }} }}"}}"#,
             gql_escape(username)
         );
 

@@ -3,6 +3,7 @@ export interface UserInfo {
   login: string;
   displayName: string;
   profileImageURL: string;
+  createdAt?: string;
 }
 
 export interface SubEntry {

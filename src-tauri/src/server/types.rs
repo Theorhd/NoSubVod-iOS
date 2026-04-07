@@ -23,6 +23,8 @@ pub struct UserInfo {
     pub display_name: String,
     #[serde(rename = "profileImageURL")]
     pub profile_image_url: String,
+    #[serde(rename = "createdAt", default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
