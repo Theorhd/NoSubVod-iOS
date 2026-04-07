@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { WatchlistEntry } from "../../../../shared/types";
 import { Bookmark, X, Play } from "lucide-react";
+import { navigateToPlayer } from "../../utils/navigation";
 
 interface WatchlistPreviewProps {
   readonly watchlist: WatchlistEntry[];
@@ -77,7 +78,11 @@ const WatchlistPreview = React.memo(
                 <button
                   className="stretched-link"
                   aria-label={`Regarder ${vod.title}`}
-                  onClick={() => navigate(`/player?vod=${vod.vodId}`)}
+                  onClick={() =>
+                    navigateToPlayer(navigate, {
+                      vodId: vod.vodId,
+                    })
+                  }
                   style={{ background: "none", border: "none", padding: 0 }}
                 />
 
@@ -122,10 +127,6 @@ const WatchlistPreview = React.memo(
                   {vod.title}
                 </div>
               </div>
-
-              <style>{`
-              .vod-card:hover .vod-play-overlay { opacity: 1 !important; }
-            `}</style>
             </div>
           ))}
         </div>

@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
-  ExperienceSettings,
   HistoryVodEntry,
   LiveStatusMap,
   SubEntry,
@@ -13,17 +12,104 @@ import MySubsList from "./components/home/MySubsList";
 import HistoryPreview from "./components/home/HistoryPreview";
 import WatchlistPreview from "./components/home/WatchlistPreview";
 import { TopBar } from "./components/TopBar";
+import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 
-const defaultSettings: ExperienceSettings = {
-  oneSync: false,
-};
+async function fetchJson<T>(
+  url: string,
+  signal: AbortSignal,
+): Promise<T | null> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    return null;
+  }
+  return (await response.json()) as T;
+}
+
+function readLocalSubs(): SubEntry[] {
+  const saved = localStorage.getItem("nsv_subs");
+  if (!saved) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(saved) as SubEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeSubEntry(entry: SubEntry): SubEntry {
+  return {
+    login: entry.login.trim().toLowerCase(),
+    displayName: entry.displayName,
+    profileImageURL: entry.profileImageURL,
+  };
+}
+
+function dedupeSubs(entries: SubEntry[]): SubEntry[] {
+  const byLogin = new Map<string, SubEntry>();
+  for (const entry of entries) {
+    const normalized = normalizeSubEntry(entry);
+    if (!normalized.login) continue;
+    if (!byLogin.has(normalized.login)) {
+      byLogin.set(normalized.login, normalized);
+    }
+  }
+  return [...byLogin.values()];
+}
+
+async function resolveSubsFromStorage(
+  signal: AbortSignal,
+  remoteSubsData: SubEntry[] | null,
+): Promise<{ subs: SubEntry[]; clearLegacyLocal: boolean }> {
+  const localSubs = dedupeSubs(readLocalSubs());
+
+  if (!remoteSubsData) {
+    return { subs: localSubs, clearLegacyLocal: false };
+  }
+
+  const normalizedRemote = dedupeSubs(remoteSubsData);
+  if (normalizedRemote.length > 0) {
+    return { subs: normalizedRemote, clearLegacyLocal: true };
+  }
+
+  if (localSubs.length === 0) {
+    return { subs: [], clearLegacyLocal: false };
+  }
+
+  await Promise.all(
+    localSubs.map(async (entry) => {
+      try {
+        await fetch("/api/subs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entry),
+          signal,
+        });
+      } catch {
+        // Keep local fallback when migration cannot complete now.
+      }
+    }),
+  );
+
+  const migratedSubs = await fetchJson<SubEntry[]>("/api/subs", signal);
+  if (migratedSubs && migratedSubs.length > 0) {
+    return {
+      subs: dedupeSubs(migratedSubs),
+      clearLegacyLocal: true,
+    };
+  }
+
+  return { subs: localSubs, clearLegacyLocal: false };
+}
 
 export default function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPageVisible = usePageVisibility();
   const [subs, setSubs] = useState<SubEntry[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
   const [historyPreview, setHistoryPreview] = useState<HistoryVodEntry[]>([]);
-  const [settings, setSettings] = useState<ExperienceSettings>(defaultSettings);
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
 
   const [showModal, setShowModal] = useState(false);
@@ -35,60 +121,76 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<UserInfo[]>([]);
   const [isSearchingChannels, setIsSearchingChannels] = useState(false);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [watchlistRes, settingsRes, historyRes] = await Promise.all([
-          fetch("/api/watchlist"),
-          fetch("/api/settings"),
-          fetch("/api/history/list?limit=3"),
-        ]);
+  const subsLiveStatusKey = useMemo(() => {
+    if (subs.length === 0) return "";
+    return subs
+      .map((sub) => sub.login.toLowerCase())
+      .sort((a, b) => a.localeCompare(b))
+      .join(",");
+  }, [subs]);
 
-        if (watchlistRes.ok) {
-          setWatchlist((await watchlistRes.json()) as WatchlistEntry[]);
-        }
+  const loadHomeData = useCallback(async (signal: AbortSignal) => {
+    try {
+      const [watchlistData, historyData, remoteSubsData] = await Promise.all([
+        fetchJson<WatchlistEntry[]>("/api/watchlist", signal),
+        fetchJson<HistoryVodEntry[]>("/api/history/list?limit=3", signal),
+        fetchJson<SubEntry[]>("/api/subs", signal),
+      ]);
 
-        if (historyRes.ok) {
-          setHistoryPreview((await historyRes.json()) as HistoryVodEntry[]);
-        }
+      if (signal.aborted) return;
 
-        let oneSyncEnabled = false;
-        if (settingsRes.ok) {
-          const remoteSettings =
-            (await settingsRes.json()) as ExperienceSettings;
-          oneSyncEnabled = Boolean(remoteSettings.oneSync);
-          setSettings({ oneSync: oneSyncEnabled });
-        }
-
-        if (oneSyncEnabled) {
-          const subsRes = await fetch("/api/subs");
-          if (subsRes.ok) {
-            setSubs((await subsRes.json()) as SubEntry[]);
-          }
-        } else {
-          const saved = localStorage.getItem("nsv_subs");
-          setSubs(saved ? (JSON.parse(saved) as SubEntry[]) : []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch initial home data", error);
+      if (watchlistData) {
+        setWatchlist(watchlistData);
       }
-    };
 
-    void loadData();
+      if (historyData) {
+        setHistoryPreview(historyData);
+      }
+
+      const resolvedSubs = await resolveSubsFromStorage(signal, remoteSubsData);
+      if (signal.aborted) return;
+
+      setSubs(resolvedSubs.subs);
+      if (resolvedSubs.clearLegacyLocal) {
+        localStorage.removeItem("nsv_subs");
+      }
+    } catch (error) {
+      if (signal.aborted) {
+        return;
+      }
+      console.error("Failed to fetch home data", error);
+    }
   }, []);
 
   useEffect(() => {
+    if (!isPageVisible) {
+      return;
+    }
+
+    const controller = new AbortController();
+    void loadHomeData(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [isPageVisible, loadHomeData, location.key]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let disposed = false;
+
     const loadLiveStatus = async () => {
-      if (subs.length === 0) {
+      if (!subsLiveStatusKey) {
         setLiveStatus({});
         return;
       }
 
       try {
-        const logins = subs.map((sub) => sub.login.toLowerCase()).join(",");
         const res = await fetch(
-          `/api/live/status?logins=${encodeURIComponent(logins)}`,
+          `/api/live/status?logins=${encodeURIComponent(subsLiveStatusKey)}`,
+          { signal: controller.signal },
         );
+        if (disposed) return;
         if (!res.ok) {
           setLiveStatus({});
           return;
@@ -96,41 +198,63 @@ export default function Home() {
 
         setLiveStatus((await res.json()) as LiveStatusMap);
       } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
         console.error("Failed to fetch live status for subs", error);
         setLiveStatus({});
       }
     };
 
     void loadLiveStatus();
-  }, [subs]);
+
+    return () => {
+      disposed = true;
+      controller.abort();
+    };
+  }, [subsLiveStatusKey]);
 
   const saveSubsLocal = (newSubs: SubEntry[]) => {
     setSubs(newSubs);
     localStorage.setItem("nsv_subs", JSON.stringify(newSubs));
   };
 
-  const saveSubServer = async (entry: SubEntry) => {
-    const res = await fetch("/api/subs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(entry),
-    });
-
-    if (res.ok) {
-      setSubs((prev) => {
-        if (prev.some((s) => s.login === entry.login)) return prev;
-        return [...prev, entry];
+  const saveSubServer = async (entry: SubEntry): Promise<boolean> => {
+    try {
+      const normalized = normalizeSubEntry(entry);
+      const res = await fetch("/api/subs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(normalized),
       });
+
+      if (!res.ok) return false;
+
+      setSubs((prev) => {
+        if (prev.some((s) => s.login === normalized.login)) return prev;
+        return [...prev, normalized];
+      });
+      return true;
+    } catch {
+      return false;
     }
   };
 
-  const removeSubServer = async (login: string) => {
-    const res = await fetch(`/api/subs/${encodeURIComponent(login)}`, {
-      method: "DELETE",
-    });
+  const removeSubServer = async (login: string): Promise<boolean> => {
+    try {
+      const normalizedLogin = login.trim().toLowerCase();
+      const res = await fetch(
+        `/api/subs/${encodeURIComponent(normalizedLogin)}`,
+        {
+          method: "DELETE",
+        },
+      );
 
-    if (res.ok) {
-      setSubs((prev) => prev.filter((s) => s.login !== login));
+      if (!res.ok) return false;
+      setSubs((prev) => prev.filter((s) => s.login !== normalizedLogin));
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -189,9 +313,8 @@ export default function Home() {
         profileImageURL: user.profileImageURL,
       };
 
-      if (settings.oneSync) {
-        await saveSubServer(newSub);
-      } else {
+      const savedOnServer = await saveSubServer(newSub);
+      if (!savedOnServer) {
         saveSubsLocal([...subs, newSub]);
       }
 
@@ -212,12 +335,10 @@ export default function Home() {
       return;
     }
 
-    if (settings.oneSync) {
-      await removeSubServer(login);
-      return;
+    const removedOnServer = await removeSubServer(login);
+    if (!removedOnServer) {
+      saveSubsLocal(subs.filter((sub) => sub.login !== login));
     }
-
-    saveSubsLocal(subs.filter((sub) => sub.login !== login));
   };
 
   return (

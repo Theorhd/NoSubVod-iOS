@@ -5,6 +5,7 @@ import NSVPlayer from "./components/NSVPlayer";
 import { ExperienceSettings } from "../../shared/types";
 import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
+import { navigateBackInApp } from "./utils/navigation";
 
 interface MultiPlayerSlot {
   id: string;
@@ -17,6 +18,26 @@ const DEFAULT_SETTINGS: ExperienceSettings = {
   oneSync: false,
   defaultVideoQuality: "auto",
 };
+
+function createSlotId(): string {
+  const api = globalThis.crypto;
+  if (api?.randomUUID) {
+    return api.randomUUID().replaceAll("-", "");
+  }
+  if (api?.getRandomValues) {
+    const bytes = new Uint8Array(10);
+    api.getRandomValues(bytes);
+    let hex = "";
+    for (const byte of bytes) {
+      const b = byte.toString(16);
+      hex += b.length === 1 ? `0${b}` : b;
+    }
+    return hex;
+  }
+  return `${Date.now().toString(36)}-${(globalThis.performance?.now() ?? 0)
+    .toString(36)
+    .replace(".", "")}`;
+}
 
 export default function MultiView() {
   const navigate = useNavigate();
@@ -41,7 +62,7 @@ export default function MultiView() {
 
   const addSlot = (type: "live" | "vod", targetId: string) => {
     if (!targetId.trim()) return;
-    const id = Math.random().toString(36).substring(7);
+    const id = createSlotId();
     setSlots((prev) => [
       ...prev,
       {
@@ -82,7 +103,7 @@ export default function MultiView() {
           }}
         >
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigateBackInApp(navigate, "/")}
             className="secondary-btn"
             style={{
               width: "40px",
@@ -163,10 +184,20 @@ export default function MultiView() {
           >
             <NSVPlayer
               source={{
-                src:
-                  slot.type === "live"
-                    ? `/api/live/${encodeURIComponent(slot.targetId)}/master.m3u8`
-                    : `/api/vod/${slot.targetId}/master.m3u8`,
+                src: (() => {
+                  if (slot.type === "live") {
+                    return `/api/live/${encodeURIComponent(slot.targetId)}/master.m3u8`;
+                  }
+
+                  const quality = (
+                    settings.defaultVideoQuality || "auto"
+                  ).trim();
+                  const qualityQuery = quality
+                    ? `?quality=${encodeURIComponent(quality)}`
+                    : "";
+
+                  return `/api/vod/${encodeURIComponent(slot.targetId)}/master.m3u8${qualityQuery}`;
+                })(),
                 type: "application/x-mpegurl",
               }}
               streamType={slot.type === "live" ? "live" : "on-demand"}

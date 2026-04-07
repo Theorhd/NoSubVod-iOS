@@ -51,10 +51,7 @@ export default function ScreenShare() {
               >
                 Ouvrir les Settings
               </button>
-              <button
-                className="secondary-btn"
-                onClick={() => navigate("/")}
-              >
+              <button className="secondary-btn" onClick={() => navigate("/")}>
                 Back to Home
               </button>
             </div>
@@ -62,51 +59,51 @@ export default function ScreenShare() {
         )}
 
         {isDesktopConnected && (
-        <div className="card" style={{ maxWidth: 760, margin: "0 auto" }}>
-          <h2 style={{ marginTop: 0 }}>Join Screen Share (Viewer)</h2>
-          <p className="card-subtitle" style={{ marginBottom: 16 }}>
-            iOS can receive NSV-Desktop screen shares but cannot broadcast its
-            own screen.
-          </p>
-          <p style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-            Le serveur Desktop lie dans les Settings est utilise
-            automatiquement. Si l&apos;hote vous a donne un session ID, vous pouvez
-            le renseigner ci-dessous.
-          </p>
+          <div className="card" style={{ maxWidth: 760, margin: "0 auto" }}>
+            <h2 style={{ marginTop: 0 }}>Join Screen Share (Viewer)</h2>
+            <p className="card-subtitle" style={{ marginBottom: 16 }}>
+              iOS can receive NSV-Desktop screen shares but cannot broadcast its
+              own screen.
+            </p>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+              Le serveur Desktop lie dans les Settings est utilise
+              automatiquement. Si l&apos;hote vous a donne un session ID, vous
+              pouvez le renseigner ci-dessous.
+            </p>
 
-          <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
-            <label
-              htmlFor="session-id"
-              style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}
+            <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
+              <label
+                htmlFor="session-id"
+                style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}
+              >
+                Session ID
+              </label>
+              <input
+                id="session-id"
+                type="text"
+                value={sessionId}
+                onChange={(event) => setSessionId(event.target.value)}
+                className="search-input"
+                placeholder="Optional: paste session id"
+              />
+            </div>
+
+            <div
+              style={{
+                marginTop: 20,
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
             >
-              Session ID
-            </label>
-            <input
-              id="session-id"
-              type="text"
-              value={sessionId}
-              onChange={(event) => setSessionId(event.target.value)}
-              className="search-input"
-              placeholder="Optional: paste session id"
-            />
+              <button className="action-btn" onClick={openViewer}>
+                Open Viewer
+              </button>
+              <button className="secondary-btn" onClick={() => navigate("/")}>
+                Back to Home
+              </button>
+            </div>
           </div>
-
-          <div
-            style={{
-              marginTop: 20,
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            <button className="action-btn" onClick={openViewer}>
-              Open Viewer
-            </button>
-            <button className="secondary-btn" onClick={() => navigate("/")}>
-              Back to Home
-            </button>
-          </div>
-        </div>
         )}
       </div>
     </>

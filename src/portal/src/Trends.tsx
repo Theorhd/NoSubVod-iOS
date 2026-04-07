@@ -4,6 +4,7 @@ import { VOD } from "../../shared/types";
 import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
 import { VODCard } from "./components/VODCard";
 import { TopBar } from "./components/TopBar";
+import { navigateToPlayer } from "./utils/navigation";
 
 const PAGE_SIZE = 24;
 
@@ -79,7 +80,11 @@ export default function Trends() {
               <VODCard
                 key={vod.id}
                 vod={vod}
-                onWatch={(id) => navigate(`/player?vod=${id}`)}
+                onWatch={(id) =>
+                  navigateToPlayer(navigate, {
+                    vodId: id,
+                  })
+                }
                 showOwner={true}
               />
             ))}

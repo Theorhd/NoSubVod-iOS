@@ -8,6 +8,7 @@ import React, {
   ReactNode,
 } from "react";
 import { safeStorageGet, safeStorageSet } from "../../shared/utils/storage";
+import { getRemoteServerToken, setRemoteServerToken } from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
 
 const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
@@ -29,8 +30,7 @@ export function ServerProvider({
 }: Readonly<{ children: ReactNode }>) {
   const [isOnline, setIsOnline] = useState(false);
   const [tokenValue, setTokenValue] = useState<string | null>(() => {
-    const stored = safeStorageGet(localStorage, "nsv_server_token");
-    return stored || null;
+    return getRemoteServerToken();
   });
   const [serverUrlState, setServerUrlState] = useState<string>(() => {
     return (
@@ -41,13 +41,13 @@ export function ServerProvider({
   });
 
   const setToken = (newToken: string) => {
-    safeStorageSet(localStorage, "nsv_server_token", newToken);
     setTokenValue(newToken);
+    void setRemoteServerToken(newToken);
   };
 
   const removeToken = () => {
-    localStorage.removeItem("nsv_server_token");
     setTokenValue(null);
+    void setRemoteServerToken(null);
   };
 
   const setServerUrl = (url: string) => {

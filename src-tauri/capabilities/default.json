@@ -6,6 +6,9 @@
   "permissions": [
     "core:default",
     "core:window:allow-create",
-    "core:window:allow-close"
+    "core:window:allow-close",
+    "opener:default",
+    "deep-link:default",
+    "secure-storage:default"
   ]
 }

@@ -61,7 +61,8 @@ impl AppState {
         let twitch = Arc::new(TwitchService::new());
         let download = Arc::new(DownloadManager::new());
         let screenshare = Arc::new(ScreenShareService::new());
-        let extensions = Arc::new(ExtensionManager::new(app_data_dir));
+        let extensions = Arc::new(ExtensionManager::new(app_data_dir.clone()));
+        let logs_dir = app_data_dir.join("logs");
 
         // Initial scan for extensions (synchronous scan or spawn task)
         let ext_clone = extensions.clone();
@@ -88,13 +89,19 @@ impl AppState {
         // Generate a per-session authentication token to protect API endpoints
         let server_token = Uuid::new_v4().to_string().replace('-', "");
 
-        let url = format!("{portal_scheme}://{ip}:{portal_port}?t={server_token}");
-        let qrcode = generate_qr_data_url(&url);
+        // Local URL is always loopback for max stability in background (especially on iOS)
+        let local_url = format!("{portal_scheme}://127.0.0.1:{portal_port}?t={server_token}");
+        // Public URL uses the discoverable network IP
+        let public_url = format!("{portal_scheme}://{ip}:{portal_port}?t={server_token}");
+
+        let qrcode = generate_qr_data_url(&public_url);
 
         let server_info = ServerInfo {
             ip,
             port,
-            url,
+            url: local_url.clone(), // Compatibility
+            local_url,
+            public_url,
             qrcode,
         };
 
@@ -122,6 +129,7 @@ impl AppState {
             screenshare,
             extensions,
             oauth,
+            logs_dir,
             server_token,
             app_handle: None,
             download_cache,

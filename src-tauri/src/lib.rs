@@ -24,9 +24,15 @@ pub mod server {
 }
 
 #[cfg(not(test))]
-use std::sync::Arc;
+use std::path::PathBuf;
+#[cfg(not(test))]
+use std::sync::LazyLock;
+#[cfg(not(test))]
+use std::sync::{Arc, Mutex};
 #[cfg(not(test))]
 use tauri::Manager;
+#[cfg(not(test))]
+use tracing_appender::non_blocking::WorkerGuard;
 #[cfg(not(test))]
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -34,21 +40,55 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use server::AppState;
 
 #[cfg(not(test))]
-fn init_tracing() {
-    let _ = tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "nosubvod_ios_lib=debug,tower_http=debug".into()),
+static TRACING_FILE_GUARD: LazyLock<Mutex<Option<WorkerGuard>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+#[cfg(not(test))]
+fn init_tracing(logs_dir: PathBuf) {
+    let default_filter = if cfg!(debug_assertions) {
+        "nosubvod_ios_lib=debug,tower_http=debug,axum=debug"
+    } else {
+        "nosubvod_ios_lib=info,tower_http=warn"
+    };
+
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| default_filter.into());
+
+    let file_layer = (|| {
+        std::fs::create_dir_all(&logs_dir).ok()?;
+
+        let file_appender = tracing_appender::rolling::never(&logs_dir, "backend.log");
+        let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+
+        if let Ok(mut slot) = TRACING_FILE_GUARD.lock() {
+            *slot = Some(guard);
+        }
+
+        Some(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(non_blocking),
         )
+    })();
+
+    if let Some(file_layer) = file_layer {
+        let _ = tracing_subscriber::registry()
+            .with(env_filter)
+            .with(tracing_subscriber::fmt::layer())
+            .with(file_layer)
+            .try_init();
+        return;
+    }
+
+    let _ = tracing_subscriber::registry()
+        .with(env_filter)
         .with(tracing_subscriber::fmt::layer())
         .try_init();
 }
 
 #[cfg(not(test))]
 fn init_rustls_crypto_provider() {
-    // rustls 0.23 may require explicit provider installation when both
-    // providers are enabled through the dependency graph.
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    // Install a single crypto provider explicitly to keep startup deterministic.
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
@@ -57,10 +97,13 @@ fn init_rustls_crypto_provider() {
 pub fn run() {
     // Load .env from the directory next to the binary (src-tauri/ in dev)
     dotenvy::dotenv().ok();
-    init_tracing();
     init_rustls_crypto_provider();
 
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_secure_storage::init());
 
     builder = builder.setup(|app| {
         // Shared state is initialized on every platform so frontend can use
@@ -69,6 +112,8 @@ pub fn run() {
             .path()
             .app_data_dir()
             .map_err(|e| tauri::Error::from(std::io::Error::other(e.to_string())))?;
+
+        init_tracing(app_data_dir.join("logs"));
 
         let state = Arc::new(
             AppState::new(app_data_dir)
@@ -96,9 +141,21 @@ pub fn run() {
         commands::stop_live_chat_polling
     ]);
 
-    builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app_handle, event| match event {
+        #[cfg(mobile)]
+        tauri::RunEvent::Resumed => {
+            tracing::info!("App resumed from background, network stack should be active");
+        }
+        #[cfg(mobile)]
+        tauri::RunEvent::ExitRequested { .. } => {
+            tracing::info!("App exit requested, background tasks should stop gracefully");
+        }
+        _ => {}
+    });
 }
 
 #[cfg(test)]
@@ -107,6 +164,5 @@ pub fn run() {}
 #[cfg(test)]
 #[ctor::ctor]
 fn init_tests() {
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let _ = rustls::crypto::ring::default_provider().install_default();
 }

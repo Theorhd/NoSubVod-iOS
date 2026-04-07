@@ -4,12 +4,14 @@ import React, {
   useCallback,
   useMemo,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
+  Navigate,
   useLocation,
   useNavigate,
 } from "react-router-dom";
@@ -26,6 +28,7 @@ import {
 import { ErrorBoundary } from "../../shared/components/ErrorBoundary";
 import { ServerProvider, useServer } from "./ServerContext";
 import { ExtensionProvider, useExtensions } from "./ExtensionContext";
+import { navigateBackInApp } from "./utils/navigation";
 
 const Home = lazy(() => import("./Home"));
 const Channel = lazy(() => import("./Channel"));
@@ -40,6 +43,7 @@ const MultiView = lazy(() => import("./MultiView"));
 const ScreenShare = lazy(() => import("./ScreenShare.tsx"));
 
 const SUSPEND_EXTENSION_LOADING = true;
+const APP_READY_EVENT_NAME = "nsv-app-ready";
 
 type NavItem = {
   path: string;
@@ -59,6 +63,158 @@ function isTauriRuntime(): boolean {
   return Boolean(
     (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
   );
+}
+
+function isIosTouchRuntime(): boolean {
+  if (!isTauriRuntime()) {
+    return false;
+  }
+
+  const ua = globalThis.navigator.userAgent.toLowerCase();
+  return (
+    ua.includes("iphone") ||
+    ua.includes("ipad") ||
+    ua.includes("ipod") ||
+    (ua.includes("macintosh") && "ontouchend" in document)
+  );
+}
+
+function isSwipeBackBlockedTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest(
+      "input, textarea, select, button, [contenteditable='true'], [data-disable-swipe-back='true']",
+    ),
+  );
+}
+
+function AppReadySignal() {
+  const hasEmittedRef = useRef(false);
+
+  useEffect(() => {
+    if (hasEmittedRef.current) {
+      return;
+    }
+
+    hasEmittedRef.current = true;
+    const frame = globalThis.requestAnimationFrame(() => {
+      globalThis.dispatchEvent(new Event(APP_READY_EVENT_NAME));
+    });
+
+    return () => {
+      globalThis.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  return null;
+}
+
+function IosSwipeBackBridge() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const swipeStateRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    startedAt: 0,
+  });
+  const lastBackAtRef = useRef(0);
+
+  useEffect(() => {
+    if (!isIosTouchRuntime()) {
+      return;
+    }
+
+    const EDGE_TRIGGER_PX = 28;
+    const MIN_HORIZONTAL_DISTANCE_PX = 76;
+    const MAX_VERTICAL_DRIFT_PX = 88;
+    const MAX_GESTURE_DURATION_MS = 900;
+    const BACK_GESTURE_COOLDOWN_MS = 450;
+
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        swipeStateRef.current.active = false;
+        return;
+      }
+
+      const touch = event.touches[0];
+      const fromLeftEdge = touch.clientX <= EDGE_TRIGGER_PX;
+
+      if (!fromLeftEdge || isSwipeBackBlockedTarget(event.target)) {
+        swipeStateRef.current.active = false;
+        return;
+      }
+
+      swipeStateRef.current = {
+        active: true,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        startedAt: Date.now(),
+      };
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (!swipeStateRef.current.active || event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - swipeStateRef.current.startX;
+      const deltaY = Math.abs(touch.clientY - swipeStateRef.current.startY);
+
+      if (deltaY > MAX_VERTICAL_DRIFT_PX || deltaX < -8) {
+        swipeStateRef.current.active = false;
+      }
+    };
+
+    const onTouchEnd = (event: TouchEvent) => {
+      if (!swipeStateRef.current.active || event.changedTouches.length < 1) {
+        swipeStateRef.current.active = false;
+        return;
+      }
+
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - swipeStateRef.current.startX;
+      const deltaY = Math.abs(touch.clientY - swipeStateRef.current.startY);
+      const durationMs = Date.now() - swipeStateRef.current.startedAt;
+      swipeStateRef.current.active = false;
+
+      if (deltaX < MIN_HORIZONTAL_DISTANCE_PX) {
+        return;
+      }
+
+      if (deltaY > MAX_VERTICAL_DRIFT_PX) {
+        return;
+      }
+
+      if (durationMs > MAX_GESTURE_DURATION_MS) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastBackAtRef.current < BACK_GESTURE_COOLDOWN_MS) {
+        return;
+      }
+
+      lastBackAtRef.current = now;
+      navigateBackInApp(navigate, "/");
+    };
+
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: true });
+    document.addEventListener("touchend", onTouchEnd, { passive: true });
+
+    return () => {
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [location.pathname, navigate]);
+
+  return null;
 }
 
 const NotificationToast = ({
@@ -90,6 +246,26 @@ const NotificationToast = ({
 
 const MemoNotificationToast = React.memo(NotificationToast);
 
+function createNotificationId(): string {
+  const api = globalThis.crypto;
+  if (api?.randomUUID) {
+    return api.randomUUID().replaceAll("-", "");
+  }
+  if (api?.getRandomValues) {
+    const bytes = new Uint8Array(10);
+    api.getRandomValues(bytes);
+    let hex = "";
+    for (const byte of bytes) {
+      const b = byte.toString(16);
+      hex += b.length === 1 ? `0${b}` : b;
+    }
+    return hex;
+  }
+  return `${Date.now().toString(36)}-${(globalThis.performance?.now() ?? 0)
+    .toString(36)
+    .replace(".", "")}`;
+}
+
 function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
@@ -99,7 +275,7 @@ function NotificationCenter() {
 
   const handleNotification = useCallback(
     (event: { payload: { title: string; message: string } }) => {
-      const id = Math.random().toString(36).substring(7);
+      const id = createNotificationId();
       const newNotif = { id, ...event.payload };
       setNotifications((prev) => [...prev, newNotif]);
       globalThis.setTimeout(() => removeNotification(id), 5000);
@@ -229,7 +405,9 @@ function AppContent() {
               </div>
             }
           >
+            <AppReadySignal />
             <div className="content-wrap">
+              <IosSwipeBackBridge />
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/trends" element={<Trends />} />
@@ -252,6 +430,7 @@ function AppContent() {
                       element={<c.component {...c.componentProps} />}
                     />
                   ))}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
           </Suspense>

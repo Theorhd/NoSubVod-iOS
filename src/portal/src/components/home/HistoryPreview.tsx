@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { HistoryVodEntry } from "../../../../shared/types";
 import { History as HistoryIcon, ChevronRight } from "lucide-react";
+import { navigateToPlayer } from "../../utils/navigation";
 
 interface HistoryPreviewProps {
   readonly historyPreview: HistoryVodEntry[];
@@ -60,7 +61,11 @@ const HistoryPreview = React.memo(({ historyPreview }: HistoryPreviewProps) => {
                   color: "inherit",
                   width: "100%",
                 }}
-                onClick={() => navigate(`/player?vod=${entry.vodId}`)}
+                onClick={() =>
+                  navigateToPlayer(navigate, {
+                    vodId: entry.vodId,
+                  })
+                }
                 type="button"
               >
                 <div
@@ -110,7 +115,11 @@ const HistoryPreview = React.memo(({ historyPreview }: HistoryPreviewProps) => {
                     style={{
                       margin: 0,
                       fontSize: "0.95rem",
-                      whiteSpace: "nowrap",
+                      whiteSpace: "normal",
+                      lineHeight: 1.35,
+                      display: "-webkit-box",
+                      WebkitBoxOrient: "vertical",
+                      WebkitLineClamp: 2,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                     }}

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   MediaPlayer,
   MediaProvider,
@@ -9,8 +15,15 @@ import {
   defaultLayoutIcons,
   DefaultVideoLayout,
 } from "@vidstack/react/player/layouts/default";
-import Hls from "hls.js/dist/hls.light.js";
+import type Hls from "hls.js";
+import "@vidstack/react/player/styles/default/theme.css";
+import "@vidstack/react/player/styles/default/layouts/video.css";
 import { safeStorageGet } from "../../../shared/utils/storage";
+import {
+  getActiveToken,
+  getDeviceId,
+  getRemoteServerToken,
+} from "../utils/authTokens";
 import {
   canPlayHlsNatively,
   canUseHlsJs,
@@ -37,7 +50,15 @@ function getHlsStabilityConfig(lockToFixedQuality: boolean) {
   };
 }
 
-function hasFixedQualityPreference(defaultQuality: string | undefined): boolean {
+function loadHlsLightLibrary() {
+  return import("hls.js/dist/hls.light.js") as Promise<
+    { default: typeof Hls } | undefined
+  >;
+}
+
+function hasFixedQualityPreference(
+  defaultQuality: string | undefined,
+): boolean {
   return Boolean(defaultQuality && defaultQuality !== "auto");
 }
 
@@ -210,6 +231,37 @@ type QualityEntry = {
   height: number;
 };
 
+function inferRequestedQualityValueFromEntry(entry: any): string | null {
+  const label = String(
+    (entry as { id?: string; label?: string })?.id ||
+      (entry as { label?: string })?.label ||
+      "",
+  ).toLowerCase();
+
+  if (!label) {
+    return null;
+  }
+
+  if (label.includes("auto")) {
+    return "auto";
+  }
+
+  if (label.includes("source") || label.includes("chunked")) {
+    return "source";
+  }
+
+  const height = Number((entry as { height?: number })?.height || 0);
+  if (Number.isFinite(height) && height > 0) {
+    return String(Math.round(height));
+  }
+
+  const maybeDigits = label
+    .split(/\D+/)
+    .find((chunk) => chunk && chunk.length > 0);
+
+  return maybeDigits || null;
+}
+
 function sortedQualitiesByHeightDesc(qualities: any[]): QualityEntry[] {
   return qualities
     .map((q, idx) => ({
@@ -228,11 +280,16 @@ function resolveRequestedQuality(
     return -1;
   }
 
-  if (!defaultQuality || defaultQuality === "auto") {
+  const normalizedQuality = (defaultQuality || "").trim().toLowerCase();
+  if (!normalizedQuality || normalizedQuality === "auto") {
     return -1;
   }
 
-  const requestedHeight = Number.parseInt(defaultQuality, 10);
+  if (normalizedQuality === "source" || normalizedQuality === "chunked") {
+    return sorted[0]?.idx ?? -1;
+  }
+
+  const requestedHeight = Number.parseInt(normalizedQuality, 10);
   if (Number.isNaN(requestedHeight)) {
     return -1;
   }
@@ -277,6 +334,8 @@ type NSVPlayerProps = {
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
   onPlayStateChange?: (playing: boolean) => void;
+  onQualitySelection?: (quality: string) => void;
+  onSourceReady?: (sourceUrl: string) => void;
   onError?: (message: string) => void;
 };
 
@@ -299,15 +358,13 @@ function withAuthQuery(url: string): string {
     pathname = url.split("?")[0];
   }
 
-  const standaloneToken =
-    safeStorageGet(sessionStorage, "nsv_token") ||
-    safeStorageGet(localStorage, "nsv_token");
-  const pairedToken = safeStorageGet(localStorage, "nsv_server_token");
+  const standaloneToken = getActiveToken("local");
+  const pairedToken = getRemoteServerToken();
   const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
   const useRemoteMedia =
     Boolean(serverUrl && pairedToken) && isRemoteMediaApiPath(pathname);
   const token = useRemoteMedia ? pairedToken : standaloneToken;
-  const deviceId = safeStorageGet(localStorage, "nsv_device_id");
+  const deviceId = getDeviceId();
   const params: string[] = [];
   if (token) params.push(`t=${encodeURIComponent(token)}`);
   if (deviceId) params.push(`d=${encodeURIComponent(deviceId)}`);
@@ -326,6 +383,25 @@ function withAuthQuery(url: string): string {
   return `${finalUrl}${sep}${params.join("&")}`;
 }
 
+function withTransientQuery(url: string, key: string, value: string): string {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url, globalThis.location.origin);
+    parsed.searchParams.set(key, value);
+    return parsed.toString();
+  } catch {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+  }
+}
+
+type WebkitPresentationVideo = HTMLVideoElement & {
+  webkitPresentationMode?: string;
+  webkitSetPresentationMode?: (
+    mode: "inline" | "fullscreen" | "picture-in-picture",
+  ) => void;
+};
+
 const NSVPlayer = React.memo(
   ({
     source,
@@ -343,6 +419,8 @@ const NSVPlayer = React.memo(
     onTimeUpdate,
     onDurationChange,
     onPlayStateChange,
+    onQualitySelection,
+    onSourceReady,
     onError,
   }: NSVPlayerProps) => {
     const playerRef = useRef<any>(null);
@@ -360,14 +438,126 @@ const NSVPlayer = React.memo(
     const lastExternalSeekRef = useRef<number | null>(null);
     const didApplyDefaultQualityRef = useRef(false);
     const hlsInstanceRef = useRef<Hls | null>(null);
+    const pendingResumeSeekRef = useRef<number | null>(null);
+    const pendingResumePlayRef = useRef(false);
+    const wasBackgroundedRef = useRef(false);
+    const internalQualityRequestRef = useRef(false);
+    const qualityLockEnabledRef = useRef(false);
+    const lockedQualityIndexRef = useRef<number | null>(null);
+    const lastLockAttemptAtRef = useRef(0);
+    const lastReadySourceRef = useRef<string | null>(null);
+    const lastRecoveryAtRef = useRef(0);
+    const recoveryWindowStartedAtRef = useRef(0);
+    const recoveryAttemptsInWindowRef = useRef(0);
+    const lastPlaybackProgressRef = useRef({ time: 0, observedAt: Date.now() });
+    const [resumeRevision, setResumeRevision] = useState(0);
 
-    const src = useMemo(
-      () => ({
-        src: withAuthQuery(source.src),
+    const useNativeResumeRefresh =
+      isMobileDevice() && canPlayHlsNatively() && !canUseHlsJs();
+
+    const queueSourceRefreshAndResume = useCallback((reason: string) => {
+      const now = Date.now();
+      if (now - lastRecoveryAtRef.current < 2500) {
+        return;
+      }
+
+      if (
+        recoveryWindowStartedAtRef.current <= 0 ||
+        now - recoveryWindowStartedAtRef.current > 120_000
+      ) {
+        recoveryWindowStartedAtRef.current = now;
+        recoveryAttemptsInWindowRef.current = 0;
+      }
+
+      if (recoveryAttemptsInWindowRef.current >= 4) {
+        return;
+      }
+
+      recoveryAttemptsInWindowRef.current += 1;
+      lastRecoveryAtRef.current = now;
+
+      const mediaState = storeRef.current as any;
+      const currentTime = Number(mediaState.currentTime || 0);
+      const canSeek =
+        Boolean(mediaState.canSeek) && Number(mediaState.duration || 0) > 0;
+
+      pendingResumeSeekRef.current =
+        canSeek && Number.isFinite(currentTime)
+          ? Math.max(0, currentTime)
+          : null;
+      pendingResumePlayRef.current = !mediaState.paused;
+
+      if (Number.isFinite(currentTime)) {
+        lastPlaybackProgressRef.current = {
+          time: Math.max(0, currentTime),
+          observedAt: now,
+        };
+      }
+
+      setResumeRevision((prev) => prev + 1);
+
+      console.warn("[NSVPlayer] Triggering source recovery refresh", {
+        reason,
+      });
+    }, []);
+
+    const src = useMemo(() => {
+      let resolvedSrc = withAuthQuery(source.src);
+      if (resumeRevision > 0) {
+        resolvedSrc = withTransientQuery(
+          resolvedSrc,
+          "_resume",
+          String(resumeRevision),
+        );
+      }
+
+      return {
+        src: resolvedSrc,
         type: source.type,
-      }),
-      [source.src, source.type],
-    );
+      };
+    }, [source.src, source.type, resumeRevision]);
+
+    const exitPictureInPictureIfNeeded = useCallback(() => {
+      const doc = document as Document & {
+        pictureInPictureElement?: Element | null;
+        exitPictureInPicture?: () => Promise<void>;
+      };
+
+      if (
+        typeof doc.exitPictureInPicture === "function" &&
+        doc.pictureInPictureElement
+      ) {
+        void doc.exitPictureInPicture().catch(() => {
+          // Ignore when PiP is already detached while the view is unmounting.
+        });
+      }
+
+      const playerRoot = (playerRef.current?.el || playerRef.current) as
+        | HTMLElement
+        | undefined;
+      const activeVideo = playerRoot?.querySelector("video");
+      const webkitVideo = activeVideo as WebkitPresentationVideo | null;
+
+      if (
+        webkitVideo &&
+        typeof webkitVideo.webkitSetPresentationMode === "function" &&
+        webkitVideo.webkitPresentationMode === "picture-in-picture"
+      ) {
+        void Promise.resolve()
+          .then(() => {
+            webkitVideo.webkitSetPresentationMode?.("inline");
+          })
+          .catch(() => {
+            // Ignore WebKit-specific transition errors during teardown.
+          });
+      }
+    }, []);
+
+    useEffect(() => {
+      return () => {
+        exitPictureInPictureIfNeeded();
+      };
+    }, [exitPictureInPictureIfNeeded]);
 
     const effectiveMuted = muted || (autoPlay && isMobileDevice());
 
@@ -392,6 +582,15 @@ const NSVPlayer = React.memo(
     }, [store.error, onError]);
 
     useEffect(() => {
+      if (!store.error) return;
+
+      const isHls = (src.type || "").toLowerCase().includes("mpegurl");
+      if (!isHls) return;
+
+      queueSourceRefreshAndResume("store-error");
+    }, [queueSourceRefreshAndResume, src.type, store.error]);
+
+    useEffect(() => {
       if (!onError) return;
       const isHls = (src.type || "").toLowerCase().includes("mpegurl");
       if (!isHls) return;
@@ -400,6 +599,54 @@ const NSVPlayer = React.memo(
         onError("This browser cannot play HLS streams on this device.");
       }
     }, [onError, src.type]);
+
+    useEffect(() => {
+      const now = Date.now();
+      const currentTime = Number(store.currentTime || 0);
+
+      if (Number.isFinite(currentTime)) {
+        const previous = lastPlaybackProgressRef.current;
+        if (Math.abs(currentTime - previous.time) >= 0.2) {
+          lastPlaybackProgressRef.current = {
+            time: currentTime,
+            observedAt: now,
+          };
+          return;
+        }
+      }
+
+      const mediaState = store as any;
+      if (mediaState.paused || mediaState.ended || mediaState.seeking) {
+        lastPlaybackProgressRef.current.observedAt = now;
+      }
+    }, [store, store.currentTime, store.paused]);
+
+    useEffect(() => {
+      const isHls = (src.type || "").toLowerCase().includes("mpegurl");
+      if (!isHls) return;
+
+      const intervalId = globalThis.setInterval(() => {
+        const mediaState = storeRef.current as any;
+        if (!mediaState) return;
+        if (document.visibilityState === "hidden") return;
+        if (mediaState.paused || mediaState.ended) return;
+        if (!mediaState.canPlay) return;
+        if (mediaState.seeking) return;
+
+        const stagnantMs =
+          Date.now() - lastPlaybackProgressRef.current.observedAt;
+        if (stagnantMs < 15_000) return;
+
+        const reason = mediaState.waiting
+          ? "playback-waiting-stall"
+          : "playback-stall";
+        queueSourceRefreshAndResume(reason);
+      }, 3000);
+
+      return () => {
+        globalThis.clearInterval(intervalId);
+      };
+    }, [queueSourceRefreshAndResume, src.type]);
 
     useEffect(() => {
       if (didSeekOnStartRef.current) return;
@@ -411,9 +658,85 @@ const NSVPlayer = React.memo(
     }, [startTime, store.canSeek, store.duration, remote]);
 
     useEffect(() => {
+      if (!useNativeResumeRefresh) return;
+
+      const onVisibilityChange = () => {
+        if (document.visibilityState === "hidden") {
+          wasBackgroundedRef.current = true;
+          return;
+        }
+
+        if (wasBackgroundedRef.current) {
+          wasBackgroundedRef.current = false;
+          queueSourceRefreshAndResume("visibility-resume");
+        }
+      };
+
+      const onPageHide = () => {
+        wasBackgroundedRef.current = true;
+      };
+
+      const onPageShowOrFocus = () => {
+        if (!wasBackgroundedRef.current) return;
+        wasBackgroundedRef.current = false;
+        queueSourceRefreshAndResume("pageshow-focus");
+      };
+
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      globalThis.addEventListener("pagehide", onPageHide);
+      globalThis.addEventListener("pageshow", onPageShowOrFocus);
+      globalThis.addEventListener("focus", onPageShowOrFocus);
+
+      return () => {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        globalThis.removeEventListener("pagehide", onPageHide);
+        globalThis.removeEventListener("pageshow", onPageShowOrFocus);
+        globalThis.removeEventListener("focus", onPageShowOrFocus);
+      };
+    }, [queueSourceRefreshAndResume, useNativeResumeRefresh]);
+
+    useEffect(() => {
+      const hasPendingSeek = pendingResumeSeekRef.current !== null;
+      const hasPendingPlay = pendingResumePlayRef.current;
+
+      if (!hasPendingSeek && !hasPendingPlay) {
+        return;
+      }
+
+      if (hasPendingSeek && (!store.canSeek || store.duration <= 0)) {
+        return;
+      }
+
+      const nextSeek = pendingResumeSeekRef.current;
+      const shouldPlay = pendingResumePlayRef.current;
+
+      pendingResumeSeekRef.current = null;
+      pendingResumePlayRef.current = false;
+
+      if (nextSeek !== null) {
+        remote.seek(nextSeek);
+      }
+
+      if (shouldPlay) {
+        remote.play();
+      }
+    }, [remote, store.canSeek, store.duration]);
+
+    useEffect(() => {
       didSeekOnStartRef.current = false;
       lastExternalSeekRef.current = null;
       didApplyDefaultQualityRef.current = false;
+      pendingResumeSeekRef.current = null;
+      pendingResumePlayRef.current = false;
+      internalQualityRequestRef.current = false;
+      qualityLockEnabledRef.current = false;
+      lockedQualityIndexRef.current = null;
+      lastLockAttemptAtRef.current = 0;
+      lastReadySourceRef.current = null;
+      lastRecoveryAtRef.current = 0;
+      recoveryWindowStartedAtRef.current = 0;
+      recoveryAttemptsInWindowRef.current = 0;
+      lastPlaybackProgressRef.current = { time: 0, observedAt: Date.now() };
 
       if (hlsInstanceRef.current) {
         try {
@@ -424,11 +747,39 @@ const NSVPlayer = React.memo(
         }
         hlsInstanceRef.current = null;
       }
-    }, [src.src]);
+    }, [source.src, source.type]);
 
     useEffect(() => {
       didApplyDefaultQualityRef.current = false;
     }, [defaultQuality, streamType]);
+
+    useEffect(() => {
+      if (!onSourceReady) return;
+      if (!store.canPlay) return;
+      if (lastReadySourceRef.current === source.src) return;
+
+      lastReadySourceRef.current = source.src;
+      onSourceReady(source.src);
+    }, [onSourceReady, source.src, store.canPlay]);
+
+    const applyQualitySelection = useCallback(
+      (qualityIdx: number) => {
+        if (!Number.isFinite(qualityIdx) || qualityIdx < 0) return;
+
+        internalQualityRequestRef.current = true;
+        try {
+          remote.changeQuality(qualityIdx);
+          if (hlsInstanceRef.current) {
+            setHlsLevelMode(hlsInstanceRef.current, qualityIdx);
+          }
+        } finally {
+          queueMicrotask(() => {
+            internalQualityRequestRef.current = false;
+          });
+        }
+      },
+      [remote],
+    );
 
     useEffect(() => {
       if (!Number.isFinite(seekTo)) return;
@@ -456,6 +807,7 @@ const NSVPlayer = React.memo(
       }
 
       try {
+        const hasFixedPreference = hasFixedQualityPreference(defaultQuality);
         const sorted = sortedQualitiesByHeightDesc(store.qualities as any[]);
         const qualityIdx = resolveRequestedQuality(sorted, defaultQuality);
 
@@ -463,13 +815,18 @@ const NSVPlayer = React.memo(
           if (hlsInstanceRef.current) {
             setHlsLevelMode(hlsInstanceRef.current, -1);
           }
+          if (!hasFixedPreference) {
+            qualityLockEnabledRef.current = false;
+            lockedQualityIndexRef.current = null;
+          }
           didApplyDefaultQualityRef.current = true;
           return;
         }
 
-        remote.changeQuality(qualityIdx);
-        if (hlsInstanceRef.current) {
-          setHlsLevelMode(hlsInstanceRef.current, qualityIdx);
+        applyQualitySelection(qualityIdx);
+        if (hasFixedPreference) {
+          qualityLockEnabledRef.current = true;
+          lockedQualityIndexRef.current = qualityIdx;
         }
         didApplyDefaultQualityRef.current = true;
       } catch (error) {
@@ -478,11 +835,114 @@ const NSVPlayer = React.memo(
       }
     }, [
       defaultQuality,
-      remote,
+      applyQualitySelection,
       store.canSetQuality,
       store.qualities,
       streamType,
     ]);
+
+    useEffect(() => {
+      if (streamType !== "on-demand") return;
+      if (!qualityLockEnabledRef.current) return;
+      if (!store.canPlay) return;
+
+      const lockedIdx = lockedQualityIndexRef.current;
+      if (lockedIdx === null || lockedIdx < 0) return;
+      if (!store.canSetQuality) return;
+      if (!store.qualities || store.qualities.length === 0) return;
+      if (lockedIdx >= store.qualities.length) return;
+
+      const qualities = store.qualities as Array<{ id?: string }>;
+      const selectedQuality = store.quality as { id?: string } | null;
+      const selectedId = selectedQuality?.id;
+      const lockedId = qualities[lockedIdx]?.id;
+
+      const shouldRestoreLock =
+        Boolean(store.autoQuality) ||
+        !selectedId ||
+        (typeof lockedId === "string" && lockedId !== selectedId);
+
+      if (!shouldRestoreLock) return;
+
+      const now = Date.now();
+      if (now - lastLockAttemptAtRef.current < 350) return;
+      lastLockAttemptAtRef.current = now;
+      applyQualitySelection(lockedIdx);
+    }, [
+      applyQualitySelection,
+      store.autoQuality,
+      store.canPlay,
+      store.canSetQuality,
+      store.qualities,
+      store.quality,
+      streamType,
+    ]);
+
+    const handleQualityChangeRequest = useCallback(
+      (event: any) => {
+        if (streamType !== "on-demand") return;
+        if (internalQualityRequestRef.current) return;
+
+        const requestedIndex = Number(event?.detail);
+        if (!Number.isFinite(requestedIndex)) return;
+
+        if (requestedIndex >= 0) {
+          qualityLockEnabledRef.current = true;
+          lockedQualityIndexRef.current = requestedIndex;
+
+          if (onQualitySelection) {
+            const qualities =
+              (storeRef.current.qualities as Array<
+                { id?: string; label?: string; height?: number } | undefined
+              >) || [];
+            const selectedEntry = qualities[requestedIndex];
+            const requestedQuality =
+              inferRequestedQualityValueFromEntry(selectedEntry);
+            if (requestedQuality) {
+              onQualitySelection(requestedQuality);
+            }
+          }
+          return;
+        }
+
+        if (onQualitySelection) {
+          onQualitySelection("auto");
+        }
+
+        if (!qualityLockEnabledRef.current) return;
+
+        const lockedIdx = lockedQualityIndexRef.current;
+        if (lockedIdx === null || lockedIdx < 0) return;
+
+        queueMicrotask(() => {
+          applyQualitySelection(lockedIdx);
+        });
+      },
+      [applyQualitySelection, onQualitySelection, streamType],
+    );
+
+    const handleQualityChange = useCallback(
+      (event: any) => {
+        if (streamType !== "on-demand") return;
+        if (!qualityLockEnabledRef.current) return;
+        if (internalQualityRequestRef.current) return;
+
+        const quality = event?.detail as { id?: string } | null | undefined;
+        const qualityId = quality?.id;
+        if (!qualityId) return;
+
+        const knownQualities =
+          (storeRef.current.qualities as Array<{ id?: string }>) || [];
+        const qualityIdx = knownQualities.findIndex((entry) => {
+          return entry?.id === qualityId;
+        });
+
+        if (qualityIdx >= 0) {
+          lockedQualityIndexRef.current = qualityIdx;
+        }
+      },
+      [streamType],
+    );
 
     const handleHlsInstance = useCallback((instance: Hls) => {
       hlsInstanceRef.current = instance;
@@ -562,21 +1022,24 @@ const NSVPlayer = React.memo(
       };
     }, [handleRemoteControl]);
 
-    const onProviderChange = useCallback((provider: any) => {
-      if (provider?.type === "hls") {
-        if (!canUseHlsJs()) return;
-        provider.library = Hls;
-        const hlsConfig = getHlsStabilityConfig(
-          hasFixedQualityPreference(defaultQuality),
-        );
-        const loaderConfig = isTauriRuntime()
-          ? { loader: InternalApiHlsLoader }
-          : {};
-        provider.config = provider.config
-          ? { ...provider.config, ...hlsConfig, ...loaderConfig }
-          : { ...hlsConfig, ...loaderConfig };
-      }
-    }, [defaultQuality]);
+    const onProviderChange = useCallback(
+      (provider: any) => {
+        if (provider?.type === "hls") {
+          if (!canUseHlsJs()) return;
+          provider.library = loadHlsLightLibrary;
+          const hlsConfig = getHlsStabilityConfig(
+            hasFixedQualityPreference(defaultQuality),
+          );
+          const loaderConfig = isTauriRuntime()
+            ? { loader: InternalApiHlsLoader }
+            : {};
+          provider.config = provider.config
+            ? { ...provider.config, ...hlsConfig, ...loaderConfig }
+            : { ...hlsConfig, ...loaderConfig };
+        }
+      },
+      [defaultQuality],
+    );
 
     const renderedTextTracks = useMemo(
       () =>
@@ -597,6 +1060,8 @@ const NSVPlayer = React.memo(
       <MediaPlayer
         onProviderChange={onProviderChange}
         onHlsInstance={handleHlsInstance}
+        onMediaQualityChangeRequest={handleQualityChangeRequest}
+        onQualityChange={handleQualityChange}
         ref={playerRef}
         className={className}
         title={title}

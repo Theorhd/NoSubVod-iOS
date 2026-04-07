@@ -1,12 +1,14 @@
 import React from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { StreamCard } from "./components/StreamCard";
 import { VODCard } from "./components/VODCard";
 import { TopBar } from "./components/TopBar";
 import { useChannelData } from "./hooks/useChannelData";
+import { navigateToPlayer } from "./utils/navigation";
 
 export default function Channel() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const user = searchParams.get("user");
   const category = searchParams.get("category");
   const categoryId = searchParams.get("categoryId");
@@ -28,7 +30,12 @@ export default function Channel() {
     loadMoreCatVods,
     loadMoreCatLive,
     addToWatchlist,
-  } = useChannelData({ user, category, categoryId });
+  } = useChannelData({
+    user,
+    category,
+    categoryId,
+    refreshKey: location.key,
+  });
 
   return (
     <>
@@ -54,7 +61,9 @@ export default function Channel() {
                 key={liveStream.id}
                 stream={liveStream}
                 onWatch={(login) =>
-                  navigate(`/player?live=${encodeURIComponent(login)}`)
+                  navigateToPlayer(navigate, {
+                    liveId: login,
+                  })
                 }
               />
             </div>
@@ -77,7 +86,9 @@ export default function Channel() {
                   key={stream.id}
                   stream={stream}
                   onWatch={(login) =>
-                    navigate(`/player?live=${encodeURIComponent(login)}`)
+                    navigateToPlayer(navigate, {
+                      liveId: login,
+                    })
                   }
                 />
               ))}
@@ -118,7 +129,11 @@ export default function Channel() {
                   <VODCard
                     key={vod.id}
                     vod={vod}
-                    onWatch={(id) => navigate(`/player?vod=${id}`)}
+                    onWatch={(id) =>
+                      navigateToPlayer(navigate, {
+                        vodId: id,
+                      })
+                    }
                     historyEntry={hist}
                     onAddToWatchlist={(e, vodItem) => {
                       e.stopPropagation();

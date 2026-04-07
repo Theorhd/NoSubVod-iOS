@@ -1,10 +1,27 @@
 import { ExperienceSettings } from "../../../shared/types";
 
-const QUALITY_OPTIONS = new Set(["auto", "480", "720", "1080"]);
+const QUALITY_ALIASES: Record<
+  string,
+  "auto" | "480" | "720" | "1080" | "source"
+> = {
+  auto: "auto",
+  source: "source",
+  chunked: "source",
+  "1080": "1080",
+  "1080p": "1080",
+  "1080p60": "1080",
+  "720": "720",
+  "720p": "720",
+  "720p60": "720",
+  "480": "480",
+  "480p": "480",
+  "480p30": "480",
+};
 
 function sanitizeQuality(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
-  return QUALITY_OPTIONS.has(value) ? value : undefined;
+  const normalized = value.trim().toLowerCase();
+  return QUALITY_ALIASES[normalized];
 }
 
 export function normalizeExperienceSettings(

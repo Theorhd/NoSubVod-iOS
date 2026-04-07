@@ -173,19 +173,6 @@ const MarkerPanel: React.FC<MarkerPanelProps> = ({
           );
         })}
       </div>
-
-      <style>{`
-        .custom-marker-list::-webkit-scrollbar {
-          width: 4px;
-        }
-        .custom-marker-list::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-marker-list::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 10px;
-        }
-      `}</style>
     </div>
   );
 };

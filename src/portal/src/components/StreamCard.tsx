@@ -183,18 +183,6 @@ export const StreamCard = React.memo<StreamCardProps>(
             </div>
           )}
         </div>
-
-        <style>{`
-        .stream-card:hover .vod-play-overlay { opacity: 1 !important; }
-        @keyframes pulse-live {
-          0% { box-shadow: 0 0 0 0 rgba(255, 107, 135, 0.7); }
-          70% { box-shadow: 0 0 0 10px rgba(255, 107, 135, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(255, 107, 135, 0); }
-        }
-        .pulse {
-          animation: pulse-live 2s infinite;
-        }
-      `}</style>
       </div>
     );
   },

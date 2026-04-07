@@ -20,11 +20,12 @@ const MySubsList = React.memo(
       <div style={{ marginBottom: "32px" }}>
         <div className="section-header">
           <h2>
-            <Users size={20} /> Your Channels
+            <Users size={20} /> Your Subs
           </h2>
         </div>
 
         <div
+          className="subs-list-scroll-hidden"
           style={{
             display: "flex",
             gap: "12px",
@@ -32,6 +33,9 @@ const MySubsList = React.memo(
             paddingBottom: "12px",
             scrollSnapType: "x mandatory",
             scrollbarWidth: "none",
+            WebkitOverflowScrolling: "touch",
+            willChange: "transform",
+            transform: "translateZ(0)",
           }}
         >
           {subs.length === 0 ? (
@@ -153,11 +157,6 @@ const MySubsList = React.memo(
             })
           )}
         </div>
-
-        <style>{`
-        .glass-hover:hover button.secondary-btn { opacity: 1 !important; }
-        div::-webkit-scrollbar { display: none; }
-      `}</style>
       </div>
     );
   },

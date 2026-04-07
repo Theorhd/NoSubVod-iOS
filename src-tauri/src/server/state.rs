@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use moka::future::Cache;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::AppHandle;
 
@@ -25,6 +26,7 @@ pub struct ApiState {
     pub screenshare: Arc<ScreenShareService>,
     pub extensions: Arc<ExtensionManager>,
     pub oauth: Arc<OAuthStateStore>,
+    pub logs_dir: PathBuf,
     /// Per-session token required for API access (prevents unauthorized LAN access).
     pub server_token: String,
     pub app_handle: Option<AppHandle>,

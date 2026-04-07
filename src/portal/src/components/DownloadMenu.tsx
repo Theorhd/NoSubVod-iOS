@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom";
 import { Download as DownloadIcon, Scissors, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { navigateToPlayer } from "../utils/navigation";
 
 interface DownloadMenuProps {
   vodId: string;
@@ -64,8 +65,10 @@ export default function DownloadMenu({
   };
 
   const handleManualClip = () => {
-    // Navigate to player with a special parameter
-    navigate(`/player?vod=${vodId}&downloadMode=true`);
+    navigateToPlayer(navigate, {
+      vodId,
+      downloadMode: true,
+    });
     onClose();
   };
 

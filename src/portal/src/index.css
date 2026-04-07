@@ -31,12 +31,26 @@
   /* -- Transitions -- */
   --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* -- iOS Safe Area -- */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+}
+
+@supports (top: constant(safe-area-inset-top)) {
+  :root {
+    --safe-area-top: constant(safe-area-inset-top);
+  }
 }
 
 /* === Global Resets === */
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  touch-action: manipulation;
 }
 
 html,
@@ -250,6 +264,7 @@ body {
   top: 0;
   z-index: 90;
   padding: 12px 16px;
+  padding-top: calc(12px + var(--safe-area-top));
   background: rgba(7, 8, 15, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -1048,6 +1063,9 @@ body {
   overflow-x: auto;
   padding-bottom: 6px;
   scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .download-queue-card {
@@ -1862,6 +1880,9 @@ select:focus {
   overflow-x: auto;
   padding-bottom: 8px;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .live-top-categories::-webkit-scrollbar {
@@ -2060,6 +2081,7 @@ button {
 @media (max-width: 480px) {
   .top-bar {
     padding: 10px 12px;
+    padding-top: calc(10px + var(--safe-area-top));
   }
 
   .container {
@@ -2103,7 +2125,7 @@ button {
 /* === Toast Notifications === */
 .toast-container {
   position: fixed;
-  top: 20px;
+  top: calc(20px + var(--safe-area-top));
   right: 20px;
   z-index: 9999;
   display: flex;
@@ -2193,4 +2215,45 @@ button {
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+/* Extracted from components to prevent layout thrashing */
+.vod-card:hover .vod-play-overlay,
+.stream-card:hover .vod-play-overlay {
+  opacity: 1 !important;
+}
+
+@keyframes pulse-live {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 107, 135, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 107, 135, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 107, 135, 0);
+  }
+}
+
+.pulse {
+  animation: pulse-live 2s infinite;
+}
+
+.custom-marker-list::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-marker-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-marker-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.glass-hover:hover button.secondary-btn {
+  opacity: 1 !important;
+}
+
+.subs-list-scroll-hidden::-webkit-scrollbar {
+  display: none;
 }
