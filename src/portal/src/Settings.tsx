@@ -1469,6 +1469,9 @@ export default function Settings() {
     };
 
     const onMessage = (event: MessageEvent) => {
+      if (event.origin !== globalThis.location.origin) {
+        return;
+      }
       const payload = event.data as { type?: string } | null;
       if (payload?.type !== "nsv:twitch-auth") {
         return;

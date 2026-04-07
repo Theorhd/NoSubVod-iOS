@@ -49,10 +49,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Check Dependency Graph support
+        id: depgraph
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          endpoint="https://api.github.com/repos/${REPO}/dependency-graph/compare/${BASE_SHA}...${HEAD_SHA}"
+          status_code=$(curl -sS -o depgraph-response.json -w "%{http_code}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "${endpoint}")
+
+          if [ "${status_code}" = "200" ]; then
+            echo "supported=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "supported=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::Dependency Review unsupported for this repository (HTTP ${status_code}). Enable Dependency Graph in settings/security_analysis to activate this check."
+
       - name: Dependency Review
+        if: steps.depgraph.outputs.supported == 'true'
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+
+      - name: Dependency Review skipped
+        if: steps.depgraph.outputs.supported != 'true'
+        run: |
+          echo "Dependency Graph is disabled or unsupported on this repository."
+          echo "Enable it at: https://github.com/${{ github.repository }}/settings/security_analysis"
 
   react-quality:
     name: React Quality

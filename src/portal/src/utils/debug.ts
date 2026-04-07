@@ -127,7 +127,19 @@ function generateLoggerSessionId(): string {
   if (api?.randomUUID) {
     return api.randomUUID().replaceAll("-", "");
   }
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+  if (api?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    api.getRandomValues(bytes);
+    let hex = "";
+    for (const byte of bytes) {
+      const b = byte.toString(16);
+      hex += b.length === 1 ? `0${b}` : b;
+    }
+    return hex;
+  }
+  return `${Date.now().toString(36)}-${(globalThis.performance?.now() ?? 0)
+    .toString(36)
+    .replace(".", "")}`;
 }
 
 function safeStorageGetRaw(key: string): string | null {

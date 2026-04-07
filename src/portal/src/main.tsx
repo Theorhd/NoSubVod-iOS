@@ -415,7 +415,19 @@ function createDeviceId(): string {
   if (api?.randomUUID) {
     return `dev_${api.randomUUID().replaceAll("-", "")}`;
   }
-  return `dev_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+  if (api?.getRandomValues) {
+    const bytes = new Uint8Array(12);
+    api.getRandomValues(bytes);
+    let hex = "";
+    for (const byte of bytes) {
+      const b = byte.toString(16);
+      hex += b.length === 1 ? `0${b}` : b;
+    }
+    return `dev_${hex}`;
+  }
+  return `dev_${Date.now().toString(36)}_${(globalThis.performance?.now() ?? 0)
+    .toString(36)
+    .replace(".", "")}`;
 }
 
 function disableAppZoomOnIos(): void {

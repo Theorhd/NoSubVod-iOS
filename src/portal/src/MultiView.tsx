@@ -19,6 +19,26 @@ const DEFAULT_SETTINGS: ExperienceSettings = {
   defaultVideoQuality: "auto",
 };
 
+function createSlotId(): string {
+  const api = globalThis.crypto;
+  if (api?.randomUUID) {
+    return api.randomUUID().replaceAll("-", "");
+  }
+  if (api?.getRandomValues) {
+    const bytes = new Uint8Array(10);
+    api.getRandomValues(bytes);
+    let hex = "";
+    for (const byte of bytes) {
+      const b = byte.toString(16);
+      hex += b.length === 1 ? `0${b}` : b;
+    }
+    return hex;
+  }
+  return `${Date.now().toString(36)}-${(globalThis.performance?.now() ?? 0)
+    .toString(36)
+    .replace(".", "")}`;
+}
+
 export default function MultiView() {
   const navigate = useNavigate();
   const { isMobileLayout } = useResponsive();
@@ -42,7 +62,7 @@ export default function MultiView() {
 
   const addSlot = (type: "live" | "vod", targetId: string) => {
     if (!targetId.trim()) return;
-    const id = Math.random().toString(36).substring(7);
+    const id = createSlotId();
     setSlots((prev) => [
       ...prev,
       {

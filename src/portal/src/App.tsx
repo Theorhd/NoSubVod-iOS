@@ -246,6 +246,26 @@ const NotificationToast = ({
 
 const MemoNotificationToast = React.memo(NotificationToast);
 
+function createNotificationId(): string {
+  const api = globalThis.crypto;
+  if (api?.randomUUID) {
+    return api.randomUUID().replaceAll("-", "");
+  }
+  if (api?.getRandomValues) {
+    const bytes = new Uint8Array(10);
+    api.getRandomValues(bytes);
+    let hex = "";
+    for (const byte of bytes) {
+      const b = byte.toString(16);
+      hex += b.length === 1 ? `0${b}` : b;
+    }
+    return hex;
+  }
+  return `${Date.now().toString(36)}-${(globalThis.performance?.now() ?? 0)
+    .toString(36)
+    .replace(".", "")}`;
+}
+
 function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
@@ -255,7 +275,7 @@ function NotificationCenter() {
 
   const handleNotification = useCallback(
     (event: { payload: { title: string; message: string } }) => {
-      const id = Math.random().toString(36).substring(7);
+      const id = createNotificationId();
       const newNotif = { id, ...event.payload };
       setNotifications((prev) => [...prev, newNotif]);
       globalThis.setTimeout(() => removeNotification(id), 5000);
