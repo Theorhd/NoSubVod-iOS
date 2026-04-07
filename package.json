@@ -1,6 +1,6 @@
 {
   "name": "nosubvod-ios",
-  "version": "0.3.7",
+  "version": "0.4.0",
   "description": "NoSubVOD iOS client with embedded Rust backend",
   "author": "Theorhd",
   "scripts": {
