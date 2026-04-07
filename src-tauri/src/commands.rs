@@ -4,11 +4,11 @@ use axum::body::{to_bytes, Body};
 use axum::http::{header, Method, Request};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use std::sync::LazyLock;
 use tokio::sync::{Mutex, RwLock};
 use tower::ServiceExt;
 use twitch_irc::login::StaticLoginCredentials;
@@ -54,8 +54,8 @@ struct LiveChatPollingSession {
     task: tokio::task::JoinHandle<()>,
 }
 
-static LIVE_CHAT_SESSIONS: Lazy<RwLock<HashMap<String, LiveChatPollingSession>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static LIVE_CHAT_SESSIONS: LazyLock<RwLock<HashMap<String, LiveChatPollingSession>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 const LIVE_CHAT_BUFFER_LIMIT: usize = 500;
 const LIVE_CHAT_BATCH_LIMIT: usize = 120;

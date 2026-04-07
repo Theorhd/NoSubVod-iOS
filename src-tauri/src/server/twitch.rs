@@ -1,10 +1,9 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 use futures::stream::{self, StreamExt};
 use moka::future::Cache;
-use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -32,11 +31,15 @@ pub struct ProxyInfo {
     pub ping: u64,
 }
 
+struct ProxyState {
+    proxies: Vec<ProxyInfo>,
+    last_refresh: Option<Instant>,
+    current_proxy: Option<ProxyInfo>,
+}
+
 pub struct ProxyManager {
     client: Client,
-    proxies: Arc<RwLock<Vec<ProxyInfo>>>,
-    last_refresh: Arc<RwLock<Option<Instant>>>,
-    current_proxy: Arc<RwLock<Option<ProxyInfo>>>,
+    state: Arc<RwLock<ProxyState>>,
     /// Ensures only ONE refresh runs at a time regardless of concurrent callers
     refresh_lock: Arc<tokio::sync::Mutex<()>>,
 }
@@ -57,19 +60,21 @@ impl ProxyManager {
 
         Self {
             client,
-            proxies: Arc::new(RwLock::new(Vec::new())),
-            last_refresh: Arc::new(RwLock::new(None)),
-            current_proxy: Arc::new(RwLock::new(None)),
+            state: Arc::new(RwLock::new(ProxyState {
+                proxies: Vec::new(),
+                last_refresh: None,
+                current_proxy: None,
+            })),
             refresh_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
     pub async fn get_all_proxies(&self) -> Vec<ProxyInfo> {
-        self.proxies.read().await.clone()
+        self.state.read().await.proxies.clone()
     }
 
     pub async fn get_current_proxy(&self) -> Option<ProxyInfo> {
-        self.current_proxy.read().await.clone()
+        self.state.read().await.current_proxy.clone()
     }
 
     pub async fn get_proxy(&self, mode: &str, manual_url: Option<&str>) -> Option<String> {
@@ -78,8 +83,9 @@ impl ProxyManager {
         }
 
         let should_refresh = {
-            let last = self.last_refresh.read().await;
-            last.is_none() || last.unwrap().elapsed() > Duration::from_secs(3600)
+            let state = self.state.read().await;
+            state.last_refresh.is_none()
+                || state.last_refresh.unwrap().elapsed() > Duration::from_secs(3600)
         };
 
         if should_refresh {
@@ -88,35 +94,33 @@ impl ProxyManager {
             let _guard = self.refresh_lock.lock().await;
             // Re-check after acquiring — another task may have refreshed while we waited
             let still_needed = {
-                let last = self.last_refresh.read().await;
-                last.is_none() || last.unwrap().elapsed() > Duration::from_secs(3600)
+                let state = self.state.read().await;
+                state.last_refresh.is_none()
+                    || state.last_refresh.unwrap().elapsed() > Duration::from_secs(3600)
             };
             if still_needed {
                 let _ = self.refresh_proxies().await;
             }
         }
 
-        let proxies = self.proxies.read().await;
-        if proxies.is_empty() {
+        let state = self.state.read().await;
+        if state.proxies.is_empty() {
             return None;
         }
 
         // Return existing current proxy if still in valid list
-        {
-            let curr = self.current_proxy.read().await;
-            if let Some(ref p) = *curr {
-                if proxies.iter().any(|x| x.url == p.url) {
-                    return Some(p.url.clone());
-                }
+        if let Some(ref p) = state.current_proxy {
+            if state.proxies.iter().any(|x| x.url == p.url) {
+                return Some(p.url.clone());
             }
         }
 
         // Pick best ping (list is already sorted by refresh_proxies)
-        let best = proxies[0].clone();
-        {
-            let mut curr = self.current_proxy.write().await;
-            *curr = Some(best.clone());
-        }
+        let best = state.proxies[0].clone();
+        drop(state); // Drop read lock before acquiring write lock
+
+        let mut state = self.state.write().await;
+        state.current_proxy = Some(best.clone());
         Some(best.url)
     }
 
@@ -198,12 +202,9 @@ impl ProxyManager {
         // Sort by ascending latency so the selector always shows best proxy first
         working.sort_by_key(|p| p.ping);
         {
-            let mut p = self.proxies.write().await;
-            *p = working;
-        }
-        {
-            let mut last = self.last_refresh.write().await;
-            *last = Some(Instant::now());
+            let mut state = self.state.write().await;
+            state.proxies = working;
+            state.last_refresh = Some(Instant::now());
         }
 
         Ok(())
@@ -919,16 +920,16 @@ async fn register_variant_proxy_target(
     Ok(proxy_id)
 }
 
-static RE_UUID_V4: Lazy<regex::Regex> = Lazy::new(|| {
+static RE_UUID_V4: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
         .unwrap()
 });
 
-static RE_TWITCH_LOGIN: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"^[a-z0-9_]{2,25}$").unwrap());
+static RE_TWITCH_LOGIN: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"^[a-z0-9_]{2,25}$").unwrap());
 
-static RE_VOD_ID_SAFE: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"^[a-zA-Z0-9_-]+$").unwrap());
+static RE_VOD_ID_SAFE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"^[a-zA-Z0-9_-]+$").unwrap());
 
 async fn resolve_variant_proxy_target(
     variant_cache: &Cache<String, String>,

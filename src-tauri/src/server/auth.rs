@@ -1,9 +1,7 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-
-use once_cell::sync::Lazy;
 
 use axum::{
     extract::{Query, State},
@@ -25,7 +23,7 @@ use super::types::SubEntry;
 //    - Optional iOS-specific redirect must also be HTTP/HTTPS per Twitch policy
 // 3. Required scopes: user:read:follows user:write:chat
 // 4. Set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in src-tauri/.env (see .env.example)
-pub static TWITCH_CLIENT_ID: Lazy<String> = Lazy::new(|| {
+pub static TWITCH_CLIENT_ID: LazyLock<String> = LazyLock::new(|| {
     std::env::var("TWITCH_CLIENT_ID")
         .ok()
         .map(|v| v.trim().to_string())
@@ -37,7 +35,7 @@ pub static TWITCH_CLIENT_ID: Lazy<String> = Lazy::new(|| {
                 .to_string()
         })
 });
-pub static TWITCH_CLIENT_SECRET: Lazy<String> = Lazy::new(|| {
+pub static TWITCH_CLIENT_SECRET: LazyLock<String> = LazyLock::new(|| {
     std::env::var("TWITCH_CLIENT_SECRET")
         .ok()
         .map(|v| v.trim().to_string())
@@ -71,7 +69,7 @@ fn normalize_twitch_redirect_uri(value: String, fallback: &str) -> String {
     fallback.to_string()
 }
 
-pub static TWITCH_REDIRECT_URI: Lazy<String> = Lazy::new(|| {
+pub static TWITCH_REDIRECT_URI: LazyLock<String> = LazyLock::new(|| {
     normalize_twitch_redirect_uri(
         std::env::var("TWITCH_REDIRECT_URI")
             .ok()
@@ -82,7 +80,7 @@ pub static TWITCH_REDIRECT_URI: Lazy<String> = Lazy::new(|| {
     )
 });
 
-pub static TWITCH_REDIRECT_URI_IOS: Lazy<String> = Lazy::new(|| {
+pub static TWITCH_REDIRECT_URI_IOS: LazyLock<String> = LazyLock::new(|| {
     normalize_twitch_redirect_uri(
         std::env::var("TWITCH_REDIRECT_URI_IOS")
             .ok()

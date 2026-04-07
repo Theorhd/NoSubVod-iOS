@@ -3,7 +3,10 @@ use axum::response::Redirect;
 use axum::{
     body::Body,
     extract::{ws::WebSocketUpgrade, Path, Query, State},
-    http::{header, StatusCode},
+    http::{
+        header::{self, HeaderName},
+        HeaderValue, StatusCode,
+    },
     middleware,
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
@@ -87,18 +90,22 @@ async fn handle_screenshare_ws(
 
 // ── Error helpers ─────────────────────────────────────────────────────────────
 
-fn m3u8_response(mut body: String) -> Response {
-    body = body.trim_start().to_string();
-    if !body.starts_with("#EXTM3U") {
-        body = format!("#EXTM3U\n{}", body);
-    }
+fn m3u8_response(body: String) -> Response {
+    let trimmed = body.trim_start();
+    let final_body = if !trimmed.starts_with("#EXTM3U") {
+        format!("#EXTM3U\n{}", trimmed)
+    } else if trimmed.len() < body.len() {
+        trimmed.to_string()
+    } else {
+        body
+    };
 
     Response::builder()
         .header(header::CONTENT_TYPE, "application/vnd.apple.mpegurl")
         .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate")
         .header("Pragma", "no-cache")
         .header("Expires", "0")
-        .body(Body::from(body))
+        .body(Body::from(final_body))
         .unwrap_or_else(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -924,7 +931,7 @@ async fn handle_shared_downloads(
             if file_path.ends_with(".ts") {
                 response
                     .headers_mut()
-                    .insert(header::CONTENT_TYPE, "video/mp2t".parse().unwrap());
+                    .insert(header::CONTENT_TYPE, HeaderValue::from_static("video/mp2t"));
             }
             Ok(response)
         }
@@ -1272,9 +1279,15 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
         .max_capacity(32 * 1024 * 1024)
         .build();
 
-    // CORS: allow only same-origin and local network origins (not Any)
+    // CORS: allow local tauri origins and loopback
     let cors = CorsLayer::new()
-        .allow_origin(tower_http::cors::AllowOrigin::mirror_request())
+        .allow_origin([
+            HeaderValue::from_static("tauri://localhost"),
+            HeaderValue::from_static("http://localhost"),
+            HeaderValue::from_static("https://localhost"),
+            HeaderValue::from_static("http://127.0.0.1"),
+            HeaderValue::from_static("https://127.0.0.1"),
+        ])
         .allow_methods([
             axum::http::Method::GET,
             axum::http::Method::POST,
@@ -1285,8 +1298,8 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
         .allow_headers([
             header::CONTENT_TYPE,
             header::AUTHORIZATION,
-            "x-nsv-token".parse().unwrap(),
-            "x-nsv-device-id".parse().unwrap(),
+            HeaderName::from_static("x-nsv-token"),
+            HeaderName::from_static("x-nsv-device-id"),
         ])
         .expose_headers([
             header::CONTENT_RANGE,

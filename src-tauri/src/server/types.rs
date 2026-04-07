@@ -7,7 +7,9 @@ use std::collections::HashMap;
 pub struct ServerInfo {
     pub ip: String,
     pub port: u16,
-    pub url: String,
+    pub url: String, // Deprecated, kept for compatibility
+    pub local_url: String,
+    pub public_url: String,
     pub qrcode: String,
 }
 

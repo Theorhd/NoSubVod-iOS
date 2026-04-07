@@ -24,9 +24,9 @@ pub mod server {
 }
 
 #[cfg(not(test))]
-use once_cell::sync::Lazy;
-#[cfg(not(test))]
 use std::path::PathBuf;
+#[cfg(not(test))]
+use std::sync::LazyLock;
 #[cfg(not(test))]
 use std::sync::{Arc, Mutex};
 #[cfg(not(test))]
@@ -40,12 +40,13 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use server::AppState;
 
 #[cfg(not(test))]
-static TRACING_FILE_GUARD: Lazy<Mutex<Option<WorkerGuard>>> = Lazy::new(|| Mutex::new(None));
+static TRACING_FILE_GUARD: LazyLock<Mutex<Option<WorkerGuard>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 #[cfg(not(test))]
 fn init_tracing(logs_dir: PathBuf) {
     let default_filter = if cfg!(debug_assertions) {
-        "nosubvod_ios_lib=debug,tower_http=debug"
+        "nosubvod_ios_lib=debug,tower_http=debug,axum=debug"
     } else {
         "nosubvod_ios_lib=info,tower_http=warn"
     };
@@ -140,9 +141,21 @@ pub fn run() {
         commands::stop_live_chat_polling
     ]);
 
-    builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app_handle, event| match event {
+        #[cfg(mobile)]
+        tauri::RunEvent::Resumed => {
+            tracing::info!("App resumed from background, network stack should be active");
+        }
+        #[cfg(mobile)]
+        tauri::RunEvent::Suspended => {
+            tracing::info!("App suspended, background tasks might be limited by iOS");
+        }
+        _ => {}
+    });
 }
 
 #[cfg(test)]

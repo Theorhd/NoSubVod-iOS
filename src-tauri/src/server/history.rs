@@ -308,7 +308,7 @@ impl HistoryStore {
             return (Vec::new(), total);
         }
 
-        let mut entries: Vec<HistoryEntry> = data.history.values().cloned().collect();
+        let mut entries: Vec<&HistoryEntry> = data.history.values().collect();
 
         // Partial sort: only sort what's needed for the current page
         let end = (offset + limit).min(total);
@@ -318,10 +318,10 @@ impl HistoryStore {
         prefix.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
         let mut head = Vec::with_capacity(prefix.len() + 1);
-        head.extend(prefix.iter().cloned());
-        head.push(nth.clone());
+        head.extend(prefix.iter().copied());
+        head.push(*nth);
 
-        let paginated = head.into_iter().skip(offset).take(limit).collect();
+        let paginated = head.into_iter().skip(offset).take(limit).cloned().collect();
 
         (paginated, total)
     }
@@ -375,7 +375,7 @@ impl HistoryStore {
             return (Vec::new(), total);
         }
 
-        let mut entries = data.watchlist.clone();
+        let mut entries: Vec<&WatchlistEntry> = data.watchlist.iter().collect();
 
         // Partial sort: newest first
         let end = (offset + limit).min(total);
@@ -384,10 +384,10 @@ impl HistoryStore {
         prefix.sort_by(|a, b| b.added_at.cmp(&a.added_at));
 
         let mut head = Vec::with_capacity(prefix.len() + 1);
-        head.extend(prefix.iter().cloned());
-        head.push(nth.clone());
+        head.extend(prefix.iter().copied());
+        head.push(*nth);
 
-        let paginated = head.into_iter().skip(offset).take(limit).collect();
+        let paginated = head.into_iter().skip(offset).take(limit).cloned().collect();
 
         (paginated, total)
     }
@@ -505,7 +505,7 @@ impl HistoryStore {
             return (Vec::new(), total);
         }
 
-        let mut entries = data.subs.clone();
+        let mut entries: Vec<&SubEntry> = data.subs.iter().collect();
 
         // Partial sort: alphabetical by display_name
         let end = (offset + limit).min(total);
@@ -514,10 +514,10 @@ impl HistoryStore {
         prefix.sort_by(|a, b| a.display_name.cmp(&b.display_name));
 
         let mut head = Vec::with_capacity(prefix.len() + 1);
-        head.extend(prefix.iter().cloned());
-        head.push(nth.clone());
+        head.extend(prefix.iter().copied());
+        head.push(*nth);
 
-        let paginated = head.into_iter().skip(offset).take(limit).collect();
+        let paginated = head.into_iter().skip(offset).take(limit).cloned().collect();
 
         (paginated, total)
     }
