@@ -21,7 +21,6 @@ type InternalApiInvokeResponse = {
 const API_INVOKE_TIMEOUT_MS = 10000;
 const API_RETRY_DELAY_MS = 250;
 const API_MAX_IDEMPOTENT_RETRIES = 1;
-const IOS_LOCAL_API_BASE_URL = "http://127.0.0.1:23400";
 
 const TWITCH_DEEP_LINK_PROTOCOL = "nosubvod:";
 const TWITCH_DEEP_LINK_HOST = "auth";
@@ -438,30 +437,6 @@ function disableAppZoomOnIos(): void {
   document.addEventListener("gestureend", blockGesture, { passive: false });
 }
 
-function buildDirectLocalApiUrl(resolvedUrl: URL): string {
-  return `${IOS_LOCAL_API_BASE_URL}${resolvedUrl.pathname}${resolvedUrl.search}`;
-}
-
-function shouldAttemptDirectLocalApiFallback(
-  response: Response,
-  method: string,
-  shouldRouteToRemote: boolean,
-): boolean {
-  if (!isIosFamilyRuntime()) {
-    return false;
-  }
-
-  if (shouldRouteToRemote) {
-    return false;
-  }
-
-  if (!isIdempotentMethod(method)) {
-    return false;
-  }
-
-  return response.status >= 500;
-}
-
 type TwitchOAuthBridgeStatus = "success" | "error";
 
 type TwitchOAuthBridgePayload = {
@@ -728,7 +703,6 @@ function patchFetch() {
       resolveApiRequestContext(url);
 
     if (isApiCall) {
-      const requestMethod = (init?.method || "GET").toUpperCase();
       const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
       const serverToken = getRemoteServerToken();
       const remoteSessionEnabled = Boolean(serverUrl && serverToken);
@@ -753,45 +727,9 @@ function patchFetch() {
         serverUrl,
       );
       if (tauriResponse) {
-        return tauriResponse.then(async (response) => {
-          if (
-            !resolvedUrl ||
-            !shouldAttemptDirectLocalApiFallback(
-              response,
-              requestMethod,
-              shouldRouteToRemote,
-            )
-          ) {
-            return response;
-          }
-
-          try {
-            const fallbackResponse = await originalFetch.call(
-              globalThis,
-              buildDirectLocalApiUrl(resolvedUrl),
-              {
-                ...init,
-                headers,
-              },
-            );
-
-            if (fallbackResponse.status < 500) {
-              console.warn("[fetch-guard] recovered via direct local API", {
-                path: apiPathname,
-                invokeStatus: response.status,
-                fallbackStatus: fallbackResponse.status,
-              });
-              return fallbackResponse;
-            }
-          } catch (fallbackError) {
-            console.warn(
-              "[fetch-guard] direct local API fallback failed",
-              fallbackError,
-            );
-          }
-
-          return response;
-        });
+        // In Tauri runtime, backend API calls must stay on the native bridge
+        // (internal_api_request/proxy_remote_request) to avoid HTTP 0 failures.
+        return tauriResponse;
       }
 
       init = { ...init, headers };
