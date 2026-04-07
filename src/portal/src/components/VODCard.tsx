@@ -178,10 +178,6 @@ export const VODCard = React.memo<VODCardProps>(
             {new Date(vod.createdAt).toLocaleDateString()}
           </div>
         </div>
-
-        <style>{`
-        .vod-card:hover .vod-play-overlay { opacity: 1 !important; }
-      `}</style>
       </div>
     );
   },

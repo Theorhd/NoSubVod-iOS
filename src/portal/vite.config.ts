@@ -6,7 +6,23 @@ export default defineConfig(({ command }) => ({
   root: __dirname,
   base: "/",
   cacheDir: "../../node_modules/.vite-portal",
-  plugins: command === "serve" ? [react(), basicSsl()] : [react()],
+  plugins:
+    command === "serve"
+      ? [
+          react({
+            babel: {
+              plugins: [["babel-plugin-react-compiler", { target: "19" }]],
+            },
+          } as any),
+          basicSsl(),
+        ]
+      : [
+          react({
+            babel: {
+              plugins: [["babel-plugin-react-compiler", { target: "19" }]],
+            },
+          } as any),
+        ],
   build: {
     outDir: "../../dist/portal",
     emptyOutDir: true,

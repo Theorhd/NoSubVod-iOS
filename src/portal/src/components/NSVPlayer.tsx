@@ -16,6 +16,8 @@ import {
   DefaultVideoLayout,
 } from "@vidstack/react/player/layouts/default";
 import type Hls from "hls.js";
+import "@vidstack/react/player/styles/default/theme.css";
+import "@vidstack/react/player/styles/default/layouts/video.css";
 import { safeStorageGet } from "../../../shared/utils/storage";
 import {
   getActiveToken,

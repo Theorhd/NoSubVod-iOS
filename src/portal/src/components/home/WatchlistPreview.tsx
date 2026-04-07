@@ -127,10 +127,6 @@ const WatchlistPreview = React.memo(
                   {vod.title}
                 </div>
               </div>
-
-              <style>{`
-              .vod-card:hover .vod-play-overlay { opacity: 1 !important; }
-            `}</style>
             </div>
           ))}
         </div>
