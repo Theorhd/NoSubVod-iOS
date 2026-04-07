@@ -6,10 +6,17 @@ export interface UserInfo {
   createdAt?: string;
 }
 
+export interface SubNotificationPreferences {
+  enabled: boolean;
+  live: boolean;
+  vod: boolean;
+}
+
 export interface SubEntry {
   login: string;
   displayName: string;
   profileImageURL: string;
+  notifications?: SubNotificationPreferences;
 }
 
 export interface VOD {

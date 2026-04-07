@@ -16,6 +16,8 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 
 use super::error::{AppError, AppResult};
+#[cfg(test)]
+use super::types::SubNotificationPreferences;
 use super::types::{
     ExperienceSettings, HistoryEntry, PersistedData, ProfileBackupFile, ProfileData, SubEntry,
     TrustedDevice, WatchlistEntry,
@@ -536,6 +538,7 @@ impl HistoryStore {
                     login: login.clone(),
                     display_name: entry.display_name.clone(),
                     profile_image_url: entry.profile_image_url.clone(),
+                    notifications: entry.notifications.clone(),
                 });
                 should_save = true;
             }
@@ -561,6 +564,48 @@ impl HistoryStore {
             self.schedule_save();
         }
         Ok(())
+    }
+
+    pub async fn update_sub_notifications(
+        &self,
+        login: &str,
+        enabled: Option<bool>,
+        live: Option<bool>,
+        vod: Option<bool>,
+    ) -> AppResult<Option<SubEntry>> {
+        let normalized_login = login.trim().to_lowercase();
+        if normalized_login.is_empty() {
+            return Err(AppError::BadRequest("Invalid sub login".to_string()));
+        }
+
+        let mut updated: Option<SubEntry> = None;
+        {
+            let mut data = self.data.write().await;
+            if let Some(sub) = data.subs.iter_mut().find(|s| s.login == normalized_login) {
+                if let Some(value) = enabled {
+                    sub.notifications.enabled = value;
+                }
+                if let Some(value) = live {
+                    sub.notifications.live = value;
+                }
+                if let Some(value) = vod {
+                    sub.notifications.vod = value;
+                }
+
+                if sub.notifications.enabled && !sub.notifications.live && !sub.notifications.vod {
+                    sub.notifications.live = true;
+                    sub.notifications.vod = true;
+                }
+
+                updated = Some(sub.clone());
+            }
+        }
+
+        if updated.is_some() {
+            self.schedule_save();
+        }
+
+        Ok(updated)
     }
 
     // ── Twitch token (kept server-side only, never serialised to API) ─────────
@@ -857,6 +902,7 @@ mod tests {
             login: "testuser".to_string(),
             display_name: "TestUser".to_string(),
             profile_image_url: "http://example.com/avatar.png".to_string(),
+            notifications: SubNotificationPreferences::default(),
         };
         store.add_sub(sub).await.unwrap();
         let subs = store.get_subs().await;

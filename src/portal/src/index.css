@@ -1933,6 +1933,14 @@ select:focus {
   font-weight: 600;
 }
 
+.streamer-info-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .streamer-sub-btn {
   min-height: 42px;
   padding: 0 18px;
@@ -1942,6 +1950,50 @@ select:focus {
   justify-content: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.streamer-notify-btn {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  color: #d9e4ff;
+  border-color: rgba(103, 145, 255, 0.35);
+  background: linear-gradient(
+    140deg,
+    rgba(28, 53, 102, 0.62),
+    rgba(37, 68, 130, 0.38)
+  );
+}
+
+.streamer-notify-btn:hover:not(:disabled) {
+  color: #f6faff;
+  border-color: rgba(132, 170, 255, 0.7);
+  background: linear-gradient(
+    140deg,
+    rgba(39, 72, 140, 0.65),
+    rgba(52, 88, 167, 0.5)
+  );
+}
+
+.streamer-notify-btn.is-enabled {
+  color: #ffffff;
+  border-color: rgba(118, 231, 214, 0.9);
+  background: linear-gradient(
+    140deg,
+    rgba(14, 73, 69, 0.94),
+    rgba(16, 101, 91, 0.86)
+  );
+  box-shadow: 0 8px 18px rgba(9, 76, 69, 0.34);
+}
+
+.streamer-notify-btn:disabled {
+  opacity: 0.72;
+  cursor: default;
 }
 
 @media (max-width: 720px) {
@@ -1955,7 +2007,15 @@ select:focus {
     height: 66px;
   }
 
+  .streamer-info-actions {
+    width: 100%;
+  }
+
   .streamer-sub-btn {
+    width: 100%;
+  }
+
+  .streamer-notify-btn {
     width: 100%;
   }
 }

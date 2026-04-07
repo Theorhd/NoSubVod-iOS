@@ -109,6 +109,13 @@ pub struct SettingsPatch {
 }
 
 #[derive(Deserialize)]
+pub struct SubNotificationsPatch {
+    pub enabled: Option<bool>,
+    pub live: Option<bool>,
+    pub vod: Option<bool>,
+}
+
+#[derive(Deserialize)]
 pub struct HistoryBody {
     #[serde(rename = "vodId")]
     pub vod_id: Option<String>,

@@ -8,6 +8,7 @@ pub mod extensions;
 pub mod history;
 pub mod http_utils;
 pub mod middleware;
+pub mod notifications;
 pub mod routes;
 pub mod screenshare;
 pub mod state;

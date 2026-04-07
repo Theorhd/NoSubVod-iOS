@@ -29,7 +29,8 @@ use super::{
     dto::{
         ChatQuery, ChatSendBody, DownloadRequest, DownloadedFile, HistoryBody, HistoryListQuery,
         LiveCategoryQuery, LiveQuery, LiveSearchQuery, LiveStatusQuery, PagedQuery, QualityQuery,
-        SearchCategoryQuery, SearchQuery, SettingsPatch, TrustedDevicePatch, VariantProxyQuery,
+        SearchCategoryQuery, SearchQuery, SettingsPatch, SubNotificationsPatch, TrustedDevicePatch,
+        VariantProxyQuery,
     },
     error::{AppError, AppResult},
     middleware::{auth_middleware, security_headers_middleware},
@@ -599,6 +600,25 @@ async fn handle_remove_sub(
 ) -> AppResult<impl IntoResponse> {
     state.history.remove_sub(&login).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+async fn handle_update_sub_notifications(
+    Path(login): Path<String>,
+    State(state): State<ApiState>,
+    Json(patch): Json<SubNotificationsPatch>,
+) -> AppResult<Response> {
+    if !is_valid_login(&login) {
+        return Err(AppError::BadRequest("Invalid username".to_string()));
+    }
+
+    match state
+        .history
+        .update_sub_notifications(&login, patch.enabled, patch.live, patch.vod)
+        .await?
+    {
+        Some(entry) => Ok(Json(entry).into_response()),
+        None => Err(AppError::NotFound("Sub not found".to_string())),
+    }
 }
 
 async fn handle_search_channels(
@@ -1368,6 +1388,10 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
         // Subs
         .route("/subs", get(handle_get_subs).post(handle_add_sub))
         .route("/subs/:login", delete(handle_remove_sub))
+        .route(
+            "/subs/:login/notifications",
+            put(handle_update_sub_notifications),
+        )
         // Search
         .route("/search/channels", get(handle_search_channels))
         .route("/search/global", get(handle_search_global))

@@ -16,7 +16,7 @@ use uuid::Uuid;
 use super::http_utils::{get_text_checked, get_text_with_direct_fallback};
 use super::types::{
     ExperienceSettings, HistoryEntry, LiveBroadcaster, LiveGame, LiveStream, LiveStreamsPage,
-    SubEntry, UserInfo, Vod,
+    SubEntry, SubNotificationPreferences, UserInfo, Vod,
 };
 use super::url_utils::{extract_origin, resolve_url};
 
@@ -2403,6 +2403,7 @@ impl TwitchService {
                 login: login.clone(),
                 display_name: String::new(),
                 profile_image_url: String::new(),
+                notifications: SubNotificationPreferences::default(),
             })
             .collect();
 

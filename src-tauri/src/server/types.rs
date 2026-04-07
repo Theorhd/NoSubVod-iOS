@@ -171,6 +171,30 @@ pub struct WatchlistEntry {
     pub added_at: u64,
 }
 
+const fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubNotificationPreferences {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub live: bool,
+    #[serde(default = "default_true")]
+    pub vod: bool,
+}
+
+impl Default for SubNotificationPreferences {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            live: true,
+            vod: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubEntry {
     pub login: String,
@@ -178,6 +202,8 @@ pub struct SubEntry {
     pub display_name: String,
     #[serde(rename = "profileImageURL")]
     pub profile_image_url: String,
+    #[serde(default)]
+    pub notifications: SubNotificationPreferences,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

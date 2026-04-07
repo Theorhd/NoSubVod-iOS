@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 use tracing::{info, instrument};
 
 use super::state::ApiState;
-use super::types::SubEntry;
+use super::types::{SubEntry, SubNotificationPreferences};
 
 // ── CONFIGURE YOUR TWITCH APP HERE ─────────────────────────────────────────────
 // 1. Register your app at https://dev.twitch.tv/console/apps
@@ -744,6 +744,7 @@ pub async fn import_followed_channels(
                     login: login.clone(),
                     display_name: display_name.clone(),
                     profile_image_url: avatar,
+                    notifications: SubNotificationPreferences::default(),
                 })
                 .await;
             total += 1;

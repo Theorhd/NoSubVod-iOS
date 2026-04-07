@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDays, UserPlus } from "lucide-react";
+import { Bell, BellRing, CalendarDays, UserPlus } from "lucide-react";
 import { UserInfo } from "../../../shared/types";
 
 type StreamerInfoCardProps = {
@@ -7,6 +7,9 @@ type StreamerInfoCardProps = {
   isSubbed: boolean;
   isAdding: boolean;
   onAddToSubs: () => void;
+  notificationsEnabled: boolean;
+  notificationsUpdating: boolean;
+  onToggleNotifications: () => void;
 };
 
 const computeAccountYears = (createdAt?: string): number | null => {
@@ -36,15 +39,30 @@ const formatYearsLabel = (years: number | null): string => {
 };
 
 export const StreamerInfoCard = React.memo<StreamerInfoCardProps>(
-  ({ streamer, isSubbed, isAdding, onAddToSubs }) => {
+  ({
+    streamer,
+    isSubbed,
+    isAdding,
+    onAddToSubs,
+    notificationsEnabled,
+    notificationsUpdating,
+    onToggleNotifications,
+  }) => {
     const years = computeAccountYears(streamer.createdAt);
     const yearsLabel = formatYearsLabel(years);
     let buttonLabel = "Subscribe";
+    let notificationLabel = notificationsEnabled
+      ? "Notifications live + VOD actives"
+      : "Activer notifications live + VOD";
 
-    if (isSubbed) {
-      buttonLabel = "Subscribed";
-    } else if (isAdding) {
+    if (isAdding) {
       buttonLabel = "Adding...";
+    }
+
+    if (notificationsUpdating) {
+      notificationLabel = notificationsEnabled
+        ? "Mise a jour..."
+        : "Activation...";
     }
 
     return (
@@ -75,15 +93,33 @@ export const StreamerInfoCard = React.memo<StreamerInfoCardProps>(
           </div>
         </div>
 
-        <button
-          type="button"
-          className={`action-btn streamer-sub-btn${isSubbed ? " secondary-btn" : ""}`}
-          onClick={onAddToSubs}
-          disabled={isSubbed || isAdding}
-        >
-          <UserPlus size={16} />
-          {buttonLabel}
-        </button>
+        <div className="streamer-info-actions">
+          {isSubbed ? (
+            <button
+              type="button"
+              className={`secondary-btn streamer-notify-btn${notificationsEnabled ? " is-enabled" : ""}`}
+              onClick={onToggleNotifications}
+              disabled={notificationsUpdating}
+            >
+              {notificationsEnabled ? (
+                <BellRing size={16} />
+              ) : (
+                <Bell size={16} />
+              )}
+              {notificationLabel}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="action-btn streamer-sub-btn"
+              onClick={onAddToSubs}
+              disabled={isAdding}
+            >
+              <UserPlus size={16} />
+              {buttonLabel}
+            </button>
+          )}
+        </div>
       </div>
     );
   },

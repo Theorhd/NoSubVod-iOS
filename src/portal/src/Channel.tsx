@@ -1,30 +1,73 @@
 import React from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
-import { SubEntry } from "../../shared/types";
+import { SubEntry, SubNotificationPreferences } from "../../shared/types";
 import { StreamCard } from "./components/StreamCard";
 import { VODCard } from "./components/VODCard";
 import { StreamerInfoCard } from "./components/streamerInfoCard";
 import { TopBar } from "./components/TopBar";
 import { useChannelData } from "./hooks/useChannelData";
 import { navigateToPlayer } from "./utils/navigation";
+import { ensureNativeNotificationPermission } from "./utils/nativeNotifications";
 
 const normalizeSubLogin = (value: string): string => value.trim().toLowerCase();
+
+const DEFAULT_SUB_NOTIFICATIONS: SubNotificationPreferences = {
+  enabled: false,
+  live: true,
+  vod: true,
+};
+
+const normalizeSubEntry = (entry: SubEntry): SubEntry => {
+  const notifications: SubNotificationPreferences = {
+    ...DEFAULT_SUB_NOTIFICATIONS,
+    ...entry.notifications,
+  };
+
+  if (notifications.enabled && !notifications.live && !notifications.vod) {
+    notifications.live = true;
+    notifications.vod = true;
+  }
+
+  return {
+    ...entry,
+    login: normalizeSubLogin(entry.login),
+    notifications,
+  };
+};
 
 function readLocalSubs(): SubEntry[] {
   const raw = localStorage.getItem("nsv_subs");
   if (!raw) return [];
 
   try {
-    return JSON.parse(raw) as SubEntry[];
+    const parsed = JSON.parse(raw) as SubEntry[];
+    return parsed.map(normalizeSubEntry);
   } catch {
     return [];
   }
 }
 
-const toSubLoginSet = (entries: SubEntry[]): Set<string> =>
-  new Set(
-    entries.map((entry) => normalizeSubLogin(entry.login)).filter(Boolean),
-  );
+function persistLocalSubs(entries: SubEntry[]): boolean {
+  try {
+    localStorage.setItem("nsv_subs", JSON.stringify(entries));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const toSubMap = (entries: SubEntry[]): Map<string, SubEntry> => {
+  const map = new Map<string, SubEntry>();
+  entries.forEach((entry) => {
+    const normalized = normalizeSubEntry(entry);
+    if (!normalized.login) return;
+    map.set(normalized.login, normalized);
+  });
+  return map;
+};
+
+const toSubEntries = (subsByLogin: Map<string, SubEntry>): SubEntry[] =>
+  Array.from(subsByLogin.values());
 
 export default function Channel() {
   const [searchParams] = useSearchParams();
@@ -33,8 +76,13 @@ export default function Channel() {
   const category = searchParams.get("category");
   const categoryId = searchParams.get("categoryId");
   const navigate = useNavigate();
-  const [subsLogins, setSubsLogins] = React.useState<Set<string>>(new Set());
+  const [subsByLogin, setSubsByLogin] = React.useState<Map<string, SubEntry>>(
+    new Map(),
+  );
+  const [subsLoaded, setSubsLoaded] = React.useState(false);
   const [isAddingSub, setIsAddingSub] = React.useState(false);
+  const [notificationsUpdatingLogin, setNotificationsUpdatingLogin] =
+    React.useState<string | null>(null);
   const [subFeedback, setSubFeedback] = React.useState<{
     type: "success" | "error";
     message: string;
@@ -74,7 +122,8 @@ export default function Channel() {
         if (res.ok) {
           const remoteSubs = (await res.json()) as SubEntry[];
           if (!cancelled) {
-            setSubsLogins(toSubLoginSet(remoteSubs));
+            setSubsByLogin(toSubMap(remoteSubs));
+            setSubsLoaded(true);
           }
           return;
         }
@@ -83,7 +132,8 @@ export default function Channel() {
       }
 
       if (!cancelled) {
-        setSubsLogins(toSubLoginSet(readLocalSubs()));
+        setSubsByLogin(toSubMap(readLocalSubs()));
+        setSubsLoaded(true);
       }
     };
 
@@ -94,9 +144,30 @@ export default function Channel() {
     };
   }, [location.key]);
 
-  const isStreamerSubbed = Boolean(
-    streamerInfo && subsLogins.has(normalizeSubLogin(streamerInfo.login)),
+  React.useEffect(() => {
+    if (!subsLoaded) return;
+    persistLocalSubs(toSubEntries(subsByLogin));
+  }, [subsByLogin, subsLoaded]);
+
+  const streamerLogin = streamerInfo
+    ? normalizeSubLogin(streamerInfo.login)
+    : "";
+  const streamerSubEntry = streamerLogin
+    ? subsByLogin.get(streamerLogin) || null
+    : null;
+
+  const streamerNotifications =
+    streamerSubEntry?.notifications || DEFAULT_SUB_NOTIFICATIONS;
+
+  const isStreamerSubbed = streamerSubEntry !== null;
+
+  const isStreamerNotificationsEnabled = Boolean(
+    streamerNotifications.enabled &&
+    (streamerNotifications.live || streamerNotifications.vod),
   );
+
+  const isStreamerNotificationsUpdating =
+    streamerLogin !== "" && notificationsUpdatingLogin === streamerLogin;
 
   React.useEffect(() => {
     setSubFeedback(null);
@@ -108,7 +179,7 @@ export default function Channel() {
     const normalizedLogin = normalizeSubLogin(streamerInfo.login);
     if (!normalizedLogin) return;
 
-    if (subsLogins.has(normalizedLogin)) {
+    if (subsByLogin.has(normalizedLogin)) {
       setSubFeedback({
         type: "success",
         message: "Streamer deja present dans ta liste de subs.",
@@ -123,6 +194,7 @@ export default function Channel() {
       login: normalizedLogin,
       displayName: streamerInfo.displayName || streamerInfo.login,
       profileImageURL: streamerInfo.profileImageURL,
+      notifications: { ...DEFAULT_SUB_NOTIFICATIONS },
     };
 
     try {
@@ -136,34 +208,29 @@ export default function Channel() {
         throw new Error("Failed to add sub");
       }
 
-      setSubsLogins((prev) => new Set(prev).add(normalizedLogin));
+      setSubsByLogin((prev) => {
+        const next = new Map(prev);
+        next.set(normalizedLogin, normalizeSubEntry(subEntry));
+        return next;
+      });
       setSubFeedback({
         type: "success",
         message: "Streamer ajoute a la liste des subs.",
       });
     } catch {
-      const localSubs = readLocalSubs();
-      const alreadyLocal = localSubs.some(
-        (entry) => normalizeSubLogin(entry.login) === normalizedLogin,
-      );
+      const localMap = new Map(subsByLogin);
+      localMap.set(normalizedLogin, normalizeSubEntry(subEntry));
 
-      if (!alreadyLocal) {
-        try {
-          localStorage.setItem(
-            "nsv_subs",
-            JSON.stringify([...localSubs, subEntry]),
-          );
-        } catch {
-          setSubFeedback({
-            type: "error",
-            message: "Impossible d'ajouter ce streamer pour le moment.",
-          });
-          setIsAddingSub(false);
-          return;
-        }
+      if (!persistLocalSubs(toSubEntries(localMap))) {
+        setSubFeedback({
+          type: "error",
+          message: "Impossible d'ajouter ce streamer pour le moment.",
+        });
+        setIsAddingSub(false);
+        return;
       }
 
-      setSubsLogins((prev) => new Set(prev).add(normalizedLogin));
+      setSubsByLogin(localMap);
       setSubFeedback({
         type: "success",
         message: "Streamer ajoute localement a la liste des subs.",
@@ -171,7 +238,109 @@ export default function Channel() {
     } finally {
       setIsAddingSub(false);
     }
-  }, [streamerInfo, subsLogins]);
+  }, [streamerInfo, subsByLogin]);
+
+  const handleToggleStreamerNotifications = React.useCallback(async () => {
+    if (!streamerInfo) return;
+
+    const normalizedLogin = normalizeSubLogin(streamerInfo.login);
+    if (!normalizedLogin) return;
+
+    const currentSub = subsByLogin.get(normalizedLogin);
+    if (!currentSub) return;
+
+    const currentNotifications: SubNotificationPreferences = {
+      ...DEFAULT_SUB_NOTIFICATIONS,
+      ...currentSub.notifications,
+    };
+
+    const currentlyEnabled = Boolean(
+      currentNotifications.enabled &&
+      (currentNotifications.live || currentNotifications.vod),
+    );
+    const shouldEnable = !currentlyEnabled;
+
+    if (shouldEnable) {
+      const permissionGranted = await ensureNativeNotificationPermission();
+      if (!permissionGranted) {
+        setSubFeedback({
+          type: "error",
+          message: "Notifications iOS refusees. Active-les dans les reglages.",
+        });
+        return;
+      }
+    }
+
+    const nextNotifications: SubNotificationPreferences = {
+      enabled: shouldEnable,
+      live: true,
+      vod: true,
+    };
+
+    setNotificationsUpdatingLogin(normalizedLogin);
+    setSubFeedback(null);
+
+    try {
+      const res = await fetch(
+        `/api/subs/${encodeURIComponent(normalizedLogin)}/notifications`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(nextNotifications),
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to update sub notifications");
+      }
+
+      const updatedSub = normalizeSubEntry((await res.json()) as SubEntry);
+      setSubsByLogin((prev) => {
+        const next = new Map(prev);
+        next.set(normalizedLogin, updatedSub);
+        return next;
+      });
+
+      setSubFeedback({
+        type: "success",
+        message: shouldEnable
+          ? "Notifications live et VOD activees."
+          : "Notifications desactivees.",
+      });
+    } catch {
+      const localMap = new Map(subsByLogin);
+      localMap.set(
+        normalizedLogin,
+        normalizeSubEntry({
+          ...currentSub,
+          notifications: nextNotifications,
+        }),
+      );
+
+      if (!persistLocalSubs(toSubEntries(localMap))) {
+        setSubFeedback({
+          type: "error",
+          message: "Impossible de mettre a jour les notifications.",
+        });
+        setNotificationsUpdatingLogin((value) =>
+          value === normalizedLogin ? null : value,
+        );
+        return;
+      }
+
+      setSubsByLogin(localMap);
+      setSubFeedback({
+        type: "success",
+        message: shouldEnable
+          ? "Notifications activees localement."
+          : "Notifications desactivees localement.",
+      });
+    } finally {
+      setNotificationsUpdatingLogin((value) =>
+        value === normalizedLogin ? null : value,
+      );
+    }
+  }, [streamerInfo, subsByLogin]);
 
   return (
     <>
@@ -194,6 +363,11 @@ export default function Channel() {
               isSubbed={isStreamerSubbed}
               isAdding={isAddingSub}
               onAddToSubs={() => void handleAddStreamerToSubs()}
+              notificationsEnabled={isStreamerNotificationsEnabled}
+              notificationsUpdating={isStreamerNotificationsUpdating}
+              onToggleNotifications={() =>
+                void handleToggleStreamerNotifications()
+              }
             />
 
             {subFeedback && (

@@ -103,6 +103,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_secure_storage::init());
 
     builder = builder.setup(|app| {
@@ -120,6 +121,12 @@ pub fn run() {
                 .map_err(|e| tauri::Error::from(std::io::Error::other(e.to_string())))?,
         );
         app.manage(state.clone());
+
+        server::notifications::SubNotificationService::spawn(
+            state.api_state.history.clone(),
+            state.api_state.twitch.clone(),
+            app.handle().clone(),
+        );
 
         // ── Start Axum HTTP server used by the iOS webview ───────────────────
         let app_handle = app.handle().clone();
