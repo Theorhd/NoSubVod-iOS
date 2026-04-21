@@ -81,9 +81,14 @@ body {
 /* === Utility Classes === */
 .glass {
   background: var(--surface);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border);
+}
+
+@media (min-width: 768px) {
+  .glass {
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
 }
 
 .glass-hover:hover {

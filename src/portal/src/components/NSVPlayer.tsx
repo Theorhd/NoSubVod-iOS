@@ -624,6 +624,7 @@ const NSVPlayer = React.memo(
     useEffect(() => {
       const isHls = (src.type || "").toLowerCase().includes("mpegurl");
       if (!isHls) return;
+      if (isMobileDevice()) return;
 
       const intervalId = globalThis.setInterval(() => {
         const mediaState = storeRef.current as any;
