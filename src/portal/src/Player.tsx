@@ -1514,7 +1514,7 @@ function VodLivePlayer({
           </div>
         </div>
 
-        {showChat && (
+        {showChat && !isFullscreen && (
           <div
             className="glass"
             style={{
