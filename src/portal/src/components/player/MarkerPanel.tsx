@@ -1,4 +1,5 @@
 import React from "react";
+import LiquidGlass from "liquid-glass-react";
 import { VideoMarker } from "../../../../shared/types";
 import { formatSafeClock as formatClock } from "../../../../shared/utils/formatters";
 import { Play, Tag, X } from "lucide-react";
@@ -19,15 +20,14 @@ const MarkerPanel: React.FC<MarkerPanelProps> = ({
   if (markers.length === 0) return null;
 
   return (
-    <div
-      className="glass"
+    <LiquidGlass
+      cornerRadius={20}
       style={{
         position: "absolute",
         top: "20px",
         right: "20px",
         width: "320px",
         maxHeight: "calc(100% - 40px)",
-        borderRadius: "var(--radius-lg)",
         zIndex: 100,
         display: "flex",
         flexDirection: "column",
@@ -35,6 +35,7 @@ const MarkerPanel: React.FC<MarkerPanelProps> = ({
         boxShadow: "var(--shadow-lg)",
         border: "1px solid var(--border)",
         animation: "page-fade-in 0.3s ease-out",
+        backgroundColor: "var(--surface)",
       }}
     >
       <div
@@ -85,11 +86,10 @@ const MarkerPanel: React.FC<MarkerPanelProps> = ({
             currentTime >= marker.displayTime && currentTime < nextTime;
 
           return (
-            <button
+            <LiquidGlass
               key={marker.id}
-              type="button"
+              cornerRadius={14}
               onClick={() => onSeek(marker.displayTime)}
-              className="glass-hover"
               style={{
                 display: "flex",
                 width: "100%",
@@ -99,7 +99,6 @@ const MarkerPanel: React.FC<MarkerPanelProps> = ({
                   : "rgba(255,255,255,0.03)",
                 border: "1px solid",
                 borderColor: isActive ? "var(--primary)" : "transparent",
-                borderRadius: "var(--radius-md)",
                 padding: "10px",
                 marginBottom: "8px",
                 cursor: "pointer",
@@ -107,6 +106,7 @@ const MarkerPanel: React.FC<MarkerPanelProps> = ({
                 alignItems: "center",
                 transition: "all 0.2s var(--transition-fast)",
                 color: "inherit",
+                backgroundColor: "var(--surface)",
               }}
             >
               <div
@@ -169,11 +169,11 @@ const MarkerPanel: React.FC<MarkerPanelProps> = ({
                   {formatClock(marker.displayTime)}
                 </div>
               </div>
-            </button>
+            </LiquidGlass>
           );
         })}
       </div>
-    </div>
+    </LiquidGlass>
   );
 };
 

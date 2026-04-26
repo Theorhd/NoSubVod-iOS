@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import LiquidGlass from "liquid-glass-react";
 import { HistoryVodEntry } from "../../../../shared/types";
 import { History as HistoryIcon, ChevronRight } from "lucide-react";
 import { navigateToPlayer } from "../../utils/navigation";
@@ -33,40 +34,43 @@ const HistoryPreview = React.memo(({ historyPreview }: HistoryPreviewProps) => {
       </div>
 
       {historyPreview.length === 0 ? (
-        <div
-          className="card glass"
-          style={{ textAlign: "center", color: "var(--text-muted)" }}
+        <LiquidGlass
+          className="card"
+          cornerRadius={14}
+          style={{
+            textAlign: "center",
+            color: "var(--text-muted)",
+            backgroundColor: "var(--surface)",
+          }}
         >
           No recent history.
-        </div>
+        </LiquidGlass>
       ) : (
         <div style={{ display: "grid", gap: "12px" }}>
           {historyPreview.map((entry) => {
             const progress = formatProgress(entry.timecode, entry.duration);
 
             return (
-              <button
+              <LiquidGlass
                 key={entry.vodId}
-                className="glass-hover"
-                style={{
-                  display: "flex",
-                  gap: "16px",
-                  padding: "12px",
-                  borderRadius: "var(--radius-md)",
-                  cursor: "pointer",
-                  alignItems: "center",
-                  border: "none",
-                  background: "transparent",
-                  textAlign: "left",
-                  color: "inherit",
-                  width: "100%",
-                }}
+                cornerRadius={14}
                 onClick={() =>
                   navigateToPlayer(navigate, {
                     vodId: entry.vodId,
                   })
                 }
-                type="button"
+                style={{
+                  display: "flex",
+                  gap: "16px",
+                  padding: "12px",
+                  cursor: "pointer",
+                  alignItems: "center",
+                  border: "none",
+                  textAlign: "left",
+                  color: "inherit",
+                  width: "100%",
+                  backgroundColor: "var(--surface)",
+                }}
               >
                 <div
                   style={{
@@ -142,7 +146,7 @@ const HistoryPreview = React.memo(({ historyPreview }: HistoryPreviewProps) => {
                     <span>{entry.vod?.game?.name || "No category"}</span>
                   </div>
                 </div>
-              </button>
+              </LiquidGlass>
             );
           })}
         </div>

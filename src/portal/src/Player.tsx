@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Search, X } from "lucide-react";
+import LiquidGlass from "liquid-glass-react";
 import {
   ChatMessage,
   ExperienceSettings,
@@ -1222,9 +1223,13 @@ function VodLivePlayer({
         className="container"
         style={{ textAlign: "center", padding: "100px" }}
       >
-        <div className="card glass">
+        <LiquidGlass
+          className="card"
+          cornerRadius={14}
+          style={{ backgroundColor: "var(--surface)" }}
+        >
           Missing player source. Please provide vod or live query parameter.
-        </div>
+        </LiquidGlass>
       </div>
     );
   }
@@ -1290,7 +1295,11 @@ function VodLivePlayer({
             className={`container player-controls-container ${showChat ? "chat-visible" : ""}`}
           >
             {!isFullscreen && (
-              <div className="glass player-actions-row">
+              <LiquidGlass
+                className="player-actions-row"
+                cornerRadius={14}
+                style={{ backgroundColor: "var(--surface)" }}
+              >
                 {!liveId && (
                   <button
                     onClick={() => setShowChatSearch((v) => !v)}
@@ -1317,7 +1326,7 @@ function VodLivePlayer({
                 >
                   {showChat ? "Masquer le chat" : "Afficher le chat"}
                 </button>
-              </div>
+              </LiquidGlass>
             )}
 
             {downloadMode && vodId && (
@@ -1347,7 +1356,11 @@ function VodLivePlayer({
         </div>
 
         {showChat && !isFullscreen && (
-          <div className="glass player-chat-container">
+          <LiquidGlass
+            className="player-chat-container"
+            cornerRadius={0}
+            style={{ backgroundColor: "var(--surface)" }}
+          >
             {!liveId && showChatSearch && vodId && (
               <ChatSearch
                 vodId={vodId}
@@ -1384,7 +1397,7 @@ function VodLivePlayer({
                 </div>
               </>
             )}
-          </div>
+          </LiquidGlass>
         )}
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import LiquidGlass from "liquid-glass-react";
 import { LiveStatusMap, SubEntry } from "../../../../shared/types";
 import { Users, X } from "lucide-react";
 
@@ -39,26 +40,34 @@ const MySubsList = React.memo(
           }}
         >
           {subs.length === 0 ? (
-            <div
-              className="card glass"
-              style={{ width: "100%", textAlign: "center", padding: "32px" }}
+            <LiquidGlass
+              className="card"
+              cornerRadius={14}
+              style={{
+                width: "100%",
+                textAlign: "center",
+                padding: "32px",
+                backgroundColor: "var(--surface)",
+              }}
             >
               <div style={{ color: "var(--text-muted)" }}>
                 No channels followed yet.
               </div>
-            </div>
+            </LiquidGlass>
           ) : (
             subs.map((sub) => {
               const isLive = Boolean(liveStatus[sub.login.toLowerCase()]);
               return (
-                <div
+                <LiquidGlass
                   key={sub.login}
-                  className="glass-hover"
+                  cornerRadius={20}
+                  onClick={() =>
+                    navigate(`/channel?user=${encodeURIComponent(sub.login)}`)
+                  }
                   style={{
                     flex: "0 0 auto",
                     width: "120px",
                     padding: "16px 12px",
-                    borderRadius: "var(--radius-lg)",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
@@ -66,6 +75,7 @@ const MySubsList = React.memo(
                     cursor: "pointer",
                     position: "relative",
                     scrollSnapAlign: "start",
+                    backgroundColor: "var(--surface)",
                   }}
                 >
                   <div style={{ position: "relative" }}>
@@ -103,15 +113,6 @@ const MySubsList = React.memo(
                       </span>
                     )}
                   </div>
-
-                  <button
-                    className="stretched-link"
-                    aria-label={`Ouvrir la chaîne de ${sub.displayName}`}
-                    onClick={() =>
-                      navigate(`/channel?user=${encodeURIComponent(sub.login)}`)
-                    }
-                    style={{ background: "none", border: "none", padding: 0 }}
-                  />
 
                   <div
                     style={{
@@ -152,7 +153,7 @@ const MySubsList = React.memo(
                   >
                     <X size={14} />
                   </button>
-                </div>
+                </LiquidGlass>
               );
             })
           )}

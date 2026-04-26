@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import LiquidGlass from "liquid-glass-react";
 import { UserInfo } from "../../../../shared/types";
 import { Search } from "lucide-react";
 
@@ -22,7 +23,11 @@ const ChannelSearchCard = React.memo(
     const navigate = useNavigate();
 
     return (
-      <div className="card glass" style={{ marginBottom: "24px" }}>
+      <LiquidGlass
+        className="card"
+        cornerRadius={14}
+        style={{ marginBottom: "24px", backgroundColor: "var(--surface)" }}
+      >
         <form onSubmit={handleChannelSearch}>
           <div style={{ display: "flex", gap: "12px" }}>
             <div style={{ position: "relative", flex: 1 }}>
@@ -71,25 +76,23 @@ const ChannelSearchCard = React.memo(
             }}
           >
             {searchResults.map((user) => (
-              <button
+              <LiquidGlass
                 key={user.id}
-                className="glass-hover"
+                cornerRadius={14}
+                onClick={() =>
+                  navigate(`/channel?user=${encodeURIComponent(user.login)}`)
+                }
                 style={{
                   border: "none",
-                  background: "transparent",
                   textAlign: "left",
                   color: "inherit",
                   padding: "12px",
-                  borderRadius: "var(--radius-md)",
                   display: "flex",
                   alignItems: "center",
                   gap: "12px",
                   cursor: "pointer",
+                  backgroundColor: "var(--surface)",
                 }}
-                onClick={() =>
-                  navigate(`/channel?user=${encodeURIComponent(user.login)}`)
-                }
-                type="button"
               >
                 <img
                   src={user.profileImageURL}
@@ -99,11 +102,11 @@ const ChannelSearchCard = React.memo(
                 <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
                   {user.displayName}
                 </div>
-              </button>
+              </LiquidGlass>
             ))}
           </div>
         )}
-      </div>
+      </LiquidGlass>
     );
   },
 );

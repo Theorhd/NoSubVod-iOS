@@ -1,4 +1,5 @@
 import React from "react";
+import LiquidGlass from "liquid-glass-react";
 import { LiveStream } from "../../../shared/types";
 import { formatViewers, formatUptime } from "../../../shared/utils/formatters";
 import { Users, Clock, Play } from "lucide-react";
@@ -21,7 +22,12 @@ export const StreamCard = React.memo<StreamCardProps>(
     showBroadcaster = true,
   }) => {
     return (
-      <div className="stream-card glass-hover">
+      <LiquidGlass
+        className="stream-card"
+        cornerRadius={20}
+        onClick={() => onWatch(stream.broadcaster.login)}
+        style={{ backgroundColor: "var(--surface)" }}
+      >
         <div className="vod-thumb-wrap">
           <img
             src={
@@ -39,12 +45,6 @@ export const StreamCard = React.memo<StreamCardProps>(
               <Play size={24} fill="currentColor" />
             </div>
           </div>
-
-          <button
-            className="stretched-link stream-link-btn"
-            aria-label={`Regarder le live de ${stream.broadcaster.displayName}`}
-            onClick={() => onWatch(stream.broadcaster.login)}
-          />
         </div>
 
         <div className="vod-body" style={{ position: "relative", zIndex: 3 }}>
@@ -110,7 +110,7 @@ export const StreamCard = React.memo<StreamCardProps>(
             </div>
           )}
         </div>
-      </div>
+      </LiquidGlass>
     );
   },
 );

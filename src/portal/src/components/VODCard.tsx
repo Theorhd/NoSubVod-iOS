@@ -1,4 +1,5 @@
 import React from "react";
+import LiquidGlass from "liquid-glass-react";
 import { VOD, HistoryEntry } from "../../../shared/types";
 import { formatTime, formatViews } from "../../../shared/utils/formatters";
 import { Clock, Users, Play } from "lucide-react";
@@ -19,7 +20,12 @@ export const VODCard = React.memo<VODCardProps>(
         : 0;
 
     return (
-      <div className="vod-card glass-hover">
+      <LiquidGlass
+        className="vod-card"
+        cornerRadius={20}
+        onClick={() => onWatch(vod.id)}
+        style={{ backgroundColor: "var(--surface)" }}
+      >
         <div className="vod-thumb-wrap">
           <img
             src={vod.previewThumbnailURL}
@@ -65,13 +71,6 @@ export const VODCard = React.memo<VODCardProps>(
               <Play size={24} fill="currentColor" />
             </div>
           </div>
-
-          <button
-            className="stretched-link"
-            aria-label={`Regarder la VOD: ${vod.title}`}
-            onClick={() => onWatch(vod.id)}
-            style={{ background: "none", border: "none", padding: 0 }}
-          />
 
           {onAddToWatchlist && (
             <button
@@ -178,7 +177,7 @@ export const VODCard = React.memo<VODCardProps>(
             {new Date(vod.createdAt).toLocaleDateString()}
           </div>
         </div>
-      </div>
+      </LiquidGlass>
     );
   },
 );

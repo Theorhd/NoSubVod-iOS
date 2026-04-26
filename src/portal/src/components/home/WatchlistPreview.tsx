@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import LiquidGlass from "liquid-glass-react";
 import { WatchlistEntry } from "../../../../shared/types";
 import { Bookmark, X, Play } from "lucide-react";
 import { navigateToPlayer } from "../../utils/navigation";
@@ -32,10 +33,19 @@ const WatchlistPreview = React.memo(
           }}
         >
           {watchlist.map((vod) => (
-            <div
+            <LiquidGlass
               key={vod.vodId}
-              className="vod-card glass-hover"
-              style={{ position: "relative" }}
+              className="vod-card"
+              cornerRadius={14}
+              onClick={() =>
+                navigateToPlayer(navigate, {
+                  vodId: vod.vodId,
+                })
+              }
+              style={{
+                position: "relative",
+                backgroundColor: "var(--surface)",
+              }}
             >
               <div className="vod-thumb-wrap">
                 <img
@@ -74,17 +84,6 @@ const WatchlistPreview = React.memo(
                     <Play size={20} fill="currentColor" />
                   </div>
                 </div>
-
-                <button
-                  className="stretched-link"
-                  aria-label={`Regarder ${vod.title}`}
-                  onClick={() =>
-                    navigateToPlayer(navigate, {
-                      vodId: vod.vodId,
-                    })
-                  }
-                  style={{ background: "none", border: "none", padding: 0 }}
-                />
 
                 <button
                   type="button"
@@ -127,7 +126,7 @@ const WatchlistPreview = React.memo(
                   {vod.title}
                 </div>
               </div>
-            </div>
+            </LiquidGlass>
           ))}
         </div>
       </div>

@@ -64,24 +64,7 @@ body {
 }
 
 /* === Utility Classes === */
-.glass {
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
-
-@media (min-width: 768px) {
-  .glass {
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-  }
-}
-
-.glass-hover:hover {
-  background: var(--surface-hover);
-  border-color: var(--border-hover);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
+/* Glass utility replaced by LiquidGlass component */
 
 /* === App Layout === */
 .media-player {
@@ -338,7 +321,6 @@ body {
 
 .card {
   background: var(--surface);
-  backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 20px;
@@ -1754,7 +1736,6 @@ select:focus {
   width: 100%;
   max-width: 480px;
   background: var(--surface);
-  backdrop-filter: blur(var(--glass-blur));
   padding: 48px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
@@ -2404,11 +2385,6 @@ button {
   border-radius: 10px;
 }
 
-.glass-hover:hover button.secondary-btn {
-  opacity: 1 !important;
-}
-
 .subs-list-scroll-hidden::-webkit-scrollbar {
   display: none;
 }
-
