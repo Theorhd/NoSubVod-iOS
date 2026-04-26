@@ -1,3 +1,7 @@
+.container {
+    padding-top: var(--safe-area-top, 0);
+}
+
 /* ChatSearch Styles */
 .chat-search-overlay {
   position: absolute;
@@ -130,7 +134,6 @@
   overflow-wrap: anywhere;
   flex: 1;
   min-width: 0;
-  padding-top: var(--safe-area-top, 0);
 }
 
 .player-scroll-area {
