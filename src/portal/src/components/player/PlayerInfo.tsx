@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { VOD, LiveStream } from "../../../../shared/types";
 
 interface PlayerInfoProps {
@@ -27,7 +28,35 @@ const Uptime: React.FC<{ startedAt: string }> = ({ startedAt }) => {
 };
 
 const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
+  const navigate = useNavigate();
   if (!vodInfo && !liveInfo) return null;
+
+  const broadcaster = liveInfo ? liveInfo.broadcaster : vodInfo?.owner;
+  const game = liveInfo ? liveInfo.game : vodInfo?.game;
+
+  const handleStreamerClick = () => {
+    if (broadcaster?.login) {
+      navigate(`/channel?user=${encodeURIComponent(broadcaster.login)}`);
+    }
+  };
+
+  const handleCategoryClick = () => {
+    if (game?.name) {
+      const categoryIdParam = (game as any).id
+        ? `&categoryId=${encodeURIComponent((game as any).id)}`
+        : "";
+      navigate(
+        `/channel?category=${encodeURIComponent(game.name)}${categoryIdParam}`,
+      );
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, handler: () => void) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handler();
+    }
+  };
 
   return (
     <div
@@ -39,21 +68,31 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: "20px" }}>
-        <img
-          src={
-            liveInfo
-              ? liveInfo.broadcaster?.profileImageURL
-              : vodInfo?.owner?.profileImageURL || ""
-          }
-          alt="Profile"
+        <button
+          type="button"
+          onClick={handleStreamerClick}
+          onKeyDown={(e) => handleKeyDown(e, handleStreamerClick)}
+          aria-label={`Go to ${broadcaster?.displayName || "streamer"}'s channel`}
           style={{
-            width: "72px",
-            height: "72px",
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
             borderRadius: "50%",
-            objectFit: "cover",
-            border: "2px solid #3a3a3d",
           }}
-        />
+        >
+          <img
+            src={broadcaster?.profileImageURL || ""}
+            alt={broadcaster?.displayName || "Profile"}
+            style={{
+              width: "72px",
+              height: "72px",
+              borderRadius: "50%",
+              objectFit: "cover",
+              border: "2px solid #3a3a3d",
+            }}
+          />
+        </button>
 
         <div style={{ flex: 1 }}>
           <div
@@ -74,18 +113,25 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
             </h1>
           </div>
 
-          <div
+          <button
+            type="button"
+            onClick={handleStreamerClick}
+            onKeyDown={(e) => handleKeyDown(e, handleStreamerClick)}
             style={{
+              background: "none",
+              border: "none",
+              padding: 0,
               fontWeight: "bold",
               fontSize: "1.1rem",
               marginBottom: "10px",
               color: "#bf94ff",
+              cursor: "pointer",
+              textAlign: "left",
+              display: "block",
             }}
           >
-            {liveInfo
-              ? liveInfo.broadcaster?.displayName
-              : vodInfo?.owner?.displayName || "Unknown Streamer"}
-          </div>
+            {broadcaster?.displayName || "Unknown Streamer"}
+          </button>
 
           <div
             style={{
@@ -94,20 +140,27 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
               display: "flex",
               gap: "20px",
               flexWrap: "wrap",
+              alignItems: "center",
             }}
           >
-            <span
+            <button
+              type="button"
+              onClick={handleCategoryClick}
+              onKeyDown={(e) => handleKeyDown(e, handleCategoryClick)}
+              disabled={!game}
               style={{
                 backgroundColor: "#18181b",
                 padding: "4px 8px",
                 borderRadius: "6px",
                 fontWeight: "bold",
+                cursor: game ? "pointer" : "default",
+                border: "none",
+                color: "#adadb8",
+                fontSize: "0.95rem",
               }}
             >
-              {liveInfo
-                ? liveInfo.game?.name
-                : vodInfo?.game?.name || "No Category"}
-            </span>
+              {game?.name || "No Category"}
+            </button>
 
             {liveInfo && (
               <>

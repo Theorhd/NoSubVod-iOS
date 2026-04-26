@@ -334,6 +334,7 @@ type NSVPlayerProps = {
   seekTo?: number | null;
   defaultQuality?: string;
   isMobileLayout?: boolean;
+  isLandscape?: boolean;
   className?: string;
   textTracks?: NSVTextTrack[];
   onTimeUpdate?: (time: number) => void;
@@ -419,6 +420,7 @@ const NSVPlayer = React.memo(
     seekTo,
     defaultQuality,
     isMobileLayout: _isMobileLayout = false,
+    isLandscape = false,
     className,
     textTracks = [],
     onTimeUpdate,
@@ -457,6 +459,12 @@ const NSVPlayer = React.memo(
     const lastPlaybackProgressRef = useRef({ time: 0, observedAt: Date.now() });
     const lastNativeVodRefreshAtRef = useRef(Date.now());
     const [resumeRevision, setResumeRevision] = useState(0);
+
+    useEffect(() => {
+      if (isLandscape && _isMobileLayout && remote) {
+        remote.enterFullscreen();
+      }
+    }, [isLandscape, _isMobileLayout, remote]);
 
     const useNativeResumeRefresh =
       isMobileDevice() && canPlayHlsNatively() && !canUseHlsJs();
@@ -694,7 +702,12 @@ const NSVPlayer = React.memo(
       return () => {
         globalThis.clearInterval(intervalId);
       };
-    }, [queueSourceRefreshAndResume, src.type, streamType, useNativeResumeRefresh]);
+    }, [
+      queueSourceRefreshAndResume,
+      src.type,
+      streamType,
+      useNativeResumeRefresh,
+    ]);
 
     useEffect(() => {
       if (didSeekOnStartRef.current) return;

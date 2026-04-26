@@ -405,7 +405,7 @@ function VodLivePlayer({
   downloadMode,
   returnPath,
 }: VodLivePlayerProps) {
-  const { isMobileLayout } = useResponsive();
+  const { isMobileLayout, isLandscape } = useResponsive();
   const navigate = useNavigate();
   const mediaKey = useMemo(() => {
     if (vodId) return `vod:${vodId}`;
@@ -1401,7 +1401,8 @@ function VodLivePlayer({
               seekTo={seekTo}
               defaultQuality={normalizedDefaultQuality}
               isMobileLayout={isMobileLayout}
-              autoPlay
+              isLandscape={isLandscape}
+              autoPlay={false}
               className="nsv-main-player"
               onTimeUpdate={handlePlayerTimeUpdate}
               onDurationChange={setDuration}
