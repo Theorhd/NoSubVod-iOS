@@ -1,4 +1,4 @@
-@import "./styles/colors.css";
+@import "./colors.css";
 
 :root {
   /* -- Shadows & Glass -- */
@@ -2411,3 +2411,4 @@ button {
 .subs-list-scroll-hidden::-webkit-scrollbar {
   display: none;
 }
+
