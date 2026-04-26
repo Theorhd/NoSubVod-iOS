@@ -1,6 +1,7 @@
 import React from "react";
 import { Bell, BellRing, CalendarDays, UserPlus } from "lucide-react";
 import { UserInfo } from "../../../shared/types";
+import Glass from "./Glass";
 
 type StreamerInfoCardProps = {
   streamer: UserInfo;
@@ -66,7 +67,7 @@ export const StreamerInfoCard = React.memo<StreamerInfoCardProps>(
     }
 
     return (
-      <div className="streamer-info-card glass">
+      <Glass className="streamer-info-card" cornerRadius={14} elasticity={0.15}>
         <div className="streamer-info-content">
           <img
             className="streamer-info-avatar"
@@ -120,7 +121,7 @@ export const StreamerInfoCard = React.memo<StreamerInfoCardProps>(
             </button>
           )}
         </div>
-      </div>
+      </Glass>
     );
   },
 );

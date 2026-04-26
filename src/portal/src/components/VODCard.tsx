@@ -1,4 +1,5 @@
 import React from "react";
+import Glass from "./Glass";
 import { VOD, HistoryEntry } from "../../../shared/types";
 import { formatTime, formatViews } from "../../../shared/utils/formatters";
 import { Clock, Users, Play } from "lucide-react";
@@ -19,7 +20,13 @@ export const VODCard = React.memo<VODCardProps>(
         : 0;
 
     return (
-      <div className="vod-card glass-hover">
+      <Glass
+        className="vod-card"
+        cornerRadius={14}
+        displacementScale={30}
+        blurAmount={0.08}
+        elasticity={0.2}
+      >
         <div className="vod-thumb-wrap">
           <img
             src={vod.previewThumbnailURL}
@@ -178,7 +185,7 @@ export const VODCard = React.memo<VODCardProps>(
             {new Date(vod.createdAt).toLocaleDateString()}
           </div>
         </div>
-      </div>
+      </Glass>
     );
   },
 );

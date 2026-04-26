@@ -209,6 +209,7 @@ function PlayerRTCHeader({
       className="rtc-header"
       style={{
         padding: isMobileLayout ? "10px 12px" : "10px 20px",
+        paddingTop: "calc(10px + var(--safe-area-top))",
         gap: isMobileLayout ? "8px" : "10px",
       }}
     >

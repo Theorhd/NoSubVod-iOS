@@ -1,4 +1,5 @@
 import React from "react";
+import Glass from "./Glass";
 import { LiveStream } from "../../../shared/types";
 import { formatViewers, formatUptime } from "../../../shared/utils/formatters";
 import { Users, Clock, Play } from "lucide-react";
@@ -21,7 +22,13 @@ export const StreamCard = React.memo<StreamCardProps>(
     showBroadcaster = true,
   }) => {
     return (
-      <div className="stream-card glass-hover">
+      <Glass
+        className="stream-card"
+        cornerRadius={14}
+        displacementScale={30}
+        blurAmount={0.08}
+        elasticity={0.2}
+      >
         <div className="vod-thumb-wrap">
           <img
             src={
@@ -110,7 +117,7 @@ export const StreamCard = React.memo<StreamCardProps>(
             </div>
           )}
         </div>
-      </div>
+      </Glass>
     );
   },
 );

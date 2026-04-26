@@ -10,6 +10,7 @@ import { LiveStream, LiveStreamsPage, SubEntry } from "../../shared/types";
 import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
 import { StreamCard } from "./components/StreamCard";
 import { TopBar } from "./components/TopBar";
+import Glass from "./components/Glass";
 import { useServer } from "./ServerContext";
 import { navigateToPlayer } from "./utils/navigation";
 import "./styles/Live.css";
@@ -330,7 +331,7 @@ export default function Live() {
     <>
       <TopBar mode="logo" title="Live Twitch" onLogoClick={switchToAll} />
       <div className="container">
-        <div className="card live-search-card">
+        <Glass className="live-search-card" cornerRadius={14}>
           <form className="live-search-form" onSubmit={handleSearchSubmit}>
             <input
               type="text"
@@ -381,9 +382,9 @@ export default function Live() {
               ))}
             </div>
           )}
-        </div>
+        </Glass>
 
-        <div className="card live-intro-card">
+        <Glass className="live-intro-card" cornerRadius={14}>
           <h2>{headerLabel}</h2>
           {mode === "all" && (
             <p className="card-subtitle">
@@ -394,7 +395,7 @@ export default function Live() {
             {streams.length} stream{streams.length === 1 ? "" : "s"} chargé
             {streams.length === 1 ? "" : "s"}
           </div>
-        </div>
+        </Glass>
 
         {renderContent()}
       </div>

@@ -9,6 +9,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { UserInfo } from "../../shared/types";
 import { formatViewers } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
+import Glass from "./components/Glass";
 import { navigateToPlayer } from "./utils/navigation";
 import "./styles/Search.css";
 
@@ -128,7 +129,7 @@ export default function Search() {
       <TopBar mode="back" title="Search Twitch" />
 
       <div className="container">
-        <div className="card">
+        <Glass className="card" cornerRadius={14}>
           <form onSubmit={handleSearch}>
             <label htmlFor="globalSearch">Search Channels, Categories...</label>
             <div className="input-row">
@@ -150,7 +151,7 @@ export default function Search() {
               </button>
             </div>
           </form>
-        </div>
+        </Glass>
 
         {hasSearched && !isSearching && results.length === 0 && (
           <div className="empty-state">No results found.</div>
@@ -161,10 +162,10 @@ export default function Search() {
             <h2>Categories</h2>
             <div className="categories-grid">
               {categories.map((game) => (
-                <button
+                <Glass
                   key={game.id}
-                  type="button"
                   className="category-card"
+                  cornerRadius={12}
                   onClick={() =>
                     navigate(
                       `/channel?category=${encodeURIComponent(game.name)}&categoryId=${encodeURIComponent(game.id)}`,
@@ -173,7 +174,7 @@ export default function Search() {
                 >
                   <img src={game.boxArtURL} alt={game.name} />
                   <span>{game.name}</span>
-                </button>
+                </Glass>
               ))}
             </div>
           </div>
@@ -184,7 +185,12 @@ export default function Search() {
             <h2>Live Streams</h2>
             <div className="vod-grid">
               {liveStreams.map((user) => (
-                <div key={user.id} className="vod-card live-card">
+                <Glass
+                  key={user.id}
+                  className="vod-card live-card"
+                  cornerRadius={14}
+                  elasticity={0.2}
+                >
                   <div className="vod-thumb-wrap">
                     <img
                       src={
@@ -225,7 +231,7 @@ export default function Search() {
                       </span>
                     </div>
                   </div>
-                </div>
+                </Glass>
               ))}
             </div>
           </div>

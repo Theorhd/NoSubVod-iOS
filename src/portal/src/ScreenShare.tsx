@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "./components/TopBar";
+import Glass from "./components/Glass";
 import { useServer } from "./ServerContext";
 import "./styles/ScreenShare.css";
 
@@ -39,7 +40,7 @@ export default function ScreenShare() {
       />
       <div className="container">
         {!isDesktopConnected && (
-          <div className="card screenshare-card">
+          <Glass className="screenshare-card" cornerRadius={14}>
             <h2 className="screenshare-title">Screen Share indisponible</h2>
             <p className="card-subtitle screenshare-subtitle">
               Connectez d&apos;abord l&apos;application iOS a un serveur
@@ -56,11 +57,11 @@ export default function ScreenShare() {
                 Back to Home
               </button>
             </div>
-          </div>
+          </Glass>
         )}
 
         {isDesktopConnected && (
-          <div className="card screenshare-card">
+          <Glass className="screenshare-card" cornerRadius={14}>
             <h2 className="screenshare-title">Join Screen Share (Viewer)</h2>
             <p className="card-subtitle screenshare-subtitle">
               iOS can receive NSV-Desktop screen shares but cannot broadcast its
@@ -94,7 +95,7 @@ export default function ScreenShare() {
                 Back to Home
               </button>
             </div>
-          </div>
+          </Glass>
         )}
       </div>
     </>

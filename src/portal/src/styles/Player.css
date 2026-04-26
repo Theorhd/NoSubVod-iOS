@@ -14,6 +14,7 @@
 
 .chat-search-header {
   padding: 16px;
+  padding-top: calc(16px + var(--safe-area-top));
   border-bottom: 1px solid var(--border);
   display: flex;
   gap: 8px;
@@ -103,6 +104,8 @@
   position: relative;
   z-index: 10;
   background: rgba(7, 8, 15, 0.8);
+  padding: 10px 16px;
+  padding-top: calc(10px + var(--safe-area-top));
 }
 
 .player-top-bar-content {

@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { UserInfo } from "../../../../shared/types";
 import { Search } from "lucide-react";
+import Glass from "../Glass";
 
 interface ChannelSearchCardProps {
   readonly channelSearch: string;
@@ -22,7 +23,11 @@ const ChannelSearchCard = React.memo(
     const navigate = useNavigate();
 
     return (
-      <div className="card glass" style={{ marginBottom: "24px" }}>
+      <Glass
+        className="card"
+        cornerRadius={14}
+        style={{ marginBottom: "24px" }}
+      >
         <form onSubmit={handleChannelSearch}>
           <div style={{ display: "flex", gap: "12px" }}>
             <div style={{ position: "relative", flex: 1 }}>
@@ -71,39 +76,46 @@ const ChannelSearchCard = React.memo(
             }}
           >
             {searchResults.map((user) => (
-              <button
+              <Glass
                 key={user.id}
-                className="glass-hover"
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  textAlign: "left",
-                  color: "inherit",
-                  padding: "12px",
-                  borderRadius: "var(--radius-md)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  cursor: "pointer",
-                }}
+                cornerRadius={12}
+                elasticity={0.15}
                 onClick={() =>
                   navigate(`/channel?user=${encodeURIComponent(user.login)}`)
                 }
-                type="button"
               >
-                <img
-                  src={user.profileImageURL}
-                  alt={user.displayName}
-                  style={{ width: "40px", height: "40px", borderRadius: "50%" }}
-                />
-                <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
-                  {user.displayName}
+                <div
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    textAlign: "left",
+                    color: "inherit",
+                    padding: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    cursor: "pointer",
+                    width: "100%",
+                  }}
+                >
+                  <img
+                    src={user.profileImageURL}
+                    alt={user.displayName}
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "50%",
+                    }}
+                  />
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                    {user.displayName}
+                  </div>
                 </div>
-              </button>
+              </Glass>
             ))}
           </div>
         )}
-      </div>
+      </Glass>
     );
   },
 );

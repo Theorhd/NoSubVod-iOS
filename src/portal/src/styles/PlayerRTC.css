@@ -44,6 +44,7 @@
   border-bottom: 1px solid #3a3a3d;
   z-index: 10;
   flex-shrink: 0;
+  padding-top: var(--safe-area-top);
 }
 
 .rtc-back-btn {

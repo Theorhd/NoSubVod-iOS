@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { WatchlistEntry } from "../../../../shared/types";
 import { Bookmark, X, Play } from "lucide-react";
 import { navigateToPlayer } from "../../utils/navigation";
+import Glass from "../Glass";
 
 interface WatchlistPreviewProps {
   readonly watchlist: WatchlistEntry[];
@@ -32,10 +33,12 @@ const WatchlistPreview = React.memo(
           }}
         >
           {watchlist.map((vod) => (
-            <div
+            <Glass
               key={vod.vodId}
-              className="vod-card glass-hover"
-              style={{ position: "relative" }}
+              className="vod-card"
+              cornerRadius={14}
+              displacementScale={30}
+              elasticity={0.2}
             >
               <div className="vod-thumb-wrap">
                 <img
@@ -127,7 +130,7 @@ const WatchlistPreview = React.memo(
                   {vod.title}
                 </div>
               </div>
-            </div>
+            </Glass>
           ))}
         </div>
       </div>

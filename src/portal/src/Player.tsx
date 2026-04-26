@@ -19,6 +19,7 @@ import LiveChatComponent from "./components/player/LiveChatComponent";
 import MarkerPanel from "./components/player/MarkerPanel";
 import ClipMode from "./components/player/ClipMode";
 import PlayerInfo from "./components/player/PlayerInfo";
+import Glass from "./components/Glass";
 import { formatSafeClock as formatClock } from "../../shared/utils/formatters";
 import PlayerRTC from "./PlayerRTC";
 import { useResponsive } from "./hooks/useResponsive";
@@ -1222,9 +1223,9 @@ function VodLivePlayer({
         className="container"
         style={{ textAlign: "center", padding: "100px" }}
       >
-        <div className="card glass">
+        <Glass className="card" cornerRadius={14}>
           Missing player source. Please provide vod or live query parameter.
-        </div>
+        </Glass>
       </div>
     );
   }
@@ -1290,7 +1291,11 @@ function VodLivePlayer({
             className={`container player-controls-container ${showChat ? "chat-visible" : ""}`}
           >
             {!isFullscreen && (
-              <div className="glass player-actions-row">
+              <Glass
+                className="player-actions-row"
+                cornerRadius={14}
+                elasticity={0.1}
+              >
                 {!liveId && (
                   <button
                     onClick={() => setShowChatSearch((v) => !v)}
@@ -1317,7 +1322,7 @@ function VodLivePlayer({
                 >
                   {showChat ? "Masquer le chat" : "Afficher le chat"}
                 </button>
-              </div>
+              </Glass>
             )}
 
             {downloadMode && vodId && (
@@ -1347,7 +1352,11 @@ function VodLivePlayer({
         </div>
 
         {showChat && !isFullscreen && (
-          <div className="glass player-chat-container">
+          <Glass
+            className="player-chat-container"
+            cornerRadius={0}
+            elasticity={0}
+          >
             {!liveId && showChatSearch && vodId && (
               <ChatSearch
                 vodId={vodId}
@@ -1384,7 +1393,7 @@ function VodLivePlayer({
                 </div>
               </>
             )}
-          </div>
+          </Glass>
         )}
       </div>
     </div>

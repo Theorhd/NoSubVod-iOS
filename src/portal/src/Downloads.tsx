@@ -10,6 +10,7 @@ import {
   Pause,
   X,
 } from "lucide-react";
+import Glass from "./components/Glass";
 import NSVPlayer, { NSVMediaSource } from "./components/NSVPlayer";
 import { formatSize } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
@@ -90,7 +91,7 @@ const DownloadPlayer = React.memo(
     if (!source) return null;
 
     return (
-      <div className="download-player-shell card">
+      <Glass className="download-player-shell" cornerRadius={14}>
         <div className="download-player-head">
           <h2>{file.metadata?.title || file.name}</h2>
           <button onClick={onClose} className="queue-nav-btn" type="button">
@@ -111,7 +112,7 @@ const DownloadPlayer = React.memo(
           }
         />
         {error && <div className="error-text">{error}</div>}
-      </div>
+      </Glass>
     );
   },
 );
@@ -125,7 +126,7 @@ const QueueItem = React.memo(
       dl.progress > 0 ? knownFile?.metadata?.previewThumbnailURL || null : null;
 
     return (
-      <article className="download-queue-card">
+      <Glass className="download-queue-card" cornerRadius={14} elasticity={0.1}>
         <div className="download-queue-top">
           <div className="queue-thumb-wrap">
             {thumbnail ? (
@@ -176,7 +177,7 @@ const QueueItem = React.memo(
             </div>
           </div>
         </div>
-      </article>
+      </Glass>
     );
   },
 );
@@ -207,7 +208,12 @@ const DownloadLibrary = React.memo(
     return (
       <div className="download-library-grid">
         {files.map((file) => (
-          <article key={file.name} className="download-library-card">
+          <Glass
+            key={file.name}
+            className="download-library-card"
+            cornerRadius={14}
+            elasticity={0.15}
+          >
             <button
               type="button"
               className="download-library-thumb-btn"
@@ -264,7 +270,7 @@ const DownloadLibrary = React.memo(
                 </a>
               </div>
             </div>
-          </article>
+          </Glass>
         ))}
       </div>
     );

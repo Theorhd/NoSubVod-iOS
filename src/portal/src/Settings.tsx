@@ -13,6 +13,7 @@ import {
 } from "../../shared/types";
 import { TopBar } from "./components/TopBar";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
+import Glass from "./components/Glass";
 import { useServer } from "./ServerContext";
 import { getDeviceId } from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
@@ -226,7 +227,7 @@ interface SectionProps {
 
 const VideoPlayerSection = React.memo(
   ({ settings, setSettings, setSuccess }: SectionProps) => (
-    <div className="card settings-card">
+    <Glass className="settings-card" cornerRadius={14}>
       <h2>Video Player</h2>
       <p className="settings-description">
         Configure la qualité demandée au démarrage. Le changement de qualité
@@ -262,7 +263,7 @@ const VideoPlayerSection = React.memo(
           dynamiquement.
         </small>
       </div>
-    </div>
+    </Glass>
   ),
 );
 VideoPlayerSection.displayName = "VideoPlayerSection";
@@ -285,7 +286,7 @@ const AdblockSection = React.memo(
     };
 
     return (
-      <div className="card settings-card">
+      <Glass className="settings-card" cornerRadius={14}>
         <h2>Adblock Proxies</h2>
         <p className="settings-description">
           Utilise un proxy tiers pour contourner les pubs Twitch sur les lives
@@ -391,7 +392,7 @@ const AdblockSection = React.memo(
             )}
           </>
         )}
-      </div>
+      </Glass>
     );
   },
 );
@@ -404,7 +405,7 @@ const DownloadsSection = React.memo(
     setSuccess,
     selectFolder,
   }: SectionProps & { selectFolder: (field: any) => Promise<void> }) => (
-    <div className="card settings-card">
+    <Glass className="settings-card" cornerRadius={14}>
       <h2>Downloads (Server Backend)</h2>
       <p className="settings-description">Où stocker les VODs téléchargées.</p>
 
@@ -465,7 +466,7 @@ const DownloadsSection = React.memo(
           </button>
         </div>
       </div>
-    </div>
+    </Glass>
   ),
 );
 DownloadsSection.displayName = "DownloadsSection";
@@ -492,7 +493,7 @@ const TwitchAccountSection = React.memo(
     }
 
     return (
-      <div className="card settings-card">
+      <Glass className="settings-card" cornerRadius={14}>
         <h2>Compte Twitch</h2>
         <p className="settings-description">
           Lie ton compte Twitch pour les messages et l&apos;import de Subs.
@@ -588,7 +589,7 @@ const TwitchAccountSection = React.memo(
             )}
           </>
         )}
-      </div>
+      </Glass>
     );
   },
 );
@@ -596,7 +597,7 @@ TwitchAccountSection.displayName = "TwitchAccountSection";
 
 const TrustedDevicesSection = React.memo(
   ({ devices, pendingDeviceId, onToggleTrusted }: any) => (
-    <div className="card settings-card">
+    <Glass className="settings-card" cornerRadius={14}>
       <h2>Trusted Devices</h2>
       <p className="settings-description">
         Gérez l&apos;accès sans token pour vos appareils.
@@ -629,7 +630,7 @@ const TrustedDevicesSection = React.memo(
           ))}
         </div>
       )}
-    </div>
+    </Glass>
   ),
 );
 TrustedDevicesSection.displayName = "TrustedDevicesSection";
@@ -652,7 +653,7 @@ const ProfileBackupSection = React.memo(
       event: React.ChangeEvent<HTMLInputElement>,
     ) => Promise<void>;
   }) => (
-    <div className="card settings-card">
+    <Glass className="settings-card" cornerRadius={14}>
       <h2>Profil utilisateur</h2>
       <p className="settings-description">
         Exporte ton profil (historique, subs, watchlist, settings) dans un
@@ -693,7 +694,7 @@ const ProfileBackupSection = React.memo(
       <small className="help-text">
         Note: les tokens sensibles ne sont pas inclus dans le fichier exporté.
       </small>
-    </div>
+    </Glass>
   ),
 );
 ProfileBackupSection.displayName = "ProfileBackupSection";
@@ -706,7 +707,7 @@ const DiagnosticsLogsSection = React.memo(
     exporting: boolean;
     onExport: () => Promise<void>;
   }) => (
-    <div className="card settings-card">
+    <Glass className="settings-card" cornerRadius={14}>
       <h2>Logs diagnostic</h2>
       <p className="settings-description">
         Exporte les logs backend Rust et les logs frontend pour analyser les
@@ -729,7 +730,7 @@ const DiagnosticsLogsSection = React.memo(
         Conseil: après un crash, relance l&apos;app puis exporte immédiatement
         les logs.
       </small>
-    </div>
+    </Glass>
   ),
 );
 DiagnosticsLogsSection.displayName = "DiagnosticsLogsSection";
@@ -915,7 +916,7 @@ const ServerConnectionSection = React.memo(() => {
   };
 
   return (
-    <div className="card settings-card">
+    <Glass className="settings-card" cornerRadius={14}>
       <div className="settings-header-row">
         <h2>Serveur local (NoSubVod Desktop)</h2>
         <div className="settings-flex-gap-10">
@@ -1226,7 +1227,7 @@ const ServerConnectionSection = React.memo(() => {
           />
         </React.Suspense>
       )}
-    </div>
+    </Glass>
   );
 });
 ServerConnectionSection.displayName = "ServerConnectionSection";
@@ -1792,7 +1793,7 @@ export default function Settings() {
           onExport={exportDiagnosticLogs}
         />
         <ServerConnectionSection />
-        <div className="card settings-card settings-footer-card">
+        <Glass className="settings-card settings-footer-card" cornerRadius={14}>
           {error && <div className="error-text">{error}</div>}
           {success && <div className="success-text">{success}</div>}
           <div className="btn-row">
@@ -1804,7 +1805,7 @@ export default function Settings() {
               {saving ? "Saving..." : "Save Settings"}
             </button>
           </div>
-        </div>
+        </Glass>
       </div>
     </>
   );

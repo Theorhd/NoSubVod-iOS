@@ -4,6 +4,7 @@ import { HistoryVodEntry } from "../../shared/types";
 import { formatRelative } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
 import { navigateToPlayer } from "./utils/navigation";
+import Glass from "./components/Glass";
 import "./styles/History.css";
 
 type HistoryItemProps = Readonly<{
@@ -18,7 +19,7 @@ function HistoryItemComponent({ entry, navigate }: HistoryItemProps) {
       : 0;
 
   return (
-    <div className="history-item">
+    <Glass className="history-item" cornerRadius={14} elasticity={0.15}>
       <button
         type="button"
         className="history-item-main"
@@ -49,7 +50,7 @@ function HistoryItemComponent({ entry, navigate }: HistoryItemProps) {
           </div>
         </div>
       </button>
-    </div>
+    </Glass>
   );
 }
 
