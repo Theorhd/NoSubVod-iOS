@@ -15,6 +15,7 @@ import { formatSize } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
 import { useDownloadsData } from "./hooks/useDownloadsData";
 import { ActiveDownload, DownloadedFile } from "../../shared/types";
+import "./styles/Downloads.css";
 
 const formatDate = (value?: string) => {
   if (!value) return "Date inconnue";
@@ -51,7 +52,7 @@ const getStatusDisplay = (status: any) => {
     return {
       label: `Erreur: ${status.Error}`,
       icon: <AlertCircle size={16} />,
-      color: "#ff4a4a",
+      color: "var(--error-red)",
     };
   return { label: "Inconnu", icon: null, color: "var(--text-muted)" };
 };
@@ -139,8 +140,8 @@ const QueueItem = React.memo(
             <div className="download-title-row">
               <h3>{dl.title}</h3>
               <span
-                className="queue-status-dot"
-                style={{ color: statusInfo.color }}
+                className="queue-status-dot download-status-text"
+                style={{ "--status-color": statusInfo.color } as React.CSSProperties}
               >
                 {statusName === "Downloading" ? (
                   <Pause size={14} />
@@ -154,19 +155,18 @@ const QueueItem = React.memo(
             </div>
             <div className="download-progress-track">
               <div
-                className="download-progress-fill"
+                className={`download-progress-fill ${statusName === "Downloading" ? "download-progress-fill-active" : ""}`}
                 style={{
                   width: `${dl.progress}%`,
-                  background:
-                    statusName === "Downloading"
-                      ? "linear-gradient(90deg, #a855f7, #3b82f6)"
-                      : undefined,
                 }}
               />
             </div>
             <div className="download-queue-meta">
               <span>{dl.progress.toFixed(0)}%</span>
-              <span style={{ color: statusInfo.color }}>
+              <span 
+                className="download-status-text"
+                style={{ "--status-color": statusInfo.color } as React.CSSProperties}
+              >
                 {statusInfo.label}
               </span>
             </div>

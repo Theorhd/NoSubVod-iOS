@@ -12,6 +12,7 @@ import { StreamCard } from "./components/StreamCard";
 import { TopBar } from "./components/TopBar";
 import { useServer } from "./ServerContext";
 import { navigateToPlayer } from "./utils/navigation";
+import "./styles/Live.css";
 
 const PAGE_SIZE = 24;
 
@@ -319,7 +320,7 @@ export default function Live() {
         </div>
         <div
           ref={lastElementRef}
-          style={{ height: "20px", width: "100%" }}
+          className="sentinel"
           aria-hidden="true"
         />
         {isLoadingMore && (

@@ -1,0 +1,9 @@
+.stretched-link-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  textAlign: left;
+  cursor: pointer;
+}

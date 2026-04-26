@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "./components/TopBar";
 import { useServer } from "./ServerContext";
+import "./styles/ScreenShare.css";
 
 const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
 
@@ -38,13 +39,13 @@ export default function ScreenShare() {
       />
       <div className="container">
         {!isDesktopConnected && (
-          <div className="card" style={{ maxWidth: 760, margin: "0 auto" }}>
-            <h2 style={{ marginTop: 0 }}>Screen Share indisponible</h2>
-            <p className="card-subtitle" style={{ marginBottom: 16 }}>
+          <div className="card screenshare-card">
+            <h2 className="screenshare-title">Screen Share indisponible</h2>
+            <p className="card-subtitle screenshare-subtitle">
               Connectez d&apos;abord l&apos;application iOS a un serveur
               NoSubVod-Desktop depuis les Settings.
             </p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div className="screenshare-actions">
               <button
                 className="action-btn"
                 onClick={() => navigate("/settings")}
@@ -59,22 +60,22 @@ export default function ScreenShare() {
         )}
 
         {isDesktopConnected && (
-          <div className="card" style={{ maxWidth: 760, margin: "0 auto" }}>
-            <h2 style={{ marginTop: 0 }}>Join Screen Share (Viewer)</h2>
-            <p className="card-subtitle" style={{ marginBottom: 16 }}>
+          <div className="card screenshare-card">
+            <h2 className="screenshare-title">Join Screen Share (Viewer)</h2>
+            <p className="card-subtitle screenshare-subtitle">
               iOS can receive NSV-Desktop screen shares but cannot broadcast its
               own screen.
             </p>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+            <p className="screenshare-text">
               Le serveur Desktop lie dans les Settings est utilise
               automatiquement. Si l&apos;hote vous a donne un session ID, vous
               pouvez le renseigner ci-dessous.
             </p>
 
-            <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
+            <div className="screenshare-input-group">
               <label
                 htmlFor="session-id"
-                style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}
+                className="screenshare-label"
               >
                 Session ID
               </label>
@@ -88,14 +89,7 @@ export default function ScreenShare() {
               />
             </div>
 
-            <div
-              style={{
-                marginTop: 20,
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
-            >
+            <div className="screenshare-footer">
               <button className="action-btn" onClick={openViewer}>
                 Open Viewer
               </button>

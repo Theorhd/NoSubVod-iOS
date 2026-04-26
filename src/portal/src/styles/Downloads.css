@@ -1,0 +1,7 @@
+.download-status-text {
+  color: var(--status-color, var(--text-muted));
+}
+
+.download-progress-fill-active {
+  background: linear-gradient(90deg, #a855f7, #3b82f6);
+}

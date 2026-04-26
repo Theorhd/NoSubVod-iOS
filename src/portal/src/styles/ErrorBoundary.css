@@ -1,0 +1,43 @@
+.error-boundary-container {
+  padding: 2rem;
+  text-align: center;
+  background: var(--card-glass);
+  color: var(--text-main);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-family: sans-serif;
+}
+
+.error-boundary-title {
+  color: var(--error-red);
+}
+
+.error-boundary-text {
+  color: var(--text-secondary);
+  max-width: 400px;
+  margin: 1rem 0;
+}
+
+.error-boundary-reload-btn {
+  background: var(--twitch-purple);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  fontWeight: bold;
+}
+
+.error-boundary-pre {
+  marginTop: 2rem;
+  padding: 1rem;
+  background: var(--bg-black);
+  border-radius: 4px;
+  fontSize: 0.8rem;
+  textAlign: left;
+  overflow: auto;
+  maxWidth: 90vw;
+}

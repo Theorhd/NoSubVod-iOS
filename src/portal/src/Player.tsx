@@ -26,6 +26,7 @@ import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { navigateBackInApp } from "./utils/navigation";
 import { buildAuthSuffix } from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
+import "./styles/Player.css";
 
 const DEFAULT_SETTINGS: ExperienceSettings = {
   oneSync: false,
@@ -226,74 +227,30 @@ const ChatSearch = ({
   };
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: "0",
-        right: "0",
-        width: "100%",
-        height: "100%",
-        zIndex: 20,
-        display: "flex",
-        flexDirection: "column",
-        background: "rgba(7, 8, 15, 0.95)",
-        borderLeft: "1px solid var(--border)",
-      }}
-    >
-      <div
-        style={{
-          padding: "16px",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          gap: "8px",
-          alignItems: "center",
-        }}
-      >
-        <div style={{ position: "relative", flex: 1 }}>
+    <div className="chat-search-overlay">
+      <div className="chat-search-header">
+        <div className="chat-search-input-wrapper">
           <input
             autoFocus
             type="text"
-            className="search-input"
+            className="search-input chat-search-input"
             placeholder="Rechercher dans le chat..."
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            style={{ width: "100%", margin: 0, paddingRight: "40px" }}
           />
-          <Search
-            size={18}
-            style={{
-              position: "absolute",
-              right: "12px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "var(--text-muted)",
-              pointerEvents: "none",
-            }}
-          />
+          <Search size={18} className="chat-search-icon" />
         </div>
         <button
-          className="secondary-btn"
+          className="secondary-btn chat-search-close-btn"
           onClick={onClose}
-          style={{
-            width: "40px",
-            height: "40px",
-            padding: 0,
-            borderRadius: "50%",
-          }}
         >
           <X size={18} />
         </button>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
+      <div className="chat-search-results">
         {results.length === 0 && !searching && keyword && (
-          <div
-            style={{
-              textAlign: "center",
-              color: "var(--text-muted)",
-              marginTop: "20px",
-            }}
-          >
+          <div className="chat-search-no-results">
             Aucun résultat trouvé pour &quot;{keyword}&quot;
           </div>
         )}
@@ -301,64 +258,20 @@ const ChatSearch = ({
           <button
             key={res.id}
             onClick={() => onSeek(res.contentOffsetSeconds)}
-            style={{
-              width: "100%",
-              textAlign: "left",
-              padding: "12px",
-              borderBottom: "1px solid var(--border)",
-              cursor: "pointer",
-              borderRadius: "8px",
-              transition: "0.2s",
-              marginBottom: "4px",
-              background: "transparent",
-              border: "none",
-              display: "block",
-            }}
-            className="hover-card"
+            className="chat-search-result-item hover-card"
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "4px",
-                alignItems: "center",
-              }}
-            >
-              <span
-                style={{
-                  fontWeight: 800,
-                  color: "var(--primary)",
-                  fontSize: "0.8rem",
-                }}
-              >
+            <div className="chat-search-result-header">
+              <span className="chat-search-result-name">
                 {res.commenter?.displayName}
               </span>
-              <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
+              <span className="chat-search-result-time">
                 {formatClock(res.contentOffsetSeconds)}
               </span>
             </div>
-            <div
-              style={{
-                fontSize: "0.85rem",
-                color: "var(--text)",
-                lineHeight: "1.4",
-              }}
-            >
-              {res.message}
-            </div>
+            <div className="chat-search-result-message">{res.message}</div>
           </button>
         ))}
-        {searching && (
-          <div
-            style={{
-              textAlign: "center",
-              color: "var(--text-muted)",
-              marginTop: "20px",
-            }}
-          >
-            Recherche en cours...
-          </div>
-        )}
+        {searching && <div className="chat-search-loading">Recherche en cours...</div>}
       </div>
     </div>
   );
@@ -1317,81 +1230,21 @@ function VodLivePlayer({
   return (
     <div className="player-container">
       {!isFullscreen && (
-        <div
-          className="top-bar"
-          style={{
-            position: "relative",
-            zIndex: 10,
-            background: "rgba(7, 8, 15, 0.8)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "12px",
-              flex: 1,
-              minWidth: 0,
-            }}
-          >
-            <button
-              onClick={handleBack}
-              className="secondary-btn"
-              style={{
-                width: "40px",
-                height: "40px",
-                padding: 0,
-                borderRadius: "50%",
-              }}
-            >
+        <div className="player-top-bar">
+          <div className="player-top-bar-content">
+            <button onClick={handleBack} className="secondary-btn player-back-btn">
               <ArrowLeft size={20} />
             </button>
-            <h2
-              style={{
-                fontSize: "1rem",
-                fontWeight: 800,
-                margin: "2px 0 0",
-                whiteSpace: "normal",
-                lineHeight: 1.35,
-                wordBreak: "break-word",
-                overflowWrap: "anywhere",
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
+            <h2 className="player-header-title">
               {vodInfo?.title || liveInfo?.title || playerTitle}
             </h2>
           </div>
         </div>
       )}
 
-      <div
-        style={{
-          display: "flex",
-          flex: 1,
-          flexDirection: "column",
-          overflowY: "auto",
-          overflowX: "hidden",
-        }}
-      >
-        <div
-          style={{
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            background: "#000",
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              position: "relative",
-              aspectRatio: isFullscreen ? "auto" : "16/9",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
+      <div className="player-scroll-area">
+        <div className="player-video-section">
+          <div className="player-video-wrapper" style={{ aspectRatio: isFullscreen ? "auto" : "16/9" }}>
             <NSVPlayer
               source={playerMediaSource as { src: string; type?: string }}
               streamType={source.streamType}
@@ -1425,33 +1278,13 @@ function VodLivePlayer({
             )}
           </div>
 
-          <div
-            className="container"
-            style={{ paddingBottom: showChat ? "20px" : "100px" }}
-          >
+          <div className={`container player-controls-container ${showChat ? "chat-visible" : ""}`}>
             {!isFullscreen && (
-              <div
-                className="glass"
-                style={{
-                  marginBottom: "16px",
-                  padding: "10px 12px",
-                  borderRadius: "var(--radius-md)",
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "8px",
-                }}
-              >
+              <div className="glass player-actions-row">
                 {!liveId && (
                   <button
                     onClick={() => setShowChatSearch((v) => !v)}
-                    className="secondary-btn"
-                    style={{
-                      fontSize: "0.8rem",
-                      padding: "6px 12px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                    }}
+                    className="secondary-btn player-action-mini-btn"
                     title="Rechercher dans le chat"
                   >
                     <Search size={16} />
@@ -1462,8 +1295,7 @@ function VodLivePlayer({
                 {!liveId && (
                   <button
                     onClick={() => setShowMarkers((v) => !v)}
-                    className="secondary-btn"
-                    style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                    className="secondary-btn player-action-mini-btn"
                   >
                     Chapitres ({markers.length})
                   </button>
@@ -1471,8 +1303,7 @@ function VodLivePlayer({
 
                 <button
                   onClick={() => setShowChat((v) => !v)}
-                  className="action-btn"
-                  style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                  className="action-btn player-action-mini-btn"
                 >
                   {showChat ? "Masquer le chat" : "Afficher le chat"}
                 </button>
@@ -1499,35 +1330,12 @@ function VodLivePlayer({
               <PlayerInfo vodInfo={vodInfo} liveInfo={liveInfo} />
             )}
 
-            {playerError && (
-              <div
-                style={{
-                  marginTop: "16px",
-                  color: "var(--danger)",
-                  padding: "16px",
-                  borderRadius: "var(--radius-md)",
-                  background: "rgba(255,107,135,0.1)",
-                }}
-              >
-                {playerError}
-              </div>
-            )}
+            {playerError && <div className="player-error-container">{playerError}</div>}
           </div>
         </div>
 
         {showChat && !isFullscreen && (
-          <div
-            className="glass"
-            style={{
-              width: "100%",
-              flex: 1,
-              minHeight: "400px",
-              borderTop: "1px solid var(--border)",
-              display: "flex",
-              flexDirection: "column",
-              position: "relative",
-            }}
-          >
+          <div className="glass player-chat-container">
             {!liveId && showChatSearch && vodId && (
               <ChatSearch
                 vodId={vodId}
@@ -1539,54 +1347,21 @@ function VodLivePlayer({
               />
             )}
             {liveId ? (
-              <LiveChatComponent
-                liveId={liveId}
-                chatScrollRef={chatScrollRef}
-              />
+              <LiveChatComponent liveId={liveId} chatScrollRef={chatScrollRef} />
             ) : (
               <>
-                <div
-                  style={{
-                    padding: "16px",
-                    borderBottom: "1px solid var(--border)",
-                    fontWeight: 800,
-                    color: "var(--text)",
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  STREAM CHAT REPLAY
-                </div>
+                <div className="player-chat-header">STREAM CHAT REPLAY</div>
 
-                <div
-                  ref={chatScrollRef}
-                  style={{ flex: 1, overflowY: "auto", padding: "16px" }}
-                >
+                <div ref={chatScrollRef} className="player-chat-messages">
                   {replayChatMessages.map((message) => (
-                    <div
-                      key={message.id}
-                      style={{
-                        marginBottom: "12px",
-                        fontSize: "0.85rem",
-                        lineHeight: "1.5",
-                      }}
-                    >
-                      <span
-                        style={{
-                          color: "var(--text-muted)",
-                          marginRight: "8px",
-                          fontSize: "0.75rem",
-                        }}
-                      >
+                    <div key={message.id} className="chat-message-item">
+                      <span className="chat-message-time">
                         {formatClock(message.contentOffsetSeconds)}
                       </span>
-                      <span
-                        style={{ fontWeight: 800, color: "var(--primary)" }}
-                      >
+                      <span className="chat-message-author">
                         {message.commenter?.displayName || "Unknown"}:{" "}
                       </span>
-                      <span style={{ color: "var(--text)" }}>
-                        {extractChatMessageText(message)}
-                      </span>
+                      <span className="chat-message-text">{extractChatMessageText(message)}</span>
                     </div>
                   ))}
                 </div>

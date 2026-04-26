@@ -5,6 +5,7 @@ import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
 import { VODCard } from "./components/VODCard";
 import { TopBar } from "./components/TopBar";
 import { navigateToPlayer } from "./utils/navigation";
+import "./styles/Trends.css";
 
 const PAGE_SIZE = 24;
 
@@ -93,7 +94,7 @@ export default function Trends() {
 
         <div
           ref={lastElementRef}
-          style={{ height: "20px", width: "100%" }}
+          className="sentinel"
           aria-hidden="true"
         />
         {isLoadingMore && <div className="status-line">Loading more...</div>}

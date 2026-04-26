@@ -2,6 +2,7 @@ import React from "react";
 import { LiveStream } from "../../../shared/types";
 import { formatViewers, formatUptime } from "../../../shared/utils/formatters";
 import { Users, Clock, Play } from "lucide-react";
+import "../styles/StreamCard.css";
 
 type StreamCardProps = {
   stream: LiveStream;
@@ -33,71 +34,33 @@ export const StreamCard = React.memo<StreamCardProps>(
           />
           <div className="live-badge pulse">LIVE</div>
 
-          <div
-            className="vod-play-overlay"
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(255, 107, 135, 0.15)",
-              opacity: 0,
-              transition: "opacity 0.3s ease",
-              pointerEvents: "none",
-              zIndex: 2,
-            }}
-          >
-            <div
-              style={{
-                width: "48px",
-                height: "48px",
-                borderRadius: "50%",
-                background: "var(--danger)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#fff",
-                boxShadow: "0 0 20px rgba(255, 107, 135, 0.5)",
-              }}
-            >
+          <div className="vod-play-overlay stream-play-overlay">
+            <div className="stream-play-icon">
               <Play size={24} fill="currentColor" />
             </div>
           </div>
 
           <button
-            className="stretched-link"
+            className="stretched-link stream-link-btn"
             aria-label={`Regarder le live de ${stream.broadcaster.displayName}`}
             onClick={() => onWatch(stream.broadcaster.login)}
-            style={{ background: "none", border: "none", padding: 0 }}
           />
         </div>
 
         <div className="vod-body" style={{ position: "relative", zIndex: 3 }}>
           {showBroadcaster && stream.broadcaster && (
-            <div
-              className="vod-meta"
-              style={{ marginBottom: "8px", color: "var(--text)" }}
-            >
+            <div className="vod-meta stream-broadcaster">
               {stream.broadcaster.profileImageURL && (
                 <img
                   src={stream.broadcaster.profileImageURL}
                   alt={stream.broadcaster.displayName}
-                  style={{ width: "20px", height: "20px", borderRadius: "50%" }}
+                  className="stream-avatar"
                 />
               )}
               <button
                 type="button"
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  font: "inherit",
-                  color: "inherit",
-                  fontWeight: 600,
-                  cursor: onChannelClick ? "pointer" : "default",
-                  textDecoration: "none",
-                }}
+                className="stream-name-btn"
+                style={{ cursor: onChannelClick ? "pointer" : "default" }}
                 onClick={(e) => {
                   if (onChannelClick) {
                     e.stopPropagation();
@@ -111,32 +74,18 @@ export const StreamCard = React.memo<StreamCardProps>(
           )}
 
           <h3
-            className="vod-title"
+            className="vod-title stream-title-text"
             title={stream.title}
-            style={{ position: "relative", zIndex: 3 }}
           >
             {stream.title}
           </h3>
 
-          <div
-            className="vod-meta"
-            style={{ justifyContent: "space-between", marginTop: "8px" }}
-          >
-            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <div className="vod-meta stream-meta-footer">
+            <div className="stream-meta-left">
               {stream.game?.name && onCategoryClick ? (
                 <button
                   type="button"
-                  className="secondary-btn"
-                  style={{
-                    position: "relative",
-                    zIndex: 4,
-                    fontSize: "0.7rem",
-                    padding: "2px 8px",
-                    borderRadius: "4px",
-                    border: "1px solid var(--primary-glow)",
-                    color: "var(--primary)",
-                    fontWeight: 700,
-                  }}
+                  className="secondary-btn stream-category-btn"
                   onClick={(e) => {
                     e.stopPropagation();
                     onCategoryClick(stream.game!.name);
@@ -145,22 +94,12 @@ export const StreamCard = React.memo<StreamCardProps>(
                   {stream.game.name}
                 </button>
               ) : (
-                <span
-                  style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}
-                >
+                <span className="stream-category-text">
                   {stream.game?.name || "No category"}
                 </span>
               )}
 
-              <span
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  color: "var(--success)",
-                  fontWeight: 700,
-                }}
-              >
+              <span className="stream-viewers">
                 <Users size={12} />
                 {formatViewers(stream.viewerCount)}
               </span>
@@ -168,16 +107,7 @@ export const StreamCard = React.memo<StreamCardProps>(
           </div>
 
           {stream.startedAt && (
-            <div
-              style={{
-                marginTop: "8px",
-                fontSize: "0.7rem",
-                color: "var(--text-muted)",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-            >
+            <div className="stream-uptime">
               <Clock size={12} />
               Uptime: {formatUptime(stream.startedAt)}
             </div>

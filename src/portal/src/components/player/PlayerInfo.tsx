@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { VOD, LiveStream } from "../../../../shared/types";
+import "../../styles/PlayerInfo.css";
 
 interface PlayerInfoProps {
   vodInfo: VOD | null;
@@ -59,56 +60,25 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
   };
 
   return (
-    <div
-      style={{
-        padding: "20px",
-        backgroundColor: "var(--player-info-bg)",
-        color: "var(--text-main)",
-        flex: 1,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "20px" }}>
+    <div className="player-info-container">
+      <div className="player-info-content">
         <button
           type="button"
           onClick={handleStreamerClick}
           onKeyDown={(e) => handleKeyDown(e, handleStreamerClick)}
           aria-label={`Go to ${broadcaster?.displayName || "streamer"}'s channel`}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 0,
-            cursor: "pointer",
-            borderRadius: "50%",
-          }}
+          className="streamer-avatar-btn"
         >
           <img
             src={broadcaster?.profileImageURL || ""}
             alt={broadcaster?.displayName || "Profile"}
-            style={{
-              width: "72px",
-              height: "72px",
-              borderRadius: "50%",
-              objectFit: "cover",
-              border: "2px solid var(--profile-border)",
-            }}
+            className="streamer-avatar-img"
           />
         </button>
 
-        <div style={{ flex: 1 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-            }}
-          >
-            <h1
-              style={{
-                margin: "0 0 8px 0",
-                fontSize: "1.4rem",
-                lineHeight: "1.3",
-              }}
-            >
+        <div className="player-info-main">
+          <div className="player-info-header">
+            <h1 className="player-info-title">
               {liveInfo ? liveInfo.title : vodInfo?.title}
             </h1>
           </div>
@@ -117,71 +87,28 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
             type="button"
             onClick={handleStreamerClick}
             onKeyDown={(e) => handleKeyDown(e, handleStreamerClick)}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              fontWeight: "bold",
-              fontSize: "1.1rem",
-              marginBottom: "10px",
-              color: "var(--accent-purple)",
-              cursor: "pointer",
-              textAlign: "left",
-              display: "block",
-            }}
+            className="streamer-name-btn"
           >
             {broadcaster?.displayName || "Unknown Streamer"}
           </button>
 
-          <div
-            style={{
-              color: "var(--text-secondary)",
-              fontSize: "0.95rem",
-              display: "flex",
-              gap: "20px",
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
+          <div className="player-info-meta">
             <button
               type="button"
               onClick={handleCategoryClick}
               onKeyDown={(e) => handleKeyDown(e, handleCategoryClick)}
               disabled={!game}
-              style={{
-                backgroundColor: "var(--card-glass)",
-                padding: "4px 8px",
-                borderRadius: "6px",
-                fontWeight: "bold",
-                cursor: game ? "pointer" : "default",
-                border: "none",
-                color: "var(--text-secondary)",
-                fontSize: "0.95rem",
-              }}
+              className="category-tag-btn"
             >
               {game?.name || "No Category"}
             </button>
 
             {liveInfo && (
               <>
-                <span
-                  style={{
-                    color: "var(--live-red)",
-                    fontWeight: "bold",
-                    backgroundColor: "var(--card-glass)",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
+                <span className="status-chip live-viewer-count">
                   {liveInfo.viewerCount.toLocaleString()} viewers
                 </span>
-                <span
-                  style={{
-                    backgroundColor: "var(--card-glass)",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
+                <span className="status-chip">
                   <Uptime startedAt={liveInfo.startedAt} />
                 </span>
               </>
@@ -189,22 +116,10 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
 
             {vodInfo && (
               <>
-                <span
-                  style={{
-                    backgroundColor: "var(--card-glass)",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
+                <span className="status-chip">
                   {(vodInfo.viewCount || 0).toLocaleString()} views
                 </span>
-                <span
-                  style={{
-                    backgroundColor: "var(--card-glass)",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
+                <span className="status-chip">
                   {new Date(vodInfo.createdAt).toLocaleDateString()}
                 </span>
               </>

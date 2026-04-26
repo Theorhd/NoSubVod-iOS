@@ -1,7 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import "./index.css";
+import "./styles/index.css";
+import "./styles/AppError.css";
 import { safeStorageGet, safeStorageSet } from "../../shared/utils/storage";
 import {
   getActiveToken,
@@ -781,16 +782,9 @@ class AppErrorBoundary extends React.Component<
   public override render() {
     if (this.state.hasError) {
       return (
-        <div
-          style={{
-            padding: "20px",
-            color: "#f7f8ff",
-            background: "#07080f",
-            minHeight: "100vh",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Portal error</h2>
-          <p style={{ marginBottom: 0 }}>
+        <div className="app-error-container">
+          <h2 className="app-error-title">Portal error</h2>
+          <p className="app-error-message">
             {this.state.message || "Unknown runtime error"}
           </p>
         </div>

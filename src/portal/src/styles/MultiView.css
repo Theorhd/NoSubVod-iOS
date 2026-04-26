@@ -1,0 +1,104 @@
+.multiview-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.multiview-top-bar {
+  position: relative;
+  z-index: 10;
+  background: rgba(7, 8, 15, 0.8);
+}
+
+.multiview-header-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.multiview-back-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.multiview-title {
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.multiview-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.multiview-input {
+  width: 180px;
+  margin: 0;
+  height: 36px;
+}
+
+.multiview-action-btn {
+  padding: 0 12px;
+  height: 36px;
+  fontSize: 0.8rem;
+}
+
+.multiview-grid {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  background: #111;
+  padding: 2px;
+  overflow: hidden;
+}
+
+.multiview-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  grid-column: 1 / -1;
+}
+
+.multiview-slot {
+  position: relative;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.multiview-remove-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 100;
+  background: rgba(0,0,0,0.6);
+  border: none;
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.multiview-slot-title {
+  position: absolute;
+  bottom: 40px;
+  left: 10px;
+  z-index: 50;
+  background: rgba(0,0,0,0.6);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: white;
+  pointer-events: none;
+}

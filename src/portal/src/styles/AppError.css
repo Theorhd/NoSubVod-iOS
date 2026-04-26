@@ -1,0 +1,14 @@
+.app-error-container {
+  padding: 20px;
+  color: var(--text);
+  background: var(--bg);
+  minHeight: 100vh;
+}
+
+.app-error-title {
+  margin-top: 0;
+}
+
+.app-error-message {
+  margin-bottom: 0;
+}

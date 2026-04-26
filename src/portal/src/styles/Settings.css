@@ -1,0 +1,133 @@
+.server-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #8a93b8;
+  box-shadow: 0 0 0 2px rgba(138, 147, 184, 0.2);
+}
+
+.server-status-dot.status-success {
+  background: #22c38a;
+  box-shadow: 0 0 0 2px rgba(34, 195, 138, 0.2);
+}
+
+.server-status-dot.status-error {
+  background: #ff6a86;
+  box-shadow: 0 0 0 2px rgba(255, 106, 134, 0.2);
+}
+
+.settings-input-full {
+  width: 100%;
+}
+
+.settings-input-with-box-sizing {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.settings-margin-top-10 {
+  margin-top: 10px;
+}
+
+.settings-margin-bottom-16 {
+  margin-bottom: 16px;
+}
+
+.settings-flex-gap-10 {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-flex-col-gap-10 {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-mini-btn {
+  padding: 4px 8px;
+  fontSize: 0.85rem;
+}
+
+.settings-no-display {
+  display: none;
+}
+
+.settings-text-muted-small {
+  color: #a3a3a3;
+  margin: 0;
+}
+
+.settings-header-small {
+  margin: 0 0 8px 0;
+  fontSize: 1rem;
+}
+
+.settings-modal-header {
+  margin-top: 0;
+}
+
+.settings-flex-1 {
+  flex: 1;
+}
+
+.settings-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.settings-status-badge {
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.settings-status-online {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+}
+
+.settings-status-offline {
+  background: rgba(231, 76, 60, 0.15);
+  color: #e74c3c;
+}
+
+.settings-config-box {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.settings-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #d1d5db;
+  font-size: 0.9rem;
+}
+
+.disconnect-btn {
+  background: #e74c3c;
+  color: white;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.qr-reader-wrapper {
+  padding: 16px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  textAlign: center;
+}
+
+.server-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

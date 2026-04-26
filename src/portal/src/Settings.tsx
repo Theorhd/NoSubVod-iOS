@@ -18,6 +18,7 @@ import { getDeviceId } from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
 import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 import { isMobileDevice } from "./utils/capabilities";
+import "./styles/Settings.css";
 
 const defaultSettings: ExperienceSettings = {
   oneSync: false,
@@ -915,19 +916,11 @@ const ServerConnectionSection = React.memo(() => {
 
   return (
     <div className="card settings-card">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "16px",
-        }}
-      >
+      <div className="settings-header-row">
         <h2>Serveur local (NoSubVod Desktop)</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div className="settings-flex-gap-10">
           <button
-            className="action-btn"
-            style={{ padding: "4px 8px", fontSize: "0.85rem" }}
+            className="action-btn settings-mini-btn"
             onClick={scanNetwork}
             disabled={scanning}
           >
@@ -936,16 +929,7 @@ const ServerConnectionSection = React.memo(() => {
 
           {serverUrl && token && (
             <div
-              style={{
-                padding: "4px 12px",
-                borderRadius: "16px",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                background: isOnline
-                  ? "rgba(46, 204, 113, 0.15)"
-                  : "rgba(231, 76, 60, 0.15)",
-                color: isOnline ? "#2ecc71" : "#e74c3c",
-              }}
+              className={`settings-status-badge ${isOnline ? "settings-status-online" : "settings-status-offline"}`}
             >
               {isOnline ? "Connecté" : "Déconnecté"}
             </div>
@@ -953,7 +937,7 @@ const ServerConnectionSection = React.memo(() => {
         </div>
       </div>
 
-      <p className="settings-description" style={{ marginBottom: "16px" }}>
+      <p className="settings-description settings-margin-bottom-16">
         {serverUrl && token
           ? `Actuellement lié à : ${serverUrl}`
           : "Connectez l'application Mobile à votre instance Desktop en la sélectionnant ci-dessous."}
@@ -961,41 +945,23 @@ const ServerConnectionSection = React.memo(() => {
 
       {serverUrl && token && (
         <>
-          <div
-            style={{
-              marginBottom: "16px",
-              padding: "12px",
-              borderRadius: "10px",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
+          <div className="settings-config-box">
             <label className="settings-label" htmlFor="pairing-apns-token">
               Token APNs iPhone (optionnel)
             </label>
             <input
               id="pairing-apns-token"
               type="password"
-              className="search-input"
+              className="search-input settings-input-with-box-sizing"
               placeholder="Coller le token APNs si disponible"
               value={pairingApnsToken}
               onChange={(event) => {
                 setPairingApnsToken(event.target.value);
                 setConnectionError("");
               }}
-              style={{ width: "100%", boxSizing: "border-box" }}
             />
 
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                marginTop: "10px",
-                color: "#d1d5db",
-                fontSize: "0.9rem",
-              }}
-            >
+            <label className="settings-checkbox-label">
               <input
                 type="checkbox"
                 checked={pairingPushOverride}
@@ -1010,8 +976,7 @@ const ServerConnectionSection = React.memo(() => {
             </label>
 
             <button
-              className="action-btn"
-              style={{ marginTop: "10px", width: "100%" }}
+              className="action-btn settings-margin-top-10 settings-input-full"
               disabled={pairingSaving}
               onClick={async () => {
                 if (!serverUrl || !token) {
@@ -1038,13 +1003,7 @@ const ServerConnectionSection = React.memo(() => {
           </div>
 
           <button
-            className="action-btn"
-            style={{
-              background: "#e74c3c",
-              color: "white",
-              marginBottom: "16px",
-              width: "100%",
-            }}
+            className="action-btn disconnect-btn"
             disabled={pairingSaving}
             onClick={async () => {
               setPairingSaving(true);
@@ -1075,28 +1034,21 @@ const ServerConnectionSection = React.memo(() => {
       )}
 
       {connectionError && (
-        <div className="error-text" style={{ marginBottom: "16px" }}>
+        <div className="error-text settings-margin-bottom-16">
           {connectionError}
         </div>
       )}
 
       {desktopServers.length === 0 && !scanning && (!serverUrl || !token) && (
-        <div
-          style={{
-            padding: "16px",
-            background: "rgba(255,255,255,0.05)",
-            borderRadius: "8px",
-            textAlign: "center",
-          }}
-        >
-          <p style={{ color: "#a3a3a3", margin: 0 }}>
+        <div className="qr-reader-wrapper">
+          <p className="settings-text-muted-small">
             Aucun Serveur NoSubVod Desktop n&apos;a été détecté
           </p>
         </div>
       )}
 
       {desktopServers.length > 0 && (!serverUrl || !token) && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div className="server-list-container">
           <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>
             Serveurs découverts :
           </h3>

@@ -32,4 +32,7 @@
   --border: rgba(143, 159, 220, 0.15);
   --border-hover: rgba(143, 159, 220, 0.3);
   --profile-border: #3a3a3d;
+  --error-red: #ff4a4a;
+  --twitch-purple: #9146ff;
+  --bg-black: #0e0e10;
 }

@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { Extension, ExtensionContribution } from "../../shared/types";
 import { getActiveToken } from "./utils/authTokens";
+import "./styles/Extension.css";
 
 interface ExtensionContextType {
   extensions: Extension[];
@@ -28,17 +29,12 @@ const ExtensionIframe = ({
 }: Readonly<{ src: string; title: string }>) => (
   <iframe
     src={src}
-    style={{
-      width: "100%",
-      height: "calc(100vh - 68px)",
-      border: "none",
-      background: "transparent",
-    }}
+    className="extension-iframe"
     title={title}
   />
 );
 
-const ExtensionNavIcon = () => <div style={{ fontSize: "1.2rem" }}>🧩</div>;
+const ExtensionNavIcon = () => <div className="extension-nav-icon">🧩</div>;
 
 function isTauriRuntime(): boolean {
   return Boolean(

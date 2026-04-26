@@ -10,6 +10,7 @@ import { UserInfo } from "../../shared/types";
 import { formatViewers } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
 import { navigateToPlayer } from "./utils/navigation";
+import "./styles/Search.css";
 
 type SearchGame = {
   id: string;
@@ -208,16 +209,7 @@ export default function Search() {
                     <h3 title={user.stream?.title}>
                       <button
                         type="button"
-                        className="stretched-link"
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "inherit",
-                          font: "inherit",
-                          padding: 0,
-                          textAlign: "left",
-                          cursor: "pointer",
-                        }}
+                        className="stretched-link stretched-link-btn"
                         onClick={() =>
                           navigateToPlayer(navigate, {
                             liveId: user.login,

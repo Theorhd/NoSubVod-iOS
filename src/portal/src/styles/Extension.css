@@ -1,0 +1,10 @@
+.extension-iframe {
+  width: 100%;
+  height: calc(100vh - 68px);
+  border: none;
+  background: transparent;
+}
+
+.extension-nav-icon {
+  fontSize: 1.2rem;
+}
