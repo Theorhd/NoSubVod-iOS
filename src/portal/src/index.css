@@ -1,21 +1,6 @@
-:root {
-  /* -- Colors & Surfaces -- */
-  --bg: #07080f;
-  --bg-darker: #04050a;
-  --surface: rgba(20, 26, 45, 0.6);
-  --surface-hover: rgba(30, 38, 65, 0.75);
-  --surface-elevated: rgba(35, 45, 80, 0.5);
-  --primary: #8f57ff;
-  --primary-hover: #a173ff;
-  --primary-glow: rgba(143, 87, 255, 0.35);
-  --text: #f7f8ff;
-  --text-muted: #a8afcc;
-  --border: rgba(143, 159, 220, 0.15);
-  --border-hover: rgba(143, 159, 220, 0.3);
-  --danger: #ff6b87;
-  --success: #31c48d;
-  --ring: rgba(143, 87, 255, 0.4);
+@import "./styles/colors.css";
 
+:root {
   /* -- Shadows & Glass -- */
   --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.15);
   --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.3);

@@ -62,8 +62,8 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
     <div
       style={{
         padding: "20px",
-        backgroundColor: "#07080f",
-        color: "#efeff1",
+        backgroundColor: "var(--player-info-bg)",
+        color: "var(--text-main)",
         flex: 1,
       }}
     >
@@ -89,7 +89,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
               height: "72px",
               borderRadius: "50%",
               objectFit: "cover",
-              border: "2px solid #3a3a3d",
+              border: "2px solid var(--profile-border)",
             }}
           />
         </button>
@@ -124,7 +124,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
               fontWeight: "bold",
               fontSize: "1.1rem",
               marginBottom: "10px",
-              color: "#bf94ff",
+              color: "var(--accent-purple)",
               cursor: "pointer",
               textAlign: "left",
               display: "block",
@@ -135,7 +135,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
 
           <div
             style={{
-              color: "#adadb8",
+              color: "var(--text-secondary)",
               fontSize: "0.95rem",
               display: "flex",
               gap: "20px",
@@ -149,13 +149,13 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
               onKeyDown={(e) => handleKeyDown(e, handleCategoryClick)}
               disabled={!game}
               style={{
-                backgroundColor: "#18181b",
+                backgroundColor: "var(--card-glass)",
                 padding: "4px 8px",
                 borderRadius: "6px",
                 fontWeight: "bold",
                 cursor: game ? "pointer" : "default",
                 border: "none",
-                color: "#adadb8",
+                color: "var(--text-secondary)",
                 fontSize: "0.95rem",
               }}
             >
@@ -166,9 +166,9 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
               <>
                 <span
                   style={{
-                    color: "#eb0400",
+                    color: "var(--live-red)",
                     fontWeight: "bold",
-                    backgroundColor: "#18181b",
+                    backgroundColor: "var(--card-glass)",
                     padding: "4px 8px",
                     borderRadius: "6px",
                   }}
@@ -177,7 +177,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
                 </span>
                 <span
                   style={{
-                    backgroundColor: "#18181b",
+                    backgroundColor: "var(--card-glass)",
                     padding: "4px 8px",
                     borderRadius: "6px",
                   }}
@@ -191,7 +191,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
               <>
                 <span
                   style={{
-                    backgroundColor: "#18181b",
+                    backgroundColor: "var(--card-glass)",
                     padding: "4px 8px",
                     borderRadius: "6px",
                   }}
@@ -200,7 +200,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
                 </span>
                 <span
                   style={{
-                    backgroundColor: "#18181b",
+                    backgroundColor: "var(--card-glass)",
                     padding: "4px 8px",
                     borderRadius: "6px",
                   }}

@@ -1,0 +1,35 @@
+:root {
+  /* -- Backgrounds & Surfaces -- */
+  --bg: #07080f;
+  --bg-darker: #04050a;
+  --surface: rgba(20, 26, 45, 0.6);
+  --surface-hover: rgba(30, 38, 65, 0.75);
+  --surface-elevated: rgba(35, 45, 80, 0.5);
+  
+  /* -- Player & Specific Surfaces -- */
+  --player-info-bg: #07080f;
+  --card-glass: #18181b;
+
+  /* -- Primary & Accents -- */
+  --primary: #8f57ff;
+  --primary-hover: #a173ff;
+  --primary-glow: rgba(143, 87, 255, 0.35);
+  --accent-purple: #bf94ff;
+  
+  /* -- Status & Feedback -- */
+  --danger: #ff6b87;
+  --success: #31c48d;
+  --live-red: #eb0400;
+  --ring: rgba(143, 87, 255, 0.4);
+
+  /* -- Text Colors -- */
+  --text: #f7f8ff;
+  --text-main: #efeff1;
+  --text-muted: #a8afcc;
+  --text-secondary: #adadb8;
+
+  /* -- Borders & Dividers -- */
+  --border: rgba(143, 159, 220, 0.15);
+  --border-hover: rgba(143, 159, 220, 0.3);
+  --profile-border: #3a3a3d;
+}
