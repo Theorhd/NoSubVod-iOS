@@ -73,10 +73,7 @@ export const StreamCard = React.memo<StreamCardProps>(
             </div>
           )}
 
-          <h3
-            className="vod-title stream-title-text"
-            title={stream.title}
-          >
+          <h3 className="vod-title stream-title-text" title={stream.title}>
             {stream.title}
           </h3>
 

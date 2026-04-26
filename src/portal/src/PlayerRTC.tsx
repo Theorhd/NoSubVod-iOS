@@ -158,9 +158,7 @@ function PlayerRTCTransportControls({
 }>) {
   return (
     <div className="rtc-controls-box">
-      <div className="rtc-label-small">
-        Contrôles
-      </div>
+      <div className="rtc-label-small">Contrôles</div>
       <div className="rtc-controls-grid">
         <button
           type="button"
@@ -214,17 +212,11 @@ function PlayerRTCHeader({
         gap: isMobileLayout ? "8px" : "10px",
       }}
     >
-      <button
-        onClick={handleBack}
-        className="rtc-back-btn"
-        type="button"
-      >
+      <button onClick={handleBack} className="rtc-back-btn" type="button">
         Back
       </button>
 
-      <h2 className="rtc-header-title">
-        Screen Share
-      </h2>
+      <h2 className="rtc-header-title">Screen Share</h2>
 
       <span className="rtc-header-status">
         {isMobileLayout
@@ -332,7 +324,14 @@ function PlayerRTCViewport({
   toggleFullscreen,
 }: PlayerRTCViewportProps) {
   const remoteStreamNode = useNativeMobilePlayer ? (
-    <div className="rtc-video" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div
+      className="rtc-video"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       <video
         ref={remoteVideoRef}
         className="screen-share-video rtc-video"
@@ -411,11 +410,7 @@ function PlayerRTCViewport({
         />
       )}
 
-      {streamError && (
-        <div className="rtc-error-toast">
-          {streamError}
-        </div>
-      )}
+      {streamError && <div className="rtc-error-toast">{streamError}</div>}
     </div>
   );
 }
@@ -450,9 +445,7 @@ function PlayerRTCSidebar({
         <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
           Session
         </div>
-        <div className="rtc-value-bold">
-          {state.sessionId || "Not started"}
-        </div>
+        <div className="rtc-value-bold">{state.sessionId || "Not started"}</div>
       </div>
 
       <div>
@@ -471,9 +464,7 @@ function PlayerRTCSidebar({
           <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
             Status
           </div>
-          <div className="rtc-value-normal">
-            {statusLabel}
-          </div>
+          <div className="rtc-value-normal">{statusLabel}</div>
         </div>
         <div>
           <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
@@ -487,9 +478,7 @@ function PlayerRTCSidebar({
           <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
             Signal
           </div>
-          <div className="rtc-value-normal">
-            {signalStatus}
-          </div>
+          <div className="rtc-value-normal">{signalStatus}</div>
         </div>
         <div>
           <div className="rtc-label-small" style={{ marginBottom: "4px" }}>

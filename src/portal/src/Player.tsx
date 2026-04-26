@@ -271,7 +271,9 @@ const ChatSearch = ({
             <div className="chat-search-result-message">{res.message}</div>
           </button>
         ))}
-        {searching && <div className="chat-search-loading">Recherche en cours...</div>}
+        {searching && (
+          <div className="chat-search-loading">Recherche en cours...</div>
+        )}
       </div>
     </div>
   );
@@ -1232,7 +1234,10 @@ function VodLivePlayer({
       {!isFullscreen && (
         <div className="player-top-bar">
           <div className="player-top-bar-content">
-            <button onClick={handleBack} className="secondary-btn player-back-btn">
+            <button
+              onClick={handleBack}
+              className="secondary-btn player-back-btn"
+            >
               <ArrowLeft size={20} />
             </button>
             <h2 className="player-header-title">
@@ -1244,7 +1249,10 @@ function VodLivePlayer({
 
       <div className="player-scroll-area">
         <div className="player-video-section">
-          <div className="player-video-wrapper" style={{ aspectRatio: isFullscreen ? "auto" : "16/9" }}>
+          <div
+            className="player-video-wrapper"
+            style={{ aspectRatio: isFullscreen ? "auto" : "16/9" }}
+          >
             <NSVPlayer
               source={playerMediaSource as { src: string; type?: string }}
               streamType={source.streamType}
@@ -1278,7 +1286,9 @@ function VodLivePlayer({
             )}
           </div>
 
-          <div className={`container player-controls-container ${showChat ? "chat-visible" : ""}`}>
+          <div
+            className={`container player-controls-container ${showChat ? "chat-visible" : ""}`}
+          >
             {!isFullscreen && (
               <div className="glass player-actions-row">
                 {!liveId && (
@@ -1330,7 +1340,9 @@ function VodLivePlayer({
               <PlayerInfo vodInfo={vodInfo} liveInfo={liveInfo} />
             )}
 
-            {playerError && <div className="player-error-container">{playerError}</div>}
+            {playerError && (
+              <div className="player-error-container">{playerError}</div>
+            )}
           </div>
         </div>
 
@@ -1347,7 +1359,10 @@ function VodLivePlayer({
               />
             )}
             {liveId ? (
-              <LiveChatComponent liveId={liveId} chatScrollRef={chatScrollRef} />
+              <LiveChatComponent
+                liveId={liveId}
+                chatScrollRef={chatScrollRef}
+              />
             ) : (
               <>
                 <div className="player-chat-header">STREAM CHAT REPLAY</div>
@@ -1361,7 +1376,9 @@ function VodLivePlayer({
                       <span className="chat-message-author">
                         {message.commenter?.displayName || "Unknown"}:{" "}
                       </span>
-                      <span className="chat-message-text">{extractChatMessageText(message)}</span>
+                      <span className="chat-message-text">
+                        {extractChatMessageText(message)}
+                      </span>
                     </div>
                   ))}
                 </div>

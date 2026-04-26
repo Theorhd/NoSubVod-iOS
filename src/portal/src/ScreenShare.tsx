@@ -73,10 +73,7 @@ export default function ScreenShare() {
             </p>
 
             <div className="screenshare-input-group">
-              <label
-                htmlFor="session-id"
-                className="screenshare-label"
-              >
+              <label htmlFor="session-id" className="screenshare-label">
                 Session ID
               </label>
               <input

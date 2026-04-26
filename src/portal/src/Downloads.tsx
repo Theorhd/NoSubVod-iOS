@@ -141,7 +141,9 @@ const QueueItem = React.memo(
               <h3>{dl.title}</h3>
               <span
                 className="queue-status-dot download-status-text"
-                style={{ "--status-color": statusInfo.color } as React.CSSProperties}
+                style={
+                  { "--status-color": statusInfo.color } as React.CSSProperties
+                }
               >
                 {statusName === "Downloading" ? (
                   <Pause size={14} />
@@ -163,9 +165,11 @@ const QueueItem = React.memo(
             </div>
             <div className="download-queue-meta">
               <span>{dl.progress.toFixed(0)}%</span>
-              <span 
+              <span
                 className="download-status-text"
-                style={{ "--status-color": statusInfo.color } as React.CSSProperties}
+                style={
+                  { "--status-color": statusInfo.color } as React.CSSProperties
+                }
               >
                 {statusInfo.label}
               </span>

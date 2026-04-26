@@ -92,9 +92,7 @@ export default function MultiView() {
           >
             <ArrowLeft size={20} />
           </button>
-          <h2 className="multiview-title">
-            Multi-View Local
-          </h2>
+          <h2 className="multiview-title">Multi-View Local</h2>
         </div>
 
         <div className="multiview-controls">
@@ -166,9 +164,7 @@ export default function MultiView() {
             >
               <X size={16} />
             </button>
-            <div className="multiview-slot-title">
-              {slot.title}
-            </div>
+            <div className="multiview-slot-title">{slot.title}</div>
           </div>
         ))}
       </div>

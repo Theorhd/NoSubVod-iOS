@@ -318,11 +318,7 @@ export default function Live() {
             />
           ))}
         </div>
-        <div
-          ref={lastElementRef}
-          className="sentinel"
-          aria-hidden="true"
-        />
+        <div ref={lastElementRef} className="sentinel" aria-hidden="true" />
         {isLoadingMore && (
           <div className="status-line">Chargement de plus de streams...</div>
         )}

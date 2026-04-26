@@ -27,11 +27,7 @@ const ExtensionIframe = ({
   src,
   title,
 }: Readonly<{ src: string; title: string }>) => (
-  <iframe
-    src={src}
-    className="extension-iframe"
-    title={title}
-  />
+  <iframe src={src} className="extension-iframe" title={title} />
 );
 
 const ExtensionNavIcon = () => <div className="extension-nav-icon">🧩</div>;

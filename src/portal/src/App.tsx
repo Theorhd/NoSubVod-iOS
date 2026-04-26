@@ -401,9 +401,7 @@ function AppContent() {
         <div className="app-container">
           <Suspense
             fallback={
-              <div className="status-line portal-loader">
-                Loading portal...
-              </div>
+              <div className="status-line portal-loader">Loading portal...</div>
             }
           >
             <AppReadySignal />

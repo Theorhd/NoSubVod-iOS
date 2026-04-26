@@ -92,11 +92,7 @@ export default function Trends() {
           </div>
         )}
 
-        <div
-          ref={lastElementRef}
-          className="sentinel"
-          aria-hidden="true"
-        />
+        <div ref={lastElementRef} className="sentinel" aria-hidden="true" />
         {isLoadingMore && <div className="status-line">Loading more...</div>}
       </div>
     </>

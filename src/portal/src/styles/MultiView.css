@@ -78,7 +78,7 @@
   top: 10px;
   right: 10px;
   z-index: 100;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   border: none;
   color: white;
   width: 30px;
@@ -95,7 +95,7 @@
   bottom: 40px;
   left: 10px;
   z-index: 50;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.75rem;
