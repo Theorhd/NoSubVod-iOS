@@ -46,7 +46,7 @@
 
 .settings-mini-btn {
   padding: 4px 8px;
-  fontSize: 0.85rem;
+  font-size: 0.85rem;
 }
 
 .settings-no-display {
@@ -60,7 +60,7 @@
 
 .settings-header-small {
   margin: 0 0 8px 0;
-  fontSize: 1rem;
+  font-size: 1rem;
 }
 
 .settings-modal-header {
@@ -87,12 +87,12 @@
 
 .settings-status-online {
   background: rgba(46, 204, 113, 0.15);
-  color: #2ecc71;
+  color: var(--settings-valid);
 }
 
 .settings-status-offline {
   background: rgba(231, 76, 60, 0.15);
-  color: #e74c3c;
+  color: var(--settings-invalid);
 }
 
 .settings-config-box {
@@ -114,7 +114,7 @@
 
 .disconnect-btn {
   background: #e74c3c;
-  color: white;
+  color: var(--settings-disconnect-btn);
   margin-bottom: 16px;
   width: 100%;
 }
@@ -123,7 +123,7 @@
   padding: 16px;
   background: rgba(255,255,255,0.05);
   border-radius: 8px;
-  textAlign: center;
+  text-align: center;
 }
 
 .server-list-container {

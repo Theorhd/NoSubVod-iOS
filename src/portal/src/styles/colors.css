@@ -35,4 +35,8 @@
   --error-red: #ff4a4a;
   --twitch-purple: #9146ff;
   --bg-black: #0e0e10;
+
+  --settings-valid: #2ecc71;
+  --settings-invalid: #e74c3c;
+  --settings-disconnect-btn: white;
 }

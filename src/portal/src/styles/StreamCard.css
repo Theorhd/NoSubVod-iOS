@@ -53,8 +53,8 @@
   padding: 0;
   font: inherit;
   color: inherit;
-  fontWeight: 600;
-  textDecoration: none;
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .stream-title-text {
@@ -64,7 +64,7 @@
 
 .stream-meta-footer {
   justify-content: space-between;
-  marginTop: 8px;
+  margin-top: 8px;
 }
 
 .stream-meta-left {
@@ -76,7 +76,7 @@
 .stream-category-btn {
   position: relative;
   z-index: 4;
-  fontSize: 0.7rem;
+  font-size: 0.7rem;
   padding: 2px 8px;
   border-radius: 4px;
   border: 1px solid var(--primary-glow);
@@ -85,7 +85,7 @@
 }
 
 .stream-category-text {
-  fontSize: 0.75rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -94,12 +94,12 @@
   align-items: center;
   gap: 4px;
   color: var(--success);
-  fontWeight: 700;
+  font-weight: 700;
 }
 
 .stream-uptime {
-  marginTop: 8px;
-  fontSize: 0.7rem;
+  margin-top: 8px;
+  font-size: 0.7rem;
   color: var(--text-muted);
   display: flex;
   align-items: center;

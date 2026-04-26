@@ -28,16 +28,16 @@
   padding: 0.75rem 1.5rem;
   border-radius: 4px;
   cursor: pointer;
-  fontWeight: bold;
+  font-weight: bold;
 }
 
 .error-boundary-pre {
-  marginTop: 2rem;
+  margin-top: 2rem;
   padding: 1rem;
   background: var(--bg-black);
   border-radius: 4px;
-  fontSize: 0.8rem;
-  textAlign: left;
+  font-size: 0.8rem;
+  text-align: left;
   overflow: auto;
-  maxWidth: 90vw;
+  max-width: 90vw;
 }

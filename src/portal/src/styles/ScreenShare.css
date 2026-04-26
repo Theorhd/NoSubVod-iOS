@@ -1,5 +1,5 @@
 .screenshare-card {
-  maxWidth: 760px;
+  max-width: 760px;
   margin: 0 auto;
 }
 
@@ -14,12 +14,12 @@
 .screenshare-actions {
   display: flex;
   gap: 10px;
-  flexWrap: wrap;
+  flex-wrap: wrap;
 }
 
 .screenshare-text {
   color: var(--text-muted);
-  lineHeight: 1.6;
+  line-height: 1.6;
 }
 
 .screenshare-input-group {
@@ -30,12 +30,12 @@
 
 .screenshare-label {
   color: var(--text-muted);
-  fontSize: 0.9rem;
+  font-size: 0.9rem;
 }
 
 .screenshare-footer {
   margin-top: 20px;
   display: flex;
   gap: 10px;
-  flexWrap: wrap;
+  flex-wrap: wrap;
 }

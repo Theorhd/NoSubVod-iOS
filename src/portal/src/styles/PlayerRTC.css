@@ -4,7 +4,7 @@
   color: #eff3ff;
   border-radius: 7px;
   padding: 8px 10px;
-  fontSize: 12px;
+  font-size: 12px;
   font-weight: 700;
   min-width: 72px;
 }
@@ -27,31 +27,31 @@
 
 .rtc-label-small {
   color: #a1a1aa;
-  fontSize: 12px;
-  marginBottom: 8px;
+  font-size: 12px;
+  margin-bottom: 8px;
 }
 
 .rtc-controls-grid {
   display: grid;
-  gridTemplateColumns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
 .rtc-header {
-  backgroundColor: #18181b;
+  background-color: #18181b;
   display: flex;
   align-items: center;
-  borderBottom: 1px solid #3a3a3d;
-  zIndex: 10;
-  flexShrink: 0;
+  border-bottom: 1px solid #3a3a3d;
+  z-index: 10;
+  flex-shrink: 0;
 }
 
 .rtc-back-btn {
   color: #efeff1;
-  fontSize: 14px;
+  font-size: 14px;
   font-weight: bold;
   padding: 5px 10px;
-  backgroundColor: #3a3a3d;
+  background-color: #3a3a3d;
   border-radius: 4px;
   border: none;
   cursor: pointer;
@@ -59,17 +59,17 @@
 
 .rtc-header-title {
   color: white;
-  fontSize: 14px;
+  font-size: 14px;
   margin: 0;
-  flexGrow: 1;
-  whiteSpace: nowrap;
+  flex-grow: 1;
+  white-space: nowrap;
   overflow: hidden;
-  textOverflow: ellipsis;
+  text-overflow: ellipsis;
 }
 
 .rtc-header-status {
   color: #efeff1;
-  fontSize: 12px;
+  font-size: 12px;
 }
 
 .rtc-overlay-controls {
@@ -83,7 +83,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  backdropFilter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .rtc-mini-btn {
@@ -93,20 +93,20 @@
   border-radius: 7px;
   padding: 6px 10px;
   cursor: pointer;
-  fontSize: 12px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .rtc-volume-slider {
-  accentColor: #8ca6ff;
+  accent-color: #8ca6ff;
   cursor: pointer;
 }
 
 .rtc-volume-text {
   color: #c9d2f3;
-  fontSize: 12px;
-  minWidth: 38px;
-  textAlign: right;
+  font-size: 12px;
+  min-width: 38px;
+  text-align: right;
 }
 
 .rtc-viewport {
@@ -115,13 +115,13 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: stretch;
-  backgroundColor: #000;
+  background-color: #000;
   position: relative;
   overflow: hidden;
 }
 
 .rtc-remote-surface {
-  touchAction: none;
+  touch-action: none;
   border: none;
   padding: 0;
   background: transparent;
@@ -133,13 +133,13 @@
 .rtc-video {
   width: 100%;
   height: 100%;
-  objectFit: contain;
-  backgroundColor: #000;
+  object-fit: contain;
+  background-color: #000;
 }
 
 .rtc-waiting-host {
   color: #efeff1;
-  textAlign: center;
+  text-align: center;
   padding: 24px;
 }
 
@@ -148,30 +148,30 @@
   bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
-  backgroundColor: rgba(0,0,0,0.6);
+  background-color: rgba(0,0,0,0.6);
   padding: 8px 12px;
   border-radius: 6px;
   color: #ff9c9c;
-  fontSize: 13px;
+  font-size: 13px;
 }
 
 .rtc-sidebar {
-  backgroundColor: var(--bg-black);
+  background-color: var(--bg-black);
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flexShrink: 0;
+  flex-shrink: 0;
 }
 
 .rtc-value-bold {
   color: #efeff1;
-  fontSize: 14px;
+  font-size: 14px;
   font-weight: bold;
 }
 
 .rtc-value-normal {
   color: #efeff1;
-  fontSize: 14px;
+  font-size: 14px;
 }
 
 .rtc-container {
@@ -181,6 +181,6 @@
   inset: 0;
   width: 100%;
   height: 100dvh;
-  backgroundColor: var(--bg);
+  background-color: var(--bg);
   overflow: hidden;
 }
