@@ -483,7 +483,7 @@ const NSVPlayer = React.memo(
         recoveryAttemptsInWindowRef.current = 0;
       }
 
-      if (recoveryAttemptsInWindowRef.current >= 4) {
+      if (recoveryAttemptsInWindowRef.current >= 6) {
         return false;
       }
 
@@ -729,6 +729,11 @@ const NSVPlayer = React.memo(
 
         if (wasBackgroundedRef.current) {
           wasBackgroundedRef.current = false;
+          // Each foreground is a fresh recovery opportunity: reset the window
+          // so a previous burst of background/foreground cycles does not
+          // permanently block recovery until the 120-second window expires.
+          recoveryWindowStartedAtRef.current = 0;
+          recoveryAttemptsInWindowRef.current = 0;
           queueSourceRefreshAndResume("visibility-resume");
         }
       };
@@ -740,6 +745,8 @@ const NSVPlayer = React.memo(
       const onPageShowOrFocus = () => {
         if (!wasBackgroundedRef.current) return;
         wasBackgroundedRef.current = false;
+        recoveryWindowStartedAtRef.current = 0;
+        recoveryAttemptsInWindowRef.current = 0;
         queueSourceRefreshAndResume("pageshow-focus");
       };
 

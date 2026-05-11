@@ -287,6 +287,14 @@ pub async fn start_live_chat_polling(live_id: String) -> Result<String, String> 
         return Err("Missing live login".to_string());
     }
 
+    // Purge sessions whose Tokio task has already finished (normal IRC
+    // disconnect or a previous abort) so the static map never accumulates
+    // orphaned entries across background/foreground cycles.
+    {
+        let mut sessions = LIVE_CHAT_SESSIONS.write().await;
+        sessions.retain(|_, session| !session.task.is_finished());
+    }
+
     let queue = Arc::new(Mutex::new(VecDeque::<Value>::with_capacity(220)));
     let queue_for_task = queue.clone();
 
