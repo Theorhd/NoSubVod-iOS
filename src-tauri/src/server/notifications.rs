@@ -48,15 +48,24 @@ pub struct SubNotificationService {
     twitch: Arc<TwitchService>,
     app: AppHandle,
     cursors: Arc<RwLock<HashMap<String, SubNotificationCursor>>>,
+    /// Reused HTTP client for remote push forwarding (avoids per-notification allocation).
+    push_client: reqwest::Client,
 }
 
 impl SubNotificationService {
     pub fn spawn(history: Arc<HistoryStore>, twitch: Arc<TwitchService>, app: AppHandle) {
+        let push_client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .timeout(Duration::from_secs(6))
+            .build()
+            .unwrap_or_default();
+
         let service = Self {
             history,
             twitch,
             app,
             cursors: Arc::new(RwLock::new(HashMap::new())),
+            push_client,
         };
 
         tauri::async_runtime::spawn(async move {
@@ -251,19 +260,8 @@ impl SubNotificationService {
             server_url.trim_end_matches('/')
         );
 
-        let client = match reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .timeout(Duration::from_secs(6))
-            .build()
-        {
-            Ok(client) => client,
-            Err(error) => {
-                tracing::warn!(error = %error, "Failed to build remote push HTTP client");
-                return false;
-            }
-        };
-
-        let mut request = client
+        let mut request = self
+            .push_client
             .post(endpoint)
             .header("x-nsv-token", server_token)
             .json(&request_body);
@@ -334,15 +332,12 @@ fn display_name_for(sub: &SubEntry) -> String {
 
 fn truncate_text(value: &str, max_len: usize) -> String {
     let trimmed = value.trim();
-    let mut output = String::new();
-
-    for (index, ch) in trimmed.chars().enumerate() {
-        if index >= max_len {
-            output.push_str("...");
-            return output;
+    match trimmed.char_indices().nth(max_len) {
+        Some((idx, _)) => {
+            let mut s = trimmed[..idx].to_string();
+            s.push_str("...");
+            s
         }
-        output.push(ch);
+        None => trimmed.to_string(),
     }
-
-    output
 }

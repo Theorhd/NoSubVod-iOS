@@ -110,7 +110,7 @@ impl AppState {
 
         let download_cache = Cache::builder()
             .time_to_live(Duration::from_secs(5))
-            .max_capacity(1)
+            .max_capacity(20)
             .build();
 
         let segment_cache = Cache::builder()
