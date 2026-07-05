@@ -317,7 +317,7 @@ impl HistoryStore {
         let (prefix, nth, _) =
             entries.select_nth_unstable_by(end - 1, |a, b| b.updated_at.cmp(&a.updated_at));
 
-        prefix.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        prefix.sort_by_key(|b| std::cmp::Reverse(b.updated_at));
 
         let mut head = Vec::with_capacity(prefix.len() + 1);
         head.extend(prefix.iter().copied());
@@ -383,7 +383,7 @@ impl HistoryStore {
         let end = (offset + limit).min(total);
         let (prefix, nth, _) =
             entries.select_nth_unstable_by(end - 1, |a, b| b.added_at.cmp(&a.added_at));
-        prefix.sort_by(|a, b| b.added_at.cmp(&a.added_at));
+        prefix.sort_by_key(|b| std::cmp::Reverse(b.added_at));
 
         let mut head = Vec::with_capacity(prefix.len() + 1);
         head.extend(prefix.iter().copied());
@@ -689,7 +689,7 @@ impl HistoryStore {
         if count > 0 {
             let (prefix, _, _) =
                 history.select_nth_unstable_by(count - 1, |a, b| b.updated_at.cmp(&a.updated_at));
-            prefix.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+            prefix.sort_by_key(|b| std::cmp::Reverse(b.updated_at));
             history.truncate(count);
         }
 
@@ -764,7 +764,7 @@ impl HistoryStore {
 
     pub async fn get_trusted_devices(&self) -> Vec<TrustedDevice> {
         let mut devices = self.data.read().await.trusted_devices.clone();
-        devices.sort_by(|a, b| b.last_seen_at.cmp(&a.last_seen_at));
+        devices.sort_by_key(|b| std::cmp::Reverse(b.last_seen_at));
         devices
     }
 

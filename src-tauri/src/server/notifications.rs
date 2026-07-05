@@ -193,7 +193,7 @@ impl SubNotificationService {
 
         let twitch = self.twitch.clone();
 
-        stream::iter(targets.into_iter())
+        stream::iter(targets)
             .map(move |login| {
                 let twitch = twitch.clone();
                 async move {

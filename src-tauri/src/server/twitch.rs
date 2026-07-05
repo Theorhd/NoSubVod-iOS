@@ -1783,7 +1783,7 @@ impl TwitchService {
             }
         }
 
-        items.sort_by(|a, b| b.viewer_count.cmp(&a.viewer_count));
+        items.sort_by_key(|b| std::cmp::Reverse(b.viewer_count));
 
         let page = LiveStreamsPage {
             has_more: false,
@@ -2467,7 +2467,7 @@ impl TwitchService {
         }
 
         let game_results =
-            stream::iter(game_inputs.into_iter())
+            stream::iter(game_inputs)
                 .map(|(game, lang_filter)| async move {
                     self.fetch_game_vods(&game, lang_filter, 40).await
                 })
@@ -2475,7 +2475,7 @@ impl TwitchService {
                 .collect::<Vec<_>>()
                 .await;
 
-        let channel_results = stream::iter(channels_to_fetch.into_iter())
+        let channel_results = stream::iter(channels_to_fetch)
             .map(|login| async move { self.fetch_user_vods(&login).await })
             .buffer_unordered(TRENDING_CHANNELS_CONCURRENCY)
             .collect::<Vec<_>>()
