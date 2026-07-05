@@ -15,10 +15,9 @@ use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::message::ServerMessage;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 
-use tauri::State;
 use crate::server::routes::build_router;
 use crate::server::{types::ServerInfo, AppState};
-
+use tauri::State;
 
 #[derive(Deserialize)]
 pub struct InternalApiRequest {
@@ -143,7 +142,6 @@ pub async fn internal_api_request(
         content_type,
     })
 }
-
 
 #[tauri::command]
 pub async fn scan_local_servers() -> Result<Vec<String>, String> {
@@ -314,4 +312,3 @@ pub async fn stop_live_chat_polling(session_id: String) -> Result<(), String> {
 pub async fn get_server_info(state: State<'_, Arc<AppState>>) -> Result<ServerInfo, String> {
     Ok(state.server_info.clone())
 }
-
