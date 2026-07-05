@@ -63,8 +63,6 @@ type Notification = {
   message: string;
 };
 
-
-
 function isSwipeBackBlockedTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) {
     return false;
@@ -223,7 +221,6 @@ function DeepLinkListener() {
 
   return null;
 }
-
 
 const NotificationToast = ({
   notifications,
@@ -417,7 +414,10 @@ function AppContent() {
               <IosSwipeBackBridge />
               <DeepLinkListener />
               <Routes>
-                <Route path="/" element={isOnline ? <Home /> : <OfflineHome />} />
+                <Route
+                  path="/"
+                  element={isOnline ? <Home /> : <OfflineHome />}
+                />
                 <Route path="/trends" element={<Trends />} />
                 <Route path="/live" element={<Live />} />
                 <Route path="/search" element={<Search />} />

@@ -1918,10 +1918,16 @@ impl TwitchService {
                         map.insert("id".to_string(), node["id"].clone());
                         map.insert("title".to_string(), node["title"].clone());
                         map.insert("lengthSeconds".to_string(), node["durationSeconds"].clone());
-                        map.insert("previewThumbnailURL".to_string(), node["thumbnailURL"].clone());
+                        map.insert(
+                            "previewThumbnailURL".to_string(),
+                            node["thumbnailURL"].clone(),
+                        );
                         map.insert("createdAt".to_string(), node["createdAt"].clone());
                         map.insert("viewCount".to_string(), node["viewCount"].clone());
-                        map.insert("broadcastType".to_string(), serde_json::Value::String("clip".to_string()));
+                        map.insert(
+                            "broadcastType".to_string(),
+                            serde_json::Value::String("clip".to_string()),
+                        );
                         map.insert("language".to_string(), serde_json::Value::Null);
                         map.insert("game".to_string(), node["game"].clone());
                         map.insert("owner".to_string(), node["broadcaster"].clone());
@@ -1935,7 +1941,6 @@ impl TwitchService {
         self.clip_cache.insert(cache_key, clips.clone()).await;
         Ok(clips)
     }
-
 
     pub async fn fetch_user_live_stream(&self, username: &str) -> AppResult<Option<LiveStream>> {
         let login = username.trim().to_lowercase();

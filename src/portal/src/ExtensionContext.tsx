@@ -33,8 +33,6 @@ const ExtensionIframe = ({
 
 const ExtensionNavIcon = () => <div className="extension-nav-icon">🧩</div>;
 
-
-
 export function ExtensionProvider({
   children,
   suspendLoading = false,

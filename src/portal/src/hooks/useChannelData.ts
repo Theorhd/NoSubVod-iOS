@@ -111,31 +111,39 @@ export function useChannelData({
 
   const fetchUserData = useCallback(
     async (targetUser: string, signal: AbortSignal) => {
-      const [vodsData, clipsData, liveData, historyData, userData] = await Promise.all([
-        fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}/vods`, {
-          signal,
-        }).then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch VODs");
-          return res.json() as Promise<VOD[]>;
-        }),
-        fetchWithTimeout(`/api/twitch/channel/${encodeURIComponent(targetUser)}/clips`, {
-          signal,
-        }).then((res) => {
-          if (!res.ok) return [];
-          return res.json() as Promise<VOD[]>;
-        }).catch(() => []),
-        fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}/live`, {
-          signal,
-        })
-          .then((res) => (res.ok ? (res.json() as Promise<LiveStream>) : null))
-          .catch(() => null),
-        fetchHistory(signal),
-        fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}`, {
-          signal,
-        })
-          .then((res) => (res.ok ? (res.json() as Promise<UserInfo>) : null))
-          .catch(() => null),
-      ]);
+      const [vodsData, clipsData, liveData, historyData, userData] =
+        await Promise.all([
+          fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}/vods`, {
+            signal,
+          }).then((res) => {
+            if (!res.ok) throw new Error("Failed to fetch VODs");
+            return res.json() as Promise<VOD[]>;
+          }),
+          fetchWithTimeout(
+            `/api/twitch/channel/${encodeURIComponent(targetUser)}/clips`,
+            {
+              signal,
+            },
+          )
+            .then((res) => {
+              if (!res.ok) return [];
+              return res.json() as Promise<VOD[]>;
+            })
+            .catch(() => []),
+          fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}/live`, {
+            signal,
+          })
+            .then((res) =>
+              res.ok ? (res.json() as Promise<LiveStream>) : null,
+            )
+            .catch(() => null),
+          fetchHistory(signal),
+          fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}`, {
+            signal,
+          })
+            .then((res) => (res.ok ? (res.json() as Promise<UserInfo>) : null))
+            .catch(() => null),
+        ]);
 
       if (signal.aborted) return;
 

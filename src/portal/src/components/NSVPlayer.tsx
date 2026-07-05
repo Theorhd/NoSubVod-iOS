@@ -78,8 +78,6 @@ function setHlsLevelMode(instance: Hls, level: number) {
   }
 }
 
-
-
 function normalizePlaylistText(raw: string): string {
   let text = raw.replaceAll(/\r\n?/g, "\n");
   if (text.codePointAt(0) === 0xfeff) {
@@ -273,7 +271,13 @@ function sortedQualitiesByHeightDesc(qualities: any[]): QualityEntry[] {
     .map((q, idx) => ({
       idx,
       height: Number((q as { height?: number }).height || 0),
-      isAudio: String((q as { id?: string; label?: string })?.id || (q as { label?: string })?.label || "").toLowerCase().includes("audio"),
+      isAudio: String(
+        (q as { id?: string; label?: string })?.id ||
+          (q as { label?: string })?.label ||
+          "",
+      )
+        .toLowerCase()
+        .includes("audio"),
     }))
     .filter((q) => q.height > 0 || q.isAudio)
     .sort((a, b) => b.height - a.height);
@@ -303,7 +307,9 @@ function resolveRequestedQuality(
 
   const requestedHeightNum = Number(normalizedQuality);
   if (!Number.isNaN(requestedHeightNum)) {
-    const exact = sorted.find((quality) => quality.height === requestedHeightNum);
+    const exact = sorted.find(
+      (quality) => quality.height === requestedHeightNum,
+    );
     if (exact) return exact.idx;
 
     const closest = sorted.find(

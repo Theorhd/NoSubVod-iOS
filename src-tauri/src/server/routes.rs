@@ -225,7 +225,8 @@ async fn handle_vod_master(
     let requested_quality = q.quality.as_deref().unwrap_or("");
     let default_quality = settings.default_video_quality.as_deref().unwrap_or("");
 
-    if requested_quality == "audio" || (requested_quality.is_empty() && default_quality == "audio") {
+    if requested_quality == "audio" || (requested_quality.is_empty() && default_quality == "audio")
+    {
         body = lock_master_playlist_to_audio(&body);
     } else if let Some(target_height) = resolve_target_quality_height(
         q.quality.as_deref(),
@@ -276,7 +277,8 @@ async fn handle_live_master(
     let requested_quality = q.quality.as_deref().unwrap_or("");
     let default_quality = settings.default_video_quality.as_deref().unwrap_or("");
 
-    if requested_quality == "audio" || (requested_quality.is_empty() && default_quality == "audio") {
+    if requested_quality == "audio" || (requested_quality.is_empty() && default_quality == "audio")
+    {
         body = lock_master_playlist_to_audio(&body);
     }
 

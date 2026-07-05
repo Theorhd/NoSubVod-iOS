@@ -11,8 +11,9 @@ export default function OfflineHome() {
       <WifiOff size={80} strokeWidth={1.5} className="offline-home__icon" />
       <h1 className="offline-home__title">Vous êtes hors ligne</h1>
       <p className="offline-home__description">
-        Il semble que vous n'ayez pas de connexion Internet. Pas de problème !
-        Vous pouvez toujours regarder vos vidéos téléchargées.
+        {
+          "Il semble que vous n'ayez pas de connexion Internet. Pas de problème ! Vous pouvez toujours regarder vos vidéos téléchargées."
+        }
       </p>
       <button
         className="action-btn offline-home__btn"

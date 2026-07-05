@@ -38,8 +38,6 @@ const LazyQRCodeReader = React.lazy(async () => {
   return { default: module.QRCodeReader };
 });
 
-
-
 function buildFallbackProfileFilename(): string {
   const now = new Date();
   const yyyy = now.getFullYear();

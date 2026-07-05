@@ -24,8 +24,6 @@ const MAX_LIVE_CHAT_MESSAGES = 300;
 const LIVE_CHAT_POLL_VISIBLE_MS = 900;
 const LIVE_CHAT_POLL_HIDDEN_MS = 4000;
 
-
-
 async function invokeTauri<T>(
   command: string,
   payload?: Record<string, unknown>,

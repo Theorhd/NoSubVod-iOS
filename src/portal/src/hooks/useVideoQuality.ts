@@ -246,8 +246,7 @@ export function useVideoQuality(
     normalizedDefaultQuality,
     vodId,
     vodQualityStage,
-    vodInfo?.broadcastType,
-    vodInfo?.previewThumbnailURL,
+    vodInfo,
   ]);
 
   const resetQualityState = useCallback(() => {
