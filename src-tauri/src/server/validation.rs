@@ -243,6 +243,102 @@ fn select_variant_index(variants: &[VariantRef], target_height: u32) -> usize {
         .unwrap_or(0)
 }
 
+pub fn lock_master_playlist_to_audio(master_playlist: &str) -> String {
+    let lines: Vec<String> = master_playlist.lines().map(ToString::to_string).collect();
+    if lines.is_empty() {
+        return master_playlist.to_string();
+    }
+
+    let mut audio_variants: Vec<(usize, usize)> = Vec::new(); // (stream_inf_index, uri_index)
+    let mut audio_media: Vec<usize> = Vec::new();
+
+    let mut index = 0usize;
+    while index < lines.len() {
+        let line = lines[index].trim();
+
+        if line.starts_with("#EXT-X-MEDIA:TYPE=AUDIO") {
+            audio_media.push(index);
+        } else if line.starts_with("#EXT-X-STREAM-INF") {
+            // Detect audio-only variants. Twitch marks them with VIDEO="audio_only" or
+            // VIDEO="audio", but also fall back to checking for the absence of a RESOLUTION=
+            // attribute (no video resolution == audio-only stream).
+            let is_audio = line.contains("VIDEO=\"audio_only\"")
+                || line.contains("VIDEO=\"audio\"")
+                || (!line.contains("RESOLUTION=")
+                    && extract_resolution_height(line).unwrap_or(0) == 0);
+            let mut uri_index: Option<usize> = None;
+            let mut scan = index + 1;
+            while scan < lines.len() {
+                let next_line = lines[scan].trim();
+                if next_line.is_empty() {
+                    scan += 1;
+                    continue;
+                }
+                if next_line.starts_with('#') {
+                    if next_line.starts_with("#EXT-X-STREAM-INF") {
+                        break;
+                    }
+                    scan += 1;
+                    continue;
+                }
+                uri_index = Some(scan);
+                break;
+            }
+
+            if is_audio {
+                if let Some(uri_idx) = uri_index {
+                    audio_variants.push((index, uri_idx));
+                }
+            }
+        }
+        index += 1;
+    }
+
+    if audio_variants.is_empty() {
+        // Fallback to highest quality if no audio only variant found (shouldn't happen on twitch)
+        return master_playlist.to_string();
+    }
+
+    // Pick the first audio variant
+    let selected_variant = &audio_variants[0];
+
+    let mut locked_lines = Vec::new();
+    let mut i = 0usize;
+
+    while i < lines.len() {
+        if i == 0 && lines[0].starts_with("#EXTM3U") {
+            locked_lines.push(lines[i].clone());
+            i += 1;
+            continue;
+        }
+
+        if lines[i].starts_with("#EXT-X-MEDIA") {
+            if audio_media.contains(&i) {
+                locked_lines.push(lines[i].clone());
+            }
+            i += 1;
+            continue;
+        }
+
+        if lines[i].starts_with("#EXT-X-STREAM-INF") {
+            if i == selected_variant.0 {
+                locked_lines.push(lines[i].clone());
+                locked_lines.push(lines[selected_variant.1].clone());
+            }
+            i += 1;
+            while i < lines.len() && !lines[i].starts_with('#') {
+                i += 1;
+            }
+            continue;
+        }
+
+        locked_lines.push(lines[i].clone());
+        i += 1;
+    }
+
+    locked_lines.join("\n")
+}
+
 pub fn lock_master_playlist_to_height(master_playlist: &str, target_height: u32) -> String {
     if target_height == 0 {
         return master_playlist.to_string();

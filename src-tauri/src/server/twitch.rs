@@ -336,6 +336,8 @@ pub struct TwitchService {
     // Specialized type-safe caches
     user_cache: Cache<String, UserInfo>,
     vod_cache: Cache<String, Vec<Vod>>,
+    /// Short-lived cache for clips (more volatile than VODs — refreshed every 5 min)
+    clip_cache: Cache<String, Vec<Vod>>,
     live_stream_cache: Cache<String, Option<LiveStream>>,
     live_page_cache: Cache<String, LiveStreamsPage>,
     related_channels_cache: Cache<String, Vec<String>>,
@@ -385,6 +387,10 @@ impl TwitchService {
             vod_cache: Cache::builder()
                 .max_capacity(200)
                 .time_to_live(Duration::from_secs(600))
+                .build(),
+            clip_cache: Cache::builder()
+                .max_capacity(100)
+                .time_to_live(Duration::from_secs(300))
                 .build(),
             live_stream_cache: Cache::builder()
                 .max_capacity(500)
@@ -1884,6 +1890,52 @@ impl TwitchService {
         self.vod_cache.insert(cache_key, vods.clone()).await;
         Ok(vods)
     }
+
+    pub async fn fetch_user_clips(&self, username: &str) -> AppResult<Vec<Vod>> {
+        let cache_key = format!("clips_{username}");
+        if let Some(cached) = self.clip_cache.get(&cache_key).await {
+            return Ok(cached);
+        }
+
+        let body = format!(
+            r#"{{"query":"query {{ user(login: \"{}\") {{ clips(first: 30, criteria: {{ period: ALL_TIME }}) {{ edges {{ node {{ id, title, durationSeconds, thumbnailURL, createdAt, viewCount, broadcaster {{ login, displayName, profileImageURL(width: 50) }}, game {{ name }} }} }} }} }} }}"}}"#,
+            gql_escape(username)
+        );
+
+        let data = self.gql_post(&body).await?;
+        if data["data"]["user"].is_null() {
+            return Err(AppError::NotFound("User not found".to_string()));
+        }
+
+        let clips: Vec<Vod> = data["data"]["user"]["clips"]["edges"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|e| {
+                        let node = &e["node"];
+                        // Map Clip node to Vod format
+                        let mut map = serde_json::Map::new();
+                        map.insert("id".to_string(), node["id"].clone());
+                        map.insert("title".to_string(), node["title"].clone());
+                        map.insert("lengthSeconds".to_string(), node["durationSeconds"].clone());
+                        map.insert("previewThumbnailURL".to_string(), node["thumbnailURL"].clone());
+                        map.insert("createdAt".to_string(), node["createdAt"].clone());
+                        map.insert("viewCount".to_string(), node["viewCount"].clone());
+                        map.insert("broadcastType".to_string(), serde_json::Value::String("clip".to_string()));
+                        map.insert("language".to_string(), serde_json::Value::Null);
+                        map.insert("game".to_string(), node["game"].clone());
+                        map.insert("owner".to_string(), node["broadcaster"].clone());
+
+                        serde_json::from_value::<Vod>(serde_json::Value::Object(map)).ok()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        self.clip_cache.insert(cache_key, clips.clone()).await;
+        Ok(clips)
+    }
+
 
     pub async fn fetch_user_live_stream(&self, username: &str) -> AppResult<Option<LiveStream>> {
         let login = username.trim().to_lowercase();

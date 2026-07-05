@@ -1,0 +1,33 @@
+.offline-home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 24px;
+}
+
+.offline-home__icon {
+  opacity: 0.5;
+  margin-bottom: 20px;
+}
+
+.offline-home__title {
+  font-size: 2rem;
+  margin-bottom: 10px;
+}
+
+.offline-home__description {
+  color: var(--text-muted);
+  margin-bottom: 30px;
+  max-width: 400px;
+}
+
+.offline-home__btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  font-size: 1.1rem;
+}

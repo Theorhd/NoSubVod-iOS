@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { Extension, ExtensionContribution } from "../../shared/types";
 import { getActiveToken } from "./utils/authTokens";
+import { isTauriRuntime } from "./utils/capabilities";
 import "./styles/Extension.css";
 
 interface ExtensionContextType {
@@ -32,11 +33,7 @@ const ExtensionIframe = ({
 
 const ExtensionNavIcon = () => <div className="extension-nav-icon">🧩</div>;
 
-function isTauriRuntime(): boolean {
-  return Boolean(
-    (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
-  );
-}
+
 
 export function ExtensionProvider({
   children,

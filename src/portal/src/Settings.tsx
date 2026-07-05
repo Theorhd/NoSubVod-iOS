@@ -17,7 +17,7 @@ import { useServer } from "./ServerContext";
 import { getDeviceId } from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
 import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
-import { isMobileDevice } from "./utils/capabilities";
+import { isMobileDevice, isTauriRuntime } from "./utils/capabilities";
 import "./styles/Settings.css";
 
 const defaultSettings: ExperienceSettings = {
@@ -38,13 +38,7 @@ const LazyQRCodeReader = React.lazy(async () => {
   return { default: module.QRCodeReader };
 });
 
-function isTauriRuntime(): boolean {
-  const runtime = globalThis as {
-    __TAURI_INTERNALS__?: unknown;
-    __TAURI__?: unknown;
-  };
-  return Boolean(runtime.__TAURI_INTERNALS__ || runtime.__TAURI__);
-}
+
 
 function buildFallbackProfileFilename(): string {
   const now = new Date();
@@ -251,9 +245,10 @@ const VideoPlayerSection = React.memo(
         >
           <option value="auto">Automatique</option>
           <option value="source">Source (chunked)</option>
-          <option value="480">480p</option>
-          <option value="720">720p</option>
           <option value="1080">1080p</option>
+          <option value="720">720p</option>
+          <option value="480">480p</option>
+          <option value="audio">Audio Only</option>
         </select>
         <small className="help-text">
           Source (chunked) force la meilleure qualité disponible. En

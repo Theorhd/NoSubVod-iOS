@@ -1,3 +1,5 @@
+import { isTauriRuntime } from "./capabilities";
+
 type NotificationPluginApi = {
   isPermissionGranted: () => Promise<boolean>;
   requestPermission: () => Promise<"granted" | "denied" | "default">;
@@ -11,12 +13,6 @@ type PermissionState = "unknown" | "granted" | "denied";
 
 let pluginApiPromise: Promise<NotificationPluginApi | null> | null = null;
 let permissionState: PermissionState = "unknown";
-
-function isTauriRuntime(): boolean {
-  return Boolean(
-    (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
-  );
-}
 
 async function getPluginApi(): Promise<NotificationPluginApi | null> {
   if (!isTauriRuntime()) {

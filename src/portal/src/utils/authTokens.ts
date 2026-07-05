@@ -1,4 +1,5 @@
 import { safeStorageGet, safeStorageSet } from "../../../shared/utils/storage";
+import { isTauriRuntime } from "./capabilities";
 
 const STANDALONE_TOKEN_KEY = "nsv_token";
 const REMOTE_SERVER_TOKEN_KEY = "nsv_server_token";
@@ -20,12 +21,6 @@ const tokenCache: Record<TokenKey, string | null> = {
 
 let secureStoragePromise: Promise<SecureStorageFacade | null> | null = null;
 let secureStorageWarningShown = false;
-
-function isTauriRuntime(): boolean {
-  return Boolean(
-    (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
-  );
-}
 
 function normalizeToken(token: string | null | undefined): string | null {
   if (!token) return null;

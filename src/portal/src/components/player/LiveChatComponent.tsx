@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { buildAuthQuery } from "../../utils/authTokens";
+import { isTauriRuntime } from "../../utils/capabilities";
 
 interface LiveChatComponentProps {
   liveId: string;
@@ -23,11 +24,7 @@ const MAX_LIVE_CHAT_MESSAGES = 300;
 const LIVE_CHAT_POLL_VISIBLE_MS = 900;
 const LIVE_CHAT_POLL_HIDDEN_MS = 4000;
 
-function isTauriRuntime(): boolean {
-  return Boolean(
-    (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
-  );
-}
+
 
 async function invokeTauri<T>(
   command: string,

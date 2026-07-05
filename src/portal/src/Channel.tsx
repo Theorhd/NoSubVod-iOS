@@ -93,6 +93,7 @@ export default function Channel() {
     isUserMode,
     isCategoryMode,
     vods,
+    clips,
     liveStream,
     streamerInfo,
     history,
@@ -353,6 +354,7 @@ export default function Channel() {
         {!loading &&
           !error &&
           vods.length === 0 &&
+          clips.length === 0 &&
           catLiveStreams.length === 0 &&
           !liveStream && <div className="empty-state">No content found.</div>}
 
@@ -485,6 +487,44 @@ export default function Channel() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Clips */}
+        {!loading && !error && clips.length > 0 && (
+          <div
+            className="block-section"
+            style={{
+              marginTop: "16px",
+            }}
+          >
+            <div className="section-header-row">
+              <h2>Clips</h2>
+              <span className="section-count">
+                {clips.length} Clip{clips.length > 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="vod-grid">
+              {clips.map((clip) => {
+                const hist = history[clip.id];
+                return (
+                  <VODCard
+                    key={clip.id}
+                    vod={clip}
+                    onWatch={(id) =>
+                      navigateToPlayer(navigate, {
+                        vodId: id,
+                      })
+                    }
+                    historyEntry={hist}
+                    onAddToWatchlist={(e, vodItem) => {
+                      e.stopPropagation();
+                      void addToWatchlist(vodItem);
+                    }}
+                  />
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

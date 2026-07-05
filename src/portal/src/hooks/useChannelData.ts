@@ -73,6 +73,7 @@ export function useChannelData({
   refreshKey,
 }: UseChannelDataParams) {
   const [vods, setVods] = useState<VOD[]>([]);
+  const [clips, setClips] = useState<VOD[]>([]);
   const [liveStream, setLiveStream] = useState<LiveStream | null>(null);
   const [streamerInfo, setStreamerInfo] = useState<UserInfo | null>(null);
   const [history, setHistory] = useState<Record<string, HistoryEntry>>({});
@@ -110,13 +111,19 @@ export function useChannelData({
 
   const fetchUserData = useCallback(
     async (targetUser: string, signal: AbortSignal) => {
-      const [vodsData, liveData, historyData, userData] = await Promise.all([
+      const [vodsData, clipsData, liveData, historyData, userData] = await Promise.all([
         fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}/vods`, {
           signal,
         }).then((res) => {
           if (!res.ok) throw new Error("Failed to fetch VODs");
           return res.json() as Promise<VOD[]>;
         }),
+        fetchWithTimeout(`/api/twitch/channel/${encodeURIComponent(targetUser)}/clips`, {
+          signal,
+        }).then((res) => {
+          if (!res.ok) return [];
+          return res.json() as Promise<VOD[]>;
+        }).catch(() => []),
         fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}/live`, {
           signal,
         })
@@ -152,6 +159,7 @@ export function useChannelData({
         : null;
 
       setVods(filterShortVods(vodsData));
+      setClips(clipsData);
       setLiveStream(liveData);
       setStreamerInfo(userData ?? fallbackFromLive ?? fallbackFromVod);
       setHistory(historyData);
@@ -196,6 +204,7 @@ export function useChannelData({
       if (signal.aborted) return;
 
       setVods(filterShortVods(vodPage.items || []));
+      setClips([]);
       setCatVodCursor(vodPage.nextCursor || null);
       setCatVodHasMore(Boolean(vodPage.hasMore));
       setCatLiveStreams(livePage?.items || []);
@@ -336,6 +345,7 @@ export function useChannelData({
     isUserMode,
     isCategoryMode,
     vods,
+    clips,
     liveStream,
     streamerInfo,
     history,

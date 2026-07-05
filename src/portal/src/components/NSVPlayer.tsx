@@ -28,6 +28,7 @@ import {
   canPlayHlsNatively,
   canUseHlsJs,
   isMobileDevice,
+  isTauriRuntime,
 } from "../utils/capabilities";
 
 const BASE_STALL_RECOVERY_THRESHOLD_MS = 15_000;
@@ -77,11 +78,7 @@ function setHlsLevelMode(instance: Hls, level: number) {
   }
 }
 
-function isTauriRuntime(): boolean {
-  return Boolean(
-    (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
-  );
-}
+
 
 function normalizePlaylistText(raw: string): string {
   let text = raw.replaceAll(/\r\n?/g, "\n");
@@ -251,6 +248,10 @@ function inferRequestedQualityValueFromEntry(entry: any): string | null {
     return "auto";
   }
 
+  if (label.includes("audio")) {
+    return "audio";
+  }
+
   if (label.includes("source") || label.includes("chunked")) {
     return "source";
   }
@@ -272,8 +273,9 @@ function sortedQualitiesByHeightDesc(qualities: any[]): QualityEntry[] {
     .map((q, idx) => ({
       idx,
       height: Number((q as { height?: number }).height || 0),
+      isAudio: String((q as { id?: string; label?: string })?.id || (q as { label?: string })?.label || "").toLowerCase().includes("audio"),
     }))
-    .filter((q) => q.height > 0)
+    .filter((q) => q.height > 0 || q.isAudio)
     .sort((a, b) => b.height - a.height);
 }
 
@@ -294,18 +296,21 @@ function resolveRequestedQuality(
     return sorted[0]?.idx ?? -1;
   }
 
-  const requestedHeight = Number.parseInt(normalizedQuality, 10);
-  if (Number.isNaN(requestedHeight)) {
-    return -1;
+  if (normalizedQuality === "audio") {
+    const audioIdx = sorted.findIndex((q: any) => q.isAudio || q.height === 0);
+    return audioIdx >= 0 ? sorted[audioIdx].idx : -1;
   }
 
-  const exact = sorted.find((quality) => quality.height === requestedHeight);
-  if (exact) return exact.idx;
+  const requestedHeightNum = Number(normalizedQuality);
+  if (!Number.isNaN(requestedHeightNum)) {
+    const exact = sorted.find((quality) => quality.height === requestedHeightNum);
+    if (exact) return exact.idx;
 
-  const closestBelow = sorted.find(
-    (quality) => quality.height < requestedHeight,
-  );
-  if (closestBelow) return closestBelow.idx;
+    const closest = sorted.find(
+      (quality) => quality.height < requestedHeightNum,
+    );
+    if (closest) return closest.idx;
+  }
 
   return sorted[sorted.length - 1]?.idx ?? -1;
 }

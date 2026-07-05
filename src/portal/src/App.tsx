@@ -29,8 +29,11 @@ import { ErrorBoundary } from "../../shared/components/ErrorBoundary";
 import { ServerProvider, useServer } from "./ServerContext";
 import { ExtensionProvider, useExtensions } from "./ExtensionContext";
 import { navigateBackInApp } from "./utils/navigation";
+import { isTauriRuntime, isIosTouchRuntime } from "./utils/capabilities";
+import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import "./styles/App.css";
 
+const OfflineHome = lazy(() => import("./OfflineHome"));
 const Home = lazy(() => import("./Home"));
 const Channel = lazy(() => import("./Channel"));
 const Player = lazy(() => import("./Player"));
@@ -60,25 +63,7 @@ type Notification = {
   message: string;
 };
 
-function isTauriRuntime(): boolean {
-  return Boolean(
-    (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
-  );
-}
 
-function isIosTouchRuntime(): boolean {
-  if (!isTauriRuntime()) {
-    return false;
-  }
-
-  const ua = globalThis.navigator.userAgent.toLowerCase();
-  return (
-    ua.includes("iphone") ||
-    ua.includes("ipad") ||
-    ua.includes("ipod") ||
-    (ua.includes("macintosh") && "ontouchend" in document)
-  );
-}
 
 function isSwipeBackBlockedTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) {
@@ -218,6 +203,28 @@ function IosSwipeBackBridge() {
   return null;
 }
 
+function DeepLinkListener() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleDeepLink = (e: Event) => {
+      // The navigation path is pre-computed by main.tsx (setupDeepLinkBridge)
+      // and passed directly as the event detail — no URL re-parsing needed here.
+      const navPath = (e as CustomEvent<string>).detail;
+      if (!navPath || !navPath.startsWith("/")) return;
+      navigate(navPath);
+    };
+
+    globalThis.addEventListener("nsv-deep-link", handleDeepLink);
+    return () => {
+      globalThis.removeEventListener("nsv-deep-link", handleDeepLink);
+    };
+  }, [navigate]);
+
+  return null;
+}
+
+
 const NotificationToast = ({
   notifications,
   onClose,
@@ -351,6 +358,7 @@ function AppContent() {
   const { isConnected: isServerConnected, serverUrl } = useServer();
   const { contributions } = useExtensions();
   const isDesktopConnected = isServerConnected && Boolean(serverUrl);
+  const isOnline = useOnlineStatus();
 
   useEffect(() => {
     try {
@@ -407,8 +415,9 @@ function AppContent() {
             <AppReadySignal />
             <div className="content-wrap">
               <IosSwipeBackBridge />
+              <DeepLinkListener />
               <Routes>
-                <Route path="/" element={<Home />} />
+                <Route path="/" element={isOnline ? <Home /> : <OfflineHome />} />
                 <Route path="/trends" element={<Trends />} />
                 <Route path="/live" element={<Live />} />
                 <Route path="/search" element={<Search />} />

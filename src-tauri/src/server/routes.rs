@@ -39,7 +39,7 @@ use super::{
     validation::{
         cap_master_playlist_to_max_height, ensure_video_media_default,
         filter_hevc_variants_for_ios, is_legacy_ios_request, is_valid_id, is_valid_login,
-        lock_master_playlist_to_height, preferred_quality_height,
+        lock_master_playlist_to_audio, lock_master_playlist_to_height, preferred_quality_height,
     },
 };
 use moka::future::Cache;
@@ -222,7 +222,12 @@ async fn handle_vod_master(
         playlist
     };
 
-    if let Some(target_height) = resolve_target_quality_height(
+    let requested_quality = q.quality.as_deref().unwrap_or("");
+    let default_quality = settings.default_video_quality.as_deref().unwrap_or("");
+
+    if requested_quality == "audio" || (requested_quality.is_empty() && default_quality == "audio") {
+        body = lock_master_playlist_to_audio(&body);
+    } else if let Some(target_height) = resolve_target_quality_height(
         q.quality.as_deref(),
         settings.default_video_quality.as_deref(),
     ) {
@@ -242,6 +247,7 @@ async fn handle_vod_master(
 
 async fn handle_live_master(
     Path(login): Path<String>,
+    Query(q): Query<QualityQuery>,
     State(state): State<ApiState>,
     headers: axum::http::HeaderMap,
 ) -> AppResult<Response> {
@@ -266,6 +272,13 @@ async fn handle_live_master(
     } else {
         m3u8
     };
+
+    let requested_quality = q.quality.as_deref().unwrap_or("");
+    let default_quality = settings.default_video_quality.as_deref().unwrap_or("");
+
+    if requested_quality == "audio" || (requested_quality.is_empty() && default_quality == "audio") {
+        body = lock_master_playlist_to_audio(&body);
+    }
 
     body = ensure_video_media_default(&body);
 
@@ -790,6 +803,18 @@ async fn handle_live_status(
 
     let result = state.twitch.fetch_live_status_by_logins(logins).await;
     Json(result).into_response()
+}
+
+async fn handle_channel_clips(
+    Path(id): Path<String>,
+    State(state): State<ApiState>,
+) -> AppResult<Response> {
+    let username = id.trim().to_lowercase();
+    if !is_valid_login(&username) {
+        return Err(AppError::BadRequest("Invalid channel login".to_string()));
+    }
+    let clips = state.twitch.fetch_user_clips(&username).await?;
+    Ok(Json(clips).into_response())
 }
 
 async fn handle_get_history(State(state): State<ApiState>) -> impl IntoResponse {
@@ -1343,6 +1368,7 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
 
     let api = Router::new()
         // Video data
+        .route("/twitch/channel/:id/clips", get(handle_channel_clips))
         .route("/vod/:vod_id/chat", get(handle_vod_chat))
         .route("/vod/:vod_id/markers", get(handle_vod_markers))
         .route("/vod/:vod_id/info", get(handle_vod_info))

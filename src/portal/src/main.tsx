@@ -10,6 +10,7 @@ import {
   initializeSecureTokenStorage,
   setStandaloneToken,
 } from "./utils/authTokens";
+import { isTauriRuntime, isIosTouchRuntime } from "./utils/capabilities";
 
 type InternalApiInvokeResponse = {
   status: number;
@@ -128,25 +129,8 @@ function buildInvokeResponse(result: InternalApiInvokeResponse): Response {
   });
 }
 
-function isTauriRuntime(): boolean {
-  return Boolean(
-    (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
-  );
-}
-
-function isIosFamilyRuntime(): boolean {
-  if (!isTauriRuntime()) {
-    return false;
-  }
-
-  const ua = globalThis.navigator.userAgent.toLowerCase();
-  return (
-    ua.includes("iphone") ||
-    ua.includes("ipad") ||
-    ua.includes("ipod") ||
-    (ua.includes("macintosh") && "ontouchend" in document)
-  );
-}
+// isIosFamilyRuntime is an alias kept for readability within this file.
+const isIosFamilyRuntime = isIosTouchRuntime;
 
 function decodeBase64ToBytes(input: string): Uint8Array {
   const binary = globalThis.atob(input);
@@ -506,7 +490,7 @@ async function exchangeTwitchOAuthFromDeepLink(rawUrl: string): Promise<void> {
   }
 }
 
-async function setupTwitchDeepLinkBridge(): Promise<void> {
+async function setupDeepLinkBridge(): Promise<void> {
   if (!isTauriRuntime()) {
     return;
   }
@@ -526,6 +510,20 @@ async function setupTwitchDeepLinkBridge(): Promise<void> {
         }
 
         if (!parseTwitchOAuthDeepLink(rawUrl)) {
+          // If it's a general deep link, dispatch an event for App.tsx to handle.
+          // We pre-compute the React navigation path here to avoid re-parsing the
+          // URL a second time in DeepLinkListener.
+          try {
+            const parsed = new URL(rawUrl);
+            if (parsed.protocol.toLowerCase() === TWITCH_DEEP_LINK_PROTOCOL) {
+              const navPath = `/${parsed.hostname}${parsed.pathname === "/" ? "" : parsed.pathname}${parsed.search}`;
+              globalThis.dispatchEvent(
+                new CustomEvent("nsv-deep-link", { detail: navPath }),
+              );
+            }
+          } catch {
+            // Ignore invalid URLs
+          }
           continue;
         }
 
@@ -693,7 +691,7 @@ async function bootstrapPortal() {
   await initAuthTokenFromUrl();
   patchFetch();
   disableAppZoomOnIos();
-  await setupTwitchDeepLinkBridge();
+  await setupDeepLinkBridge();
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <AppErrorBoundary>

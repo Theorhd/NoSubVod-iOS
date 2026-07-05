@@ -286,6 +286,7 @@ function VodLivePlayer({
   } = useVideoQuality(
     vodId,
     liveId,
+    vodInfo,
     settings.defaultVideoQuality,
     historySyncRef.current.lastObservedTime,
     currentTime,

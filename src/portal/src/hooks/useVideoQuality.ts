@@ -64,9 +64,12 @@ export function buildQualityQuery(
   return `?${params.toString()}`;
 }
 
+import { VOD } from "../../../shared/types";
+
 export function useVideoQuality(
   vodId: string | null,
   liveId: string | null,
+  vodInfo: VOD | null,
   defaultVideoQuality: string | undefined,
   historySyncLastObservedTime: number,
   currentTime: number,
@@ -174,6 +177,29 @@ export function useVideoQuality(
 
   const source = useMemo(() => {
     if (vodId) {
+      if (vodInfo?.broadcastType === "clip" && vodInfo?.previewThumbnailURL) {
+        // Twitch clip thumbnails follow the pattern:
+        //   https://clips-media-assets2.twitch.tv/AT-cm%7C...-preview-480x272.jpg
+        // We derive the MP4 URL by stripping the "-preview-{w}x{h}.jpg" suffix.
+        const thumbnailUrl = vodInfo.previewThumbnailURL;
+        const mp4Url = thumbnailUrl.replace(/-preview-.*\.jpg$/, ".mp4");
+
+        if (mp4Url === thumbnailUrl) {
+          // The regex matched nothing — Twitch may have changed their CDN URL format.
+          console.warn(
+            "[useVideoQuality] Unexpected clip thumbnail URL format — cannot derive MP4 URL:",
+            thumbnailUrl,
+          );
+          return null;
+        }
+
+        return {
+          src: mp4Url,
+          type: "video/mp4",
+          streamType: "on-demand" as const,
+        };
+      }
+
       const normalizedManualLock = normalizedManualLockedQuality;
 
       if (normalizedManualLock && normalizedManualLock !== "auto") {
@@ -220,6 +246,8 @@ export function useVideoQuality(
     normalizedDefaultQuality,
     vodId,
     vodQualityStage,
+    vodInfo?.broadcastType,
+    vodInfo?.previewThumbnailURL,
   ]);
 
   const resetQualityState = useCallback(() => {
