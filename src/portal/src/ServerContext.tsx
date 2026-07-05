@@ -75,7 +75,7 @@ export function ServerProvider({
       // Pinging the health endpoint to check if the server is available
       await fetch(`${serverUrlState}/api/auth/twitch/status`, {
         method: "GET",
-        headers: tokenValue ? { Authorization: `Bearer ${tokenValue}` } : {},
+        headers: { Authorization: `Bearer ${tokenValue}` },
       });
       setIsOnline(true);
     } catch {

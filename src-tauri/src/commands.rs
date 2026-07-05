@@ -16,21 +16,9 @@ use twitch_irc::message::ServerMessage;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 
 use tauri::State;
-
-use crate::server::download_paths::{
-    build_master_m3u8_url, build_output_file_path, resolve_download_output_dir,
-};
 use crate::server::routes::build_router;
 use crate::server::{types::ServerInfo, AppState};
 
-const DOWNLOAD_STARTED_MESSAGE: &str = "Download started in background";
-
-struct FfmpegDownloadJob {
-    master_m3u8_url: String,
-    output_file: String,
-    start_time: Option<f64>,
-    end_time: Option<f64>,
-}
 
 #[derive(Deserialize)]
 pub struct InternalApiRequest {
@@ -156,84 +144,6 @@ pub async fn internal_api_request(
     })
 }
 
-#[tauri::command]
-pub async fn proxy_remote_request(
-    server_url: String,
-    method: String,
-    path: String,
-    query: Option<String>,
-    headers: Option<HashMap<String, String>>,
-    body: Option<String>,
-) -> Result<InternalApiResponse, String> {
-    let mut url = format!("{server_url}{path}");
-    if let Some(q) = query.filter(|s| !s.is_empty()) {
-        url = format!("{url}?{q}");
-    }
-
-    let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .build()
-        .map_err(|e| format!("Failed to build reqwest client: {e}"))?;
-
-    let req_method = reqwest::Method::from_bytes(method.as_bytes())
-        .map_err(|_| "Invalid HTTP method".to_string())?;
-
-    let mut req_builder = client.request(req_method, &url);
-
-    if let Some(h) = headers {
-        for (k, v) in h {
-            let key_lower = k.to_ascii_lowercase();
-            if key_lower == "host" || key_lower == "content-length" {
-                continue;
-            }
-            req_builder = req_builder.header(k, v);
-        }
-    }
-
-    if let Some(b) = body {
-        req_builder = req_builder.body(b);
-    }
-
-    let resp = req_builder
-        .send()
-        .await
-        .map_err(|e| format!("Proxy request failed: {e}"))?;
-
-    let status = resp.status().as_u16();
-    let content_type = resp
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
-
-    let body_bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read proxy response body: {e}"))?;
-
-    let content_type_ref = content_type
-        .as_deref()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let is_textual = content_type_ref.starts_with("text/")
-        || content_type_ref.contains("json")
-        || content_type_ref.contains("javascript")
-        || content_type_ref.contains("xml")
-        || content_type_ref.contains("mpegurl");
-
-    let (body_str, is_base64) = if is_textual {
-        (String::from_utf8_lossy(&body_bytes).to_string(), false)
-    } else {
-        (B64.encode(&body_bytes), true)
-    };
-
-    Ok(InternalApiResponse {
-        status,
-        body: body_str,
-        is_base64,
-        content_type,
-    })
-}
 
 #[tauri::command]
 pub async fn scan_local_servers() -> Result<Vec<String>, String> {
@@ -405,62 +315,3 @@ pub async fn get_server_info(state: State<'_, Arc<AppState>>) -> Result<ServerIn
     Ok(state.server_info.clone())
 }
 
-#[tauri::command]
-pub async fn start_download(
-    vod_id: String,
-    quality: String,
-    start_time: Option<f64>,
-    end_time: Option<f64>,
-    state: State<'_, Arc<AppState>>,
-) -> Result<String, String> {
-    let settings = state.api_state.history.get_settings().await;
-    let out_dir = resolve_download_output_dir(settings.download_local_path);
-
-    let job = FfmpegDownloadJob {
-        master_m3u8_url: build_master_m3u8_url(state.server_info.port, &vod_id),
-        output_file: build_output_file_path(&out_dir, &vod_id, &quality, "mp4"),
-        start_time,
-        end_time,
-    };
-
-    tauri::async_runtime::spawn(spawn_ffmpeg_download(job));
-
-    Ok(DOWNLOAD_STARTED_MESSAGE.to_string())
-}
-
-fn clip_duration(start_time: Option<f64>, end_time: Option<f64>) -> Option<f64> {
-    match (start_time, end_time) {
-        (Some(start), Some(end)) if end > start => Some(end - start),
-        _ => None,
-    }
-}
-
-async fn spawn_ffmpeg_download(job: FfmpegDownloadJob) {
-    let mut cmd = tokio::process::Command::new("ffmpeg");
-
-    if let Some(start_time) = job.start_time {
-        cmd.arg("-ss").arg(start_time.to_string());
-    }
-
-    cmd.arg("-i").arg(&job.master_m3u8_url);
-
-    if let Some(duration) = clip_duration(job.start_time, job.end_time) {
-        cmd.arg("-t").arg(duration.to_string());
-    }
-
-    cmd.arg("-c")
-        .arg("copy")
-        .arg("-bsf:a")
-        .arg("aac_adtstoasc")
-        .arg("-y")
-        .arg(&job.output_file);
-
-    match cmd.spawn() {
-        Ok(mut child) => {
-            let _ = child.wait().await;
-        }
-        Err(error) => {
-            eprintln!("Failed to spawn ffmpeg: {error}");
-        }
-    }
-}
