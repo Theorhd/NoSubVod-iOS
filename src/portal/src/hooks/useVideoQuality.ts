@@ -232,8 +232,25 @@ export function useVideoQuality(
     }
 
     if (liveId) {
+      let liveQuality: NormalizedQuality = normalizedDefaultQuality;
+      if (vodQualityStage === "bootstrap") {
+        liveQuality = "480";
+      }
+
+      const normalizedManualLock = normalizedManualLockedQuality;
+      const qualityMode =
+        (vodQualityStage === "preferred" && liveQuality !== "auto") ||
+        normalizedManualLock
+          ? "lock"
+          : undefined;
+
+      const activeQuality =
+        normalizedManualLock && normalizedManualLock !== "auto"
+          ? normalizedManualLock
+          : liveQuality;
+
       return {
-        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8`,
+        src: `/api/live/${encodeURIComponent(liveId)}/master.m3u8${buildQualityQuery(activeQuality, qualityMode)}`,
         type: "application/x-mpegurl",
         streamType: "live" as const,
       };

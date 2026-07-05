@@ -660,7 +660,20 @@ const NSVPlayer = React.memo(
       const intervalId = globalThis.setInterval(() => {
         const mediaState = storeRef.current as any;
         if (!mediaState) return;
-        if (document.visibilityState === "hidden") return;
+
+        let isNativeFullscreen = false;
+        try {
+          const playerRoot = (playerRef.current?.el || playerRef.current) as
+            | HTMLElement
+            | undefined;
+          const activeVideo = playerRoot?.querySelector("video") as any;
+          isNativeFullscreen = Boolean(activeVideo?.webkitDisplayingFullscreen);
+        } catch {
+          // Ignore
+        }
+
+        if (document.visibilityState === "hidden" && !isNativeFullscreen)
+          return;
         if (mediaState.paused || mediaState.ended) return;
         if (!mediaState.canPlay && !isNativeHlsPlayback) return;
         if (mediaState.seeking) return;
@@ -732,9 +745,23 @@ const NSVPlayer = React.memo(
     useEffect(() => {
       if (!useNativeResumeRefresh) return;
 
+      const getIsNativeFullscreen = () => {
+        try {
+          const playerRoot = (playerRef.current?.el || playerRef.current) as
+            | HTMLElement
+            | undefined;
+          const activeVideo = playerRoot?.querySelector("video") as any;
+          return Boolean(activeVideo?.webkitDisplayingFullscreen);
+        } catch {
+          return false;
+        }
+      };
+
       const onVisibilityChange = () => {
         if (document.visibilityState === "hidden") {
-          wasBackgroundedRef.current = true;
+          if (!getIsNativeFullscreen()) {
+            wasBackgroundedRef.current = true;
+          }
           return;
         }
 
@@ -750,7 +777,9 @@ const NSVPlayer = React.memo(
       };
 
       const onPageHide = () => {
-        wasBackgroundedRef.current = true;
+        if (!getIsNativeFullscreen()) {
+          wasBackgroundedRef.current = true;
+        }
       };
 
       const onPageShowOrFocus = () => {
