@@ -15,10 +15,9 @@ use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::message::ServerMessage;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 
-use tauri::State;
 use crate::server::routes::build_router;
 use crate::server::{types::ServerInfo, AppState};
-
+use tauri::State;
 
 #[derive(Deserialize)]
 pub struct InternalApiRequest {
@@ -144,7 +143,6 @@ pub async fn internal_api_request(
     })
 }
 
-
 #[tauri::command]
 pub async fn scan_local_servers() -> Result<Vec<String>, String> {
     let client = reqwest::Client::builder()
@@ -195,6 +193,14 @@ pub async fn start_live_chat_polling(live_id: String) -> Result<String, String> 
     let login = live_id.trim().to_lowercase();
     if login.is_empty() {
         return Err("Missing live login".to_string());
+    }
+
+    // Purge sessions whose Tokio task has already finished (normal IRC
+    // disconnect or a previous abort) so the static map never accumulates
+    // orphaned entries across background/foreground cycles.
+    {
+        let mut sessions = LIVE_CHAT_SESSIONS.write().await;
+        sessions.retain(|_, session| !session.task.is_finished());
     }
 
     let queue = Arc::new(Mutex::new(VecDeque::<Value>::with_capacity(220)));
@@ -306,4 +312,3 @@ pub async fn stop_live_chat_polling(session_id: String) -> Result<(), String> {
 pub async fn get_server_info(state: State<'_, Arc<AppState>>) -> Result<ServerInfo, String> {
     Ok(state.server_info.clone())
 }
-

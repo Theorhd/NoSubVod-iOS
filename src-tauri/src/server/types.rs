@@ -23,6 +23,8 @@ pub struct UserInfo {
     pub display_name: String,
     #[serde(rename = "profileImageURL")]
     pub profile_image_url: String,
+    #[serde(rename = "createdAt", default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,6 +171,30 @@ pub struct WatchlistEntry {
     pub added_at: u64,
 }
 
+const fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubNotificationPreferences {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub live: bool,
+    #[serde(default = "default_true")]
+    pub vod: bool,
+}
+
+impl Default for SubNotificationPreferences {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            live: true,
+            vod: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubEntry {
     pub login: String,
@@ -176,6 +202,8 @@ pub struct SubEntry {
     pub display_name: String,
     #[serde(rename = "profileImageURL")]
     pub profile_image_url: String,
+    #[serde(default)]
+    pub notifications: SubNotificationPreferences,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -190,6 +218,12 @@ pub struct TrustedDevice {
     pub last_ip: Option<String>,
     #[serde(rename = "userAgent", default)]
     pub user_agent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    #[serde(rename = "apnsToken", default, skip_serializing_if = "Option::is_none")]
+    pub apns_token: Option<String>,
+    #[serde(rename = "pushEnabled", default)]
+    pub push_enabled: bool,
     #[serde(default)]
     pub trusted: bool,
 }
@@ -214,6 +248,34 @@ pub struct ExperienceSettings {
     pub download_local_path: Option<String>,
     #[serde(rename = "downloadNetworkSharedPath", default)]
     pub download_network_shared_path: Option<String>,
+    #[serde(rename = "desktopPairingEnabled", default)]
+    pub desktop_pairing_enabled: bool,
+    #[serde(
+        rename = "desktopPairingServerUrl",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub desktop_pairing_server_url: Option<String>,
+    #[serde(
+        rename = "desktopPairingServerToken",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub desktop_pairing_server_token: Option<String>,
+    #[serde(
+        rename = "desktopPairingDeviceId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub desktop_pairing_device_id: Option<String>,
+    #[serde(
+        rename = "desktopPairingApnsToken",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub desktop_pairing_apns_token: Option<String>,
+    #[serde(rename = "desktopPairingPushOverride", default = "default_true")]
+    pub desktop_pairing_push_override: bool,
     // Twitch linked account (public info — token stored separately in PersistedData)
     #[serde(
         rename = "twitchUserId",

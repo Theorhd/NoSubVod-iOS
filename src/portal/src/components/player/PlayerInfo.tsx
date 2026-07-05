@@ -1,5 +1,7 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { VOD, LiveStream } from "../../../../shared/types";
+import "../../styles/PlayerInfo.css";
 
 interface PlayerInfoProps {
   vodInfo: VOD | null;
@@ -27,108 +29,86 @@ const Uptime: React.FC<{ startedAt: string }> = ({ startedAt }) => {
 };
 
 const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
+  const navigate = useNavigate();
   if (!vodInfo && !liveInfo) return null;
 
-  return (
-    <div
-      style={{
-        padding: "20px",
-        backgroundColor: "#07080f",
-        color: "#efeff1",
-        flex: 1,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "20px" }}>
-        <img
-          src={
-            liveInfo
-              ? liveInfo.broadcaster?.profileImageURL
-              : vodInfo?.owner?.profileImageURL || ""
-          }
-          alt="Profile"
-          style={{
-            width: "72px",
-            height: "72px",
-            borderRadius: "50%",
-            objectFit: "cover",
-            border: "2px solid #3a3a3d",
-          }}
-        />
+  const broadcaster = liveInfo ? liveInfo.broadcaster : vodInfo?.owner;
+  const game = liveInfo ? liveInfo.game : vodInfo?.game;
 
-        <div style={{ flex: 1 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-            }}
-          >
-            <h1
-              style={{
-                margin: "0 0 8px 0",
-                fontSize: "1.4rem",
-                lineHeight: "1.3",
-              }}
-            >
+  const handleStreamerClick = () => {
+    if (broadcaster?.login) {
+      navigate(`/channel?user=${encodeURIComponent(broadcaster.login)}`);
+    }
+  };
+
+  const handleCategoryClick = () => {
+    if (game?.name) {
+      const categoryIdParam = (game as any).id
+        ? `&categoryId=${encodeURIComponent((game as any).id)}`
+        : "";
+      navigate(
+        `/channel?category=${encodeURIComponent(game.name)}${categoryIdParam}`,
+      );
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, handler: () => void) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handler();
+    }
+  };
+
+  return (
+    <div className="player-info-container">
+      <div className="player-info-content">
+        <button
+          type="button"
+          onClick={handleStreamerClick}
+          onKeyDown={(e) => handleKeyDown(e, handleStreamerClick)}
+          aria-label={`Go to ${broadcaster?.displayName || "streamer"}'s channel`}
+          className="streamer-avatar-btn"
+        >
+          <img
+            src={broadcaster?.profileImageURL || ""}
+            alt={broadcaster?.displayName || "Profile"}
+            className="streamer-avatar-img"
+          />
+        </button>
+
+        <div className="player-info-main">
+          <div className="player-info-header">
+            <h1 className="player-info-title">
               {liveInfo ? liveInfo.title : vodInfo?.title}
             </h1>
           </div>
 
-          <div
-            style={{
-              fontWeight: "bold",
-              fontSize: "1.1rem",
-              marginBottom: "10px",
-              color: "#bf94ff",
-            }}
+          <button
+            type="button"
+            onClick={handleStreamerClick}
+            onKeyDown={(e) => handleKeyDown(e, handleStreamerClick)}
+            className="streamer-name-btn"
           >
-            {liveInfo
-              ? liveInfo.broadcaster?.displayName
-              : vodInfo?.owner?.displayName || "Unknown Streamer"}
-          </div>
+            {broadcaster?.displayName || "Unknown Streamer"}
+          </button>
 
-          <div
-            style={{
-              color: "#adadb8",
-              fontSize: "0.95rem",
-              display: "flex",
-              gap: "20px",
-              flexWrap: "wrap",
-            }}
-          >
-            <span
-              style={{
-                backgroundColor: "#18181b",
-                padding: "4px 8px",
-                borderRadius: "6px",
-                fontWeight: "bold",
-              }}
+          <div className="player-info-meta">
+            <button
+              type="button"
+              onClick={handleCategoryClick}
+              onKeyDown={(e) => handleKeyDown(e, handleCategoryClick)}
+              disabled={!game}
+              className="category-tag-btn"
             >
-              {liveInfo
-                ? liveInfo.game?.name
-                : vodInfo?.game?.name || "No Category"}
-            </span>
+              {game?.name || "No Category"}
+            </button>
 
             {liveInfo && (
               <>
-                <span
-                  style={{
-                    color: "#eb0400",
-                    fontWeight: "bold",
-                    backgroundColor: "#18181b",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
+                <span className="status-chip live-viewer-count">
                   {liveInfo.viewerCount.toLocaleString()} viewers
                 </span>
-                <span
-                  style={{
-                    backgroundColor: "#18181b",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
+                <span className="status-chip">
                   <Uptime startedAt={liveInfo.startedAt} />
                 </span>
               </>
@@ -136,22 +116,10 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({ vodInfo, liveInfo }) => {
 
             {vodInfo && (
               <>
-                <span
-                  style={{
-                    backgroundColor: "#18181b",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
+                <span className="status-chip">
                   {(vodInfo.viewCount || 0).toLocaleString()} views
                 </span>
-                <span
-                  style={{
-                    backgroundColor: "#18181b",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
+                <span className="status-chip">
                   {new Date(vodInfo.createdAt).toLocaleDateString()}
                 </span>
               </>

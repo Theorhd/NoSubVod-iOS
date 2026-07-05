@@ -30,6 +30,11 @@ import {
   isMobileDevice,
 } from "../utils/capabilities";
 
+const BASE_STALL_RECOVERY_THRESHOLD_MS = 15_000;
+const NATIVE_HLS_STALL_RECOVERY_THRESHOLD_MS = 10_000;
+const NATIVE_VOD_SOURCE_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
+const NATIVE_VOD_SOURCE_REFRESH_CHECK_MS = 20_000;
+
 function getHlsStabilityConfig(lockToFixedQuality: boolean) {
   return {
     enableWorker: true,
@@ -329,6 +334,7 @@ type NSVPlayerProps = {
   seekTo?: number | null;
   defaultQuality?: string;
   isMobileLayout?: boolean;
+  isLandscape?: boolean;
   className?: string;
   textTracks?: NSVTextTrack[];
   onTimeUpdate?: (time: number) => void;
@@ -414,6 +420,7 @@ const NSVPlayer = React.memo(
     seekTo,
     defaultQuality,
     isMobileLayout: _isMobileLayout = false,
+    isLandscape = false,
     className,
     textTracks = [],
     onTimeUpdate,
@@ -450,7 +457,14 @@ const NSVPlayer = React.memo(
     const recoveryWindowStartedAtRef = useRef(0);
     const recoveryAttemptsInWindowRef = useRef(0);
     const lastPlaybackProgressRef = useRef({ time: 0, observedAt: Date.now() });
+    const lastNativeVodRefreshAtRef = useRef(Date.now());
     const [resumeRevision, setResumeRevision] = useState(0);
+
+    useEffect(() => {
+      if (isLandscape && _isMobileLayout && remote) {
+        remote.enterFullscreen();
+      }
+    }, [isLandscape, _isMobileLayout, remote]);
 
     const useNativeResumeRefresh =
       isMobileDevice() && canPlayHlsNatively() && !canUseHlsJs();
@@ -458,7 +472,7 @@ const NSVPlayer = React.memo(
     const queueSourceRefreshAndResume = useCallback((reason: string) => {
       const now = Date.now();
       if (now - lastRecoveryAtRef.current < 2500) {
-        return;
+        return false;
       }
 
       if (
@@ -469,8 +483,8 @@ const NSVPlayer = React.memo(
         recoveryAttemptsInWindowRef.current = 0;
       }
 
-      if (recoveryAttemptsInWindowRef.current >= 4) {
-        return;
+      if (recoveryAttemptsInWindowRef.current >= 6) {
+        return false;
       }
 
       recoveryAttemptsInWindowRef.current += 1;
@@ -499,6 +513,8 @@ const NSVPlayer = React.memo(
       console.warn("[NSVPlayer] Triggering source recovery refresh", {
         reason,
       });
+
+      return true;
     }, []);
 
     const src = useMemo(() => {
@@ -625,28 +641,73 @@ const NSVPlayer = React.memo(
       const isHls = (src.type || "").toLowerCase().includes("mpegurl");
       if (!isHls) return;
 
+      const isNativeHlsPlayback = useNativeResumeRefresh;
+      const stagnantThresholdMs = isNativeHlsPlayback
+        ? NATIVE_HLS_STALL_RECOVERY_THRESHOLD_MS
+        : BASE_STALL_RECOVERY_THRESHOLD_MS;
+
       const intervalId = globalThis.setInterval(() => {
         const mediaState = storeRef.current as any;
         if (!mediaState) return;
         if (document.visibilityState === "hidden") return;
         if (mediaState.paused || mediaState.ended) return;
-        if (!mediaState.canPlay) return;
+        if (!mediaState.canPlay && !isNativeHlsPlayback) return;
         if (mediaState.seeking) return;
 
         const stagnantMs =
           Date.now() - lastPlaybackProgressRef.current.observedAt;
-        if (stagnantMs < 15_000) return;
+        if (stagnantMs < stagnantThresholdMs) return;
 
         const reason = mediaState.waiting
           ? "playback-waiting-stall"
           : "playback-stall";
-        queueSourceRefreshAndResume(reason);
+        queueSourceRefreshAndResume(
+          isNativeHlsPlayback ? `${reason}-native` : reason,
+        );
       }, 3000);
 
       return () => {
         globalThis.clearInterval(intervalId);
       };
-    }, [queueSourceRefreshAndResume, src.type]);
+    }, [queueSourceRefreshAndResume, src.type, useNativeResumeRefresh]);
+
+    useEffect(() => {
+      const isHls = (src.type || "").toLowerCase().includes("mpegurl");
+      if (!isHls) return;
+      if (!useNativeResumeRefresh) return;
+      if (streamType !== "on-demand") return;
+
+      const intervalId = globalThis.setInterval(() => {
+        const mediaState = storeRef.current as any;
+        if (!mediaState) return;
+        if (document.visibilityState === "hidden") return;
+        if (mediaState.paused || mediaState.ended || mediaState.seeking) {
+          return;
+        }
+
+        const now = Date.now();
+        if (
+          now - lastNativeVodRefreshAtRef.current <
+          NATIVE_VOD_SOURCE_REFRESH_INTERVAL_MS
+        ) {
+          return;
+        }
+
+        const queued = queueSourceRefreshAndResume("native-vod-token-rotation");
+        if (queued) {
+          lastNativeVodRefreshAtRef.current = now;
+        }
+      }, NATIVE_VOD_SOURCE_REFRESH_CHECK_MS);
+
+      return () => {
+        globalThis.clearInterval(intervalId);
+      };
+    }, [
+      queueSourceRefreshAndResume,
+      src.type,
+      streamType,
+      useNativeResumeRefresh,
+    ]);
 
     useEffect(() => {
       if (didSeekOnStartRef.current) return;
@@ -668,6 +729,11 @@ const NSVPlayer = React.memo(
 
         if (wasBackgroundedRef.current) {
           wasBackgroundedRef.current = false;
+          // Each foreground is a fresh recovery opportunity: reset the window
+          // so a previous burst of background/foreground cycles does not
+          // permanently block recovery until the 120-second window expires.
+          recoveryWindowStartedAtRef.current = 0;
+          recoveryAttemptsInWindowRef.current = 0;
           queueSourceRefreshAndResume("visibility-resume");
         }
       };
@@ -679,6 +745,8 @@ const NSVPlayer = React.memo(
       const onPageShowOrFocus = () => {
         if (!wasBackgroundedRef.current) return;
         wasBackgroundedRef.current = false;
+        recoveryWindowStartedAtRef.current = 0;
+        recoveryAttemptsInWindowRef.current = 0;
         queueSourceRefreshAndResume("pageshow-focus");
       };
 
@@ -737,6 +805,7 @@ const NSVPlayer = React.memo(
       recoveryWindowStartedAtRef.current = 0;
       recoveryAttemptsInWindowRef.current = 0;
       lastPlaybackProgressRef.current = { time: 0, observedAt: Date.now() };
+      lastNativeVodRefreshAtRef.current = Date.now();
 
       if (hlsInstanceRef.current) {
         try {

@@ -3,6 +3,7 @@ import {
   HistoryEntry,
   LiveStream,
   LiveStreamsPage,
+  UserInfo,
   VOD,
 } from "../../../shared/types";
 import { usePageVisibility } from "../../../shared/hooks/usePageVisibility";
@@ -73,6 +74,7 @@ export function useChannelData({
 }: UseChannelDataParams) {
   const [vods, setVods] = useState<VOD[]>([]);
   const [liveStream, setLiveStream] = useState<LiveStream | null>(null);
+  const [streamerInfo, setStreamerInfo] = useState<UserInfo | null>(null);
   const [history, setHistory] = useState<Record<string, HistoryEntry>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -108,7 +110,7 @@ export function useChannelData({
 
   const fetchUserData = useCallback(
     async (targetUser: string, signal: AbortSignal) => {
-      const [vodsData, liveData, historyData] = await Promise.all([
+      const [vodsData, liveData, historyData, userData] = await Promise.all([
         fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}/vods`, {
           signal,
         }).then((res) => {
@@ -121,12 +123,37 @@ export function useChannelData({
           .then((res) => (res.ok ? (res.json() as Promise<LiveStream>) : null))
           .catch(() => null),
         fetchHistory(signal),
+        fetchWithTimeout(`/api/user/${encodeURIComponent(targetUser)}`, {
+          signal,
+        })
+          .then((res) => (res.ok ? (res.json() as Promise<UserInfo>) : null))
+          .catch(() => null),
       ]);
 
       if (signal.aborted) return;
 
+      const fallbackFromLive: UserInfo | null = liveData
+        ? {
+            id: liveData.broadcaster.id,
+            login: liveData.broadcaster.login,
+            displayName: liveData.broadcaster.displayName,
+            profileImageURL: liveData.broadcaster.profileImageURL,
+          }
+        : null;
+
+      const firstVodOwner = vodsData.find((vod) => vod.owner)?.owner;
+      const fallbackFromVod: UserInfo | null = firstVodOwner
+        ? {
+            id: firstVodOwner.login,
+            login: firstVodOwner.login,
+            displayName: firstVodOwner.displayName,
+            profileImageURL: firstVodOwner.profileImageURL,
+          }
+        : null;
+
       setVods(filterShortVods(vodsData));
       setLiveStream(liveData);
+      setStreamerInfo(userData ?? fallbackFromLive ?? fallbackFromVod);
       setHistory(historyData);
       setCatLiveStreams([]);
       setCatLiveCursor(null);
@@ -175,6 +202,7 @@ export function useChannelData({
       setCatLiveCursor(livePage?.nextCursor || null);
       setCatLiveHasMore(Boolean(livePage?.hasMore));
       setLiveStream(null);
+      setStreamerInfo(null);
       setHistory(historyData);
     },
     [categoryId, fetchHistory],
@@ -183,6 +211,7 @@ export function useChannelData({
   const fetchData = useCallback(async () => {
     if (!isUserMode && !isCategoryMode) {
       setError("No channel or category specified");
+      setStreamerInfo(null);
       setLoading(false);
       return;
     }
@@ -308,6 +337,7 @@ export function useChannelData({
     isCategoryMode,
     vods,
     liveStream,
+    streamerInfo,
     history,
     loading,
     error,

@@ -4,6 +4,7 @@ import { HistoryVodEntry } from "../../shared/types";
 import { formatRelative } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
 import { navigateToPlayer } from "./utils/navigation";
+import "./styles/History.css";
 
 type HistoryItemProps = Readonly<{
   entry: HistoryVodEntry;
@@ -17,7 +18,7 @@ function HistoryItemComponent({ entry, navigate }: HistoryItemProps) {
       : 0;
 
   return (
-    <div className="history-item" style={{ position: "relative" }}>
+    <div className="history-item">
       <button
         type="button"
         className="history-item-main"

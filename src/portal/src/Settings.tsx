@@ -14,9 +14,11 @@ import {
 import { TopBar } from "./components/TopBar";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { useServer } from "./ServerContext";
+import { getDeviceId } from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
 import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 import { isMobileDevice } from "./utils/capabilities";
+import "./styles/Settings.css";
 
 const defaultSettings: ExperienceSettings = {
   oneSync: false,
@@ -24,6 +26,9 @@ const defaultSettings: ExperienceSettings = {
   adblockProxy: "",
   adblockProxyMode: "auto",
   defaultVideoQuality: "auto",
+  desktopPairingEnabled: false,
+  desktopPairingPushOverride: true,
+  desktopPairingApnsToken: "",
   launchAtLogin: false,
   enabledExtensions: [],
 };
@@ -748,11 +753,109 @@ const ServerConnectionSection = React.memo(() => {
   const [selectedServer, setSelectedServer] = useState<string | null>(null);
   const [manualToken, setManualToken] = useState("");
   const [connectionError, setConnectionError] = useState("");
+  const [pairingPushOverride, setPairingPushOverride] = useState(true);
+  const [pairingApnsToken, setPairingApnsToken] = useState("");
+  const [pairingSaving, setPairingSaving] = useState(false);
 
   const desktopServers = useMemo(
     () => scannedServers.filter((server) => isDesktopServerOrigin(server)),
     [scannedServers],
   );
+
+  const persistPairingConfig = useCallback(
+    async (
+      enabled: boolean,
+      origin: string | null,
+      sessionToken: string | null,
+    ) => {
+      const payload = {
+        desktopPairingEnabled: enabled,
+        desktopPairingServerUrl: enabled ? origin : null,
+        desktopPairingServerToken: enabled ? sessionToken : null,
+        desktopPairingDeviceId: enabled ? getDeviceId() : null,
+        desktopPairingApnsToken: pairingApnsToken.trim() || null,
+        desktopPairingPushOverride: pairingPushOverride,
+      };
+
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+    [pairingApnsToken, pairingPushOverride],
+  );
+
+  const registerRemotePairing = useCallback(async () => {
+    const deviceId = getDeviceId();
+    if (!deviceId) {
+      throw new Error("Device ID indisponible pour le pairing.");
+    }
+
+    const response = await fetch("/api/pairing/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceId,
+        platform: "ios",
+        apnsToken: pairingApnsToken.trim() || null,
+        pushEnabled: pairingPushOverride,
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(payload?.error || "Pairing Desktop refuse.");
+    }
+  }, [pairingApnsToken, pairingPushOverride]);
+
+  const unregisterRemotePairing = useCallback(async () => {
+    const deviceId = getDeviceId();
+    if (!deviceId) {
+      return;
+    }
+
+    await fetch("/api/pairing/unregister", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId }),
+    });
+  }, []);
+
+  useEffect(() => {
+    const loadPairingSettings = async () => {
+      try {
+        const response = await fetch("/api/settings");
+        if (!response.ok) {
+          return;
+        }
+        const settings = (await response.json()) as ExperienceSettings;
+        setPairingPushOverride(settings.desktopPairingPushOverride !== false);
+        setPairingApnsToken(settings.desktopPairingApnsToken || "");
+      } catch {
+        // Keep defaults if settings cannot be loaded.
+      }
+    };
+
+    void loadPairingSettings();
+  }, []);
+
+  useEffect(() => {
+    const enabled = Boolean(serverUrl && token);
+    void persistPairingConfig(enabled, serverUrl || null, token || null).catch(
+      () => {
+        // Ignore autosave failures, connection flow will retry explicit sync.
+      },
+    );
+  }, [
+    persistPairingConfig,
+    pairingApnsToken,
+    pairingPushOverride,
+    serverUrl,
+    token,
+  ]);
 
   const scanNetwork = async () => {
     setScanning(true);
@@ -773,7 +876,7 @@ const ServerConnectionSection = React.memo(() => {
     void scanNetwork();
   }, []);
 
-  const handleQRScan = (text: string) => {
+  const handleQRScan = async (text: string) => {
     try {
       const url = new URL(text);
       if (url.port !== DESKTOP_SERVER_HTTPS_PORT) {
@@ -785,12 +888,22 @@ const ServerConnectionSection = React.memo(() => {
 
       const t = url.searchParams.get("t");
       if (t) {
-        setToken(t);
+        setPairingSaving(true);
         url.searchParams.delete("t");
         setServerUrl(url.origin);
-        setShowQRScanner(false);
-        setSelectedServer(null);
-        setConnectionError("");
+        setToken(t);
+
+        try {
+          await persistPairingConfig(true, url.origin, t);
+          await registerRemotePairing();
+          setShowQRScanner(false);
+          setSelectedServer(null);
+          setConnectionError("");
+        } catch (error) {
+          setConnectionError(unknownErrorMessage(error));
+        } finally {
+          setPairingSaving(false);
+        }
       } else {
         setConnectionError("Le QR code ne contient pas de token de connexion.");
         console.error("No token found in QR code:", text);
@@ -803,19 +916,11 @@ const ServerConnectionSection = React.memo(() => {
 
   return (
     <div className="card settings-card">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "16px",
-        }}
-      >
+      <div className="settings-header-row">
         <h2>Serveur local (NoSubVod Desktop)</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div className="settings-flex-gap-10">
           <button
-            className="action-btn"
-            style={{ padding: "4px 8px", fontSize: "0.85rem" }}
+            className="action-btn settings-mini-btn"
             onClick={scanNetwork}
             disabled={scanning}
           >
@@ -824,16 +929,7 @@ const ServerConnectionSection = React.memo(() => {
 
           {serverUrl && token && (
             <div
-              style={{
-                padding: "4px 12px",
-                borderRadius: "16px",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                background: isOnline
-                  ? "rgba(46, 204, 113, 0.15)"
-                  : "rgba(231, 76, 60, 0.15)",
-                color: isOnline ? "#2ecc71" : "#e74c3c",
-              }}
+              className={`settings-status-badge ${isOnline ? "settings-status-online" : "settings-status-offline"}`}
             >
               {isOnline ? "Connecté" : "Déconnecté"}
             </div>
@@ -841,54 +937,118 @@ const ServerConnectionSection = React.memo(() => {
         </div>
       </div>
 
-      <p className="settings-description" style={{ marginBottom: "16px" }}>
+      <p className="settings-description settings-margin-bottom-16">
         {serverUrl && token
           ? `Actuellement lié à : ${serverUrl}`
           : "Connectez l'application Mobile à votre instance Desktop en la sélectionnant ci-dessous."}
       </p>
 
       {serverUrl && token && (
-        <button
-          className="action-btn"
-          style={{
-            background: "#e74c3c",
-            color: "white",
-            marginBottom: "16px",
-            width: "100%",
-          }}
-          onClick={() => {
-            removeToken();
-            setServerUrl("");
-            setConnectionError("");
-          }}
-        >
-          Déconnecter et repasser en mode Standalone
-        </button>
+        <>
+          <div className="settings-config-box">
+            <label className="settings-label" htmlFor="pairing-apns-token">
+              Token APNs iPhone (optionnel)
+            </label>
+            <input
+              id="pairing-apns-token"
+              type="password"
+              className="search-input settings-input-with-box-sizing"
+              placeholder="Coller le token APNs si disponible"
+              value={pairingApnsToken}
+              onChange={(event) => {
+                setPairingApnsToken(event.target.value);
+                setConnectionError("");
+              }}
+            />
+
+            <label className="settings-checkbox-label">
+              <input
+                type="checkbox"
+                checked={pairingPushOverride}
+                onChange={(event) => {
+                  setPairingPushOverride(event.target.checked);
+                  setConnectionError("");
+                }}
+              />
+              <span>
+                Prioriser le push APNs distant si le serveur Desktop est pairé
+              </span>
+            </label>
+
+            <button
+              className="action-btn settings-margin-top-10 settings-input-full"
+              disabled={pairingSaving}
+              onClick={async () => {
+                if (!serverUrl || !token) {
+                  return;
+                }
+
+                setPairingSaving(true);
+                setConnectionError("");
+
+                try {
+                  await persistPairingConfig(true, serverUrl, token);
+                  await registerRemotePairing();
+                } catch (error) {
+                  setConnectionError(unknownErrorMessage(error));
+                } finally {
+                  setPairingSaving(false);
+                }
+              }}
+            >
+              {pairingSaving
+                ? "Synchronisation..."
+                : "Synchroniser Pairing + Push APNs"}
+            </button>
+          </div>
+
+          <button
+            className="action-btn disconnect-btn"
+            disabled={pairingSaving}
+            onClick={async () => {
+              setPairingSaving(true);
+              setConnectionError("");
+
+              try {
+                await unregisterRemotePairing();
+              } catch {
+                // Continue disconnect even if remote unregister fails.
+              }
+
+              removeToken();
+              setServerUrl("");
+
+              try {
+                await persistPairingConfig(false, null, null);
+              } catch {
+                // Ignore local sync errors while disconnecting.
+              }
+
+              setConnectionError("");
+              setPairingSaving(false);
+            }}
+          >
+            Déconnecter et repasser en mode Standalone
+          </button>
+        </>
       )}
 
       {connectionError && (
-        <div className="error-text" style={{ marginBottom: "16px" }}>
+        <div className="error-text settings-margin-bottom-16">
           {connectionError}
         </div>
       )}
 
       {desktopServers.length === 0 && !scanning && (!serverUrl || !token) && (
-        <div
-          style={{
-            padding: "16px",
-            background: "rgba(255,255,255,0.05)",
-            borderRadius: "8px",
-            textAlign: "center",
-          }}
-        >
-          <p style={{ color: "#a3a3a3", margin: 0 }}>
+        <div className="qr-reader-wrapper">
+          <p className="settings-text-muted-small">
             Aucun Serveur NoSubVod Desktop n&apos;a été détecté
           </p>
         </div>
       )}
 
       {desktopServers.length > 0 && (!serverUrl || !token) && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div className="server-list-container">
           <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>
             Serveurs découverts :
           </h3>
@@ -993,7 +1153,7 @@ const ServerConnectionSection = React.memo(() => {
               <button
                 className="action-btn"
                 style={{ flex: 1 }}
-                onClick={() => {
+                onClick={async () => {
                   if (
                     !selectedServer ||
                     !isDesktopServerOrigin(selectedServer)
@@ -1004,10 +1164,25 @@ const ServerConnectionSection = React.memo(() => {
                     return;
                   }
                   if (manualToken.trim()) {
+                    const normalizedToken = manualToken.trim();
+                    setPairingSaving(true);
                     setServerUrl(selectedServer);
-                    setToken(manualToken.trim());
-                    setSelectedServer(null);
-                    setConnectionError("");
+                    setToken(normalizedToken);
+
+                    try {
+                      await persistPairingConfig(
+                        true,
+                        selectedServer,
+                        normalizedToken,
+                      );
+                      await registerRemotePairing();
+                      setSelectedServer(null);
+                      setConnectionError("");
+                    } catch (error) {
+                      setConnectionError(unknownErrorMessage(error));
+                    } finally {
+                      setPairingSaving(false);
+                    }
                   } else {
                     setConnectionError(
                       "Veuillez entrer un token de connexion.",

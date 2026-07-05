@@ -13,6 +13,8 @@ use super::http_utils::{get_bytes_checked, get_text_checked};
 use super::url_utils::{extract_origin, resolve_url};
 use crate::server::error::AppError;
 
+const SEGMENT_CONCURRENCY: usize = 8;
+
 // ── Public types ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
@@ -94,19 +96,18 @@ impl DownloadManager {
         };
         let progress_arc = Arc::new(RwLock::new(progress));
 
-        self.active_downloads.write().await.retain(|_, progress| {
-            if let Ok(lock) = progress.try_read() {
-                !matches!(
-                    lock.status,
-                    DownloadStatus::Finished | DownloadStatus::Error(_)
-                )
-            } else {
-                true
-            }
-        });
-
         {
             let mut lock = self.active_downloads.write().await;
+            lock.retain(|_, progress| {
+                if let Ok(lock) = progress.try_read() {
+                    !matches!(
+                        lock.status,
+                        DownloadStatus::Finished | DownloadStatus::Error(_)
+                    )
+                } else {
+                    true
+                }
+            });
             if !lock.contains_key(&vod_id) && lock.len() >= MAX_TRACKED_DOWNLOADS {
                 return Err(AppError::BadRequest(
                     "Too many tracked downloads, clear finished items first".to_string(),
@@ -214,8 +215,7 @@ impl DownloadManager {
                 lock.status = DownloadStatus::Downloading;
             }
 
-            // ── Step 5: download segments (up to 4 in parallel, in order) ─────
-            const CONCURRENCY: usize = 4;
+            // ── Step 5: download segments (up to SEGMENT_CONCURRENCY in parallel, in order) ─
             let mut elapsed_secs: f64 = 0.0;
             let mut segments_done: usize = 0;
             let mut last_reported_prog: f64 = 0.0;
@@ -223,7 +223,7 @@ impl DownloadManager {
             let mut seg_iter = segments.into_iter().peekable();
 
             'outer: while seg_iter.peek().is_some() {
-                let batch: Vec<Segment> = seg_iter.by_ref().take(CONCURRENCY).collect();
+                let batch: Vec<Segment> = seg_iter.by_ref().take(SEGMENT_CONCURRENCY).collect();
 
                 // Segments already have Arc<str> for URLs
                 let batch_urls: Vec<Arc<str>> = batch.iter().map(|s| s.url.clone()).collect();
@@ -232,7 +232,7 @@ impl DownloadManager {
                         let client = client.clone();
                         async move { get_bytes_checked(&client, &url).await }
                     }))
-                    .buffered(CONCURRENCY)
+                    .buffered(SEGMENT_CONCURRENCY)
                     .collect()
                     .await;
 
@@ -299,31 +299,29 @@ impl DownloadManager {
     }
 
     pub async fn get_all_downloads(&self) -> Vec<DownloadProgress> {
-        let lock = self.active_downloads.read().await;
-        let mut results = Vec::with_capacity(lock.len());
-        for p_arc in lock.values() {
+        // Collect Arc refs quickly, then release the map lock before awaiting each entry.
+        let arcs: Vec<Arc<RwLock<DownloadProgress>>> = {
+            let lock = self.active_downloads.read().await;
+            lock.values().cloned().collect()
+        };
+        let mut results = Vec::with_capacity(arcs.len());
+        for p_arc in &arcs {
             results.push(p_arc.read().await.clone());
         }
         results
     }
 
     pub async fn clear_finished(&self) {
+        // Use try_read so we never await under the write-lock.
+        // A download that can't be try_read is actively being updated — keep it.
         let mut lock = self.active_downloads.write().await;
-        let mut to_remove = Vec::new();
-
-        for (id, p_arc) in lock.iter() {
-            let p = p_arc.read().await;
-            if matches!(
+        lock.retain(|_, p_arc| match p_arc.try_read() {
+            Ok(p) => !matches!(
                 p.status,
                 DownloadStatus::Finished | DownloadStatus::Error(_)
-            ) {
-                to_remove.push(id.clone());
-            }
-        }
-
-        for id in to_remove {
-            lock.remove(&id);
-        }
+            ),
+            Err(_) => true,
+        });
     }
 }
 

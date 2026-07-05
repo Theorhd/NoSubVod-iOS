@@ -1,0 +1,11 @@
+.home-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.home-icon-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+}

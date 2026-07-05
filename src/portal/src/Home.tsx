@@ -13,6 +13,7 @@ import HistoryPreview from "./components/home/HistoryPreview";
 import WatchlistPreview from "./components/home/WatchlistPreview";
 import { TopBar } from "./components/TopBar";
 import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
+import "./styles/Home.css";
 
 async function fetchJson<T>(
   url: string,
@@ -347,15 +348,9 @@ export default function Home() {
         mode="logo"
         title="NoSubVod"
         actions={
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div className="home-actions">
             <button
-              className="action-btn"
-              style={{
-                width: "40px",
-                height: "40px",
-                padding: 0,
-                borderRadius: "50%",
-              }}
+              className="action-btn home-icon-btn"
               onClick={() => setShowModal(true)}
               aria-label="Add sub"
               type="button"
@@ -363,13 +358,7 @@ export default function Home() {
               +
             </button>
             <button
-              className="secondary-btn"
-              style={{
-                width: "40px",
-                height: "40px",
-                padding: 0,
-                borderRadius: "50%",
-              }}
+              className="secondary-btn home-icon-btn"
               onClick={() => navigate("/settings")}
               aria-label="Open settings"
               title="Settings"

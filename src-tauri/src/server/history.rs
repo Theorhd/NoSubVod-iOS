@@ -16,6 +16,8 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 
 use super::error::{AppError, AppResult};
+#[cfg(test)]
+use super::types::SubNotificationPreferences;
 use super::types::{
     ExperienceSettings, HistoryEntry, PersistedData, ProfileBackupFile, ProfileData, SubEntry,
     TrustedDevice, WatchlistEntry,
@@ -315,7 +317,7 @@ impl HistoryStore {
         let (prefix, nth, _) =
             entries.select_nth_unstable_by(end - 1, |a, b| b.updated_at.cmp(&a.updated_at));
 
-        prefix.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        prefix.sort_by_key(|b| std::cmp::Reverse(b.updated_at));
 
         let mut head = Vec::with_capacity(prefix.len() + 1);
         head.extend(prefix.iter().copied());
@@ -381,7 +383,7 @@ impl HistoryStore {
         let end = (offset + limit).min(total);
         let (prefix, nth, _) =
             entries.select_nth_unstable_by(end - 1, |a, b| b.added_at.cmp(&a.added_at));
-        prefix.sort_by(|a, b| b.added_at.cmp(&a.added_at));
+        prefix.sort_by_key(|b| std::cmp::Reverse(b.added_at));
 
         let mut head = Vec::with_capacity(prefix.len() + 1);
         head.extend(prefix.iter().copied());
@@ -445,6 +447,12 @@ impl HistoryStore {
         preferred_video_quality: Option<Option<String>>,
         download_local_path: Option<Option<String>>,
         download_network_shared_path: Option<Option<String>>,
+        desktop_pairing_enabled: Option<bool>,
+        desktop_pairing_server_url: Option<Option<String>>,
+        desktop_pairing_server_token: Option<Option<String>>,
+        desktop_pairing_device_id: Option<Option<String>>,
+        desktop_pairing_apns_token: Option<Option<String>>,
+        desktop_pairing_push_override: Option<bool>,
         launch_at_login: Option<bool>,
         auto_update: Option<bool>,
         enabled_extensions: Option<Vec<String>>,
@@ -477,6 +485,24 @@ impl HistoryStore {
             }
             if let Some(v) = download_network_shared_path {
                 data.settings.download_network_shared_path = v;
+            }
+            if let Some(v) = desktop_pairing_enabled {
+                data.settings.desktop_pairing_enabled = v;
+            }
+            if let Some(v) = desktop_pairing_server_url {
+                data.settings.desktop_pairing_server_url = v;
+            }
+            if let Some(v) = desktop_pairing_server_token {
+                data.settings.desktop_pairing_server_token = v;
+            }
+            if let Some(v) = desktop_pairing_device_id {
+                data.settings.desktop_pairing_device_id = v;
+            }
+            if let Some(v) = desktop_pairing_apns_token {
+                data.settings.desktop_pairing_apns_token = v;
+            }
+            if let Some(v) = desktop_pairing_push_override {
+                data.settings.desktop_pairing_push_override = v;
             }
             if let Some(v) = launch_at_login {
                 data.settings.launch_at_login = v;
@@ -536,6 +562,7 @@ impl HistoryStore {
                     login: login.clone(),
                     display_name: entry.display_name.clone(),
                     profile_image_url: entry.profile_image_url.clone(),
+                    notifications: entry.notifications.clone(),
                 });
                 should_save = true;
             }
@@ -561,6 +588,48 @@ impl HistoryStore {
             self.schedule_save();
         }
         Ok(())
+    }
+
+    pub async fn update_sub_notifications(
+        &self,
+        login: &str,
+        enabled: Option<bool>,
+        live: Option<bool>,
+        vod: Option<bool>,
+    ) -> AppResult<Option<SubEntry>> {
+        let normalized_login = login.trim().to_lowercase();
+        if normalized_login.is_empty() {
+            return Err(AppError::BadRequest("Invalid sub login".to_string()));
+        }
+
+        let mut updated: Option<SubEntry> = None;
+        {
+            let mut data = self.data.write().await;
+            if let Some(sub) = data.subs.iter_mut().find(|s| s.login == normalized_login) {
+                if let Some(value) = enabled {
+                    sub.notifications.enabled = value;
+                }
+                if let Some(value) = live {
+                    sub.notifications.live = value;
+                }
+                if let Some(value) = vod {
+                    sub.notifications.vod = value;
+                }
+
+                if sub.notifications.enabled && !sub.notifications.live && !sub.notifications.vod {
+                    sub.notifications.live = true;
+                    sub.notifications.vod = true;
+                }
+
+                updated = Some(sub.clone());
+            }
+        }
+
+        if updated.is_some() {
+            self.schedule_save();
+        }
+
+        Ok(updated)
     }
 
     // ── Twitch token (kept server-side only, never serialised to API) ─────────
@@ -620,7 +689,7 @@ impl HistoryStore {
         if count > 0 {
             let (prefix, _, _) =
                 history.select_nth_unstable_by(count - 1, |a, b| b.updated_at.cmp(&a.updated_at));
-            prefix.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+            prefix.sort_by_key(|b| std::cmp::Reverse(b.updated_at));
             history.truncate(count);
         }
 
@@ -678,6 +747,9 @@ impl HistoryStore {
                     last_seen_at: now,
                     last_ip: ip,
                     user_agent: ua,
+                    platform: None,
+                    apns_token: None,
+                    push_enabled: false,
                     trusted: false,
                 });
                 should_save = true;
@@ -692,7 +764,7 @@ impl HistoryStore {
 
     pub async fn get_trusted_devices(&self) -> Vec<TrustedDevice> {
         let mut devices = self.data.read().await.trusted_devices.clone();
-        devices.sort_by(|a, b| b.last_seen_at.cmp(&a.last_seen_at));
+        devices.sort_by_key(|b| std::cmp::Reverse(b.last_seen_at));
         devices
     }
 
@@ -857,6 +929,7 @@ mod tests {
             login: "testuser".to_string(),
             display_name: "TestUser".to_string(),
             profile_image_url: "http://example.com/avatar.png".to_string(),
+            notifications: SubNotificationPreferences::default(),
         };
         store.add_sub(sub).await.unwrap();
         let subs = store.get_subs().await;

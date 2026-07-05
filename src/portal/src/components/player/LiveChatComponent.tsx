@@ -21,7 +21,7 @@ type LiveChatBatch = {
 
 const MAX_LIVE_CHAT_MESSAGES = 300;
 const LIVE_CHAT_POLL_VISIBLE_MS = 900;
-const LIVE_CHAT_POLL_HIDDEN_MS = 2500;
+const LIVE_CHAT_POLL_HIDDEN_MS = 4000;
 
 function isTauriRuntime(): boolean {
   return Boolean(
@@ -61,6 +61,12 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
   const pollingDelayMs = isPageVisible
     ? LIVE_CHAT_POLL_VISIBLE_MS
     : LIVE_CHAT_POLL_HIDDEN_MS;
+  // Keep a ref so the polling loop always reads the current delay without
+  // recreating the IRC session every time visibility changes.
+  const pollingDelayMsRef = React.useRef(pollingDelayMs);
+  React.useEffect(() => {
+    pollingDelayMsRef.current = pollingDelayMs;
+  }, [pollingDelayMs]);
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -208,7 +214,7 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
       setConnectionLabel("Connecting...");
 
       let disposed = false;
-      let pollTimer: ReturnType<typeof setInterval> | undefined;
+      let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
       const connectPolling = async () => {
         try {
@@ -247,9 +253,18 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
             }
           };
 
-          pollTimer = globalThis.setInterval(() => {
-            void poll();
-          }, pollingDelayMs);
+          // Use recursive setTimeout instead of setInterval so we can read
+          // the current delay from pollingDelayMsRef on every tick without
+          // having to tear down and recreate the IRC session each time the
+          // app backgrounds or foregrounds.
+          const schedulePoll = () => {
+            if (disposed) return;
+            pollTimer = globalThis.setTimeout(async () => {
+              await poll();
+              schedulePoll();
+            }, pollingDelayMsRef.current);
+          };
+          schedulePoll();
         } catch (error) {
           console.error("Failed to start live chat polling", error);
           setConnectionLabel("Unavailable");
@@ -261,7 +276,7 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
       return () => {
         disposed = true;
         if (pollTimer) {
-          globalThis.clearInterval(pollTimer);
+          globalThis.clearTimeout(pollTimer);
         }
         const sessionId = pollingSessionIdRef.current;
         pollingSessionIdRef.current = null;
@@ -311,7 +326,8 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
     handleWsMessage,
     tauriRuntime,
     applyIncomingMessages,
-    pollingDelayMs,
+    // pollingDelayMs intentionally omitted: delay is read via pollingDelayMsRef
+    // so visibility changes never tear down and recreate the IRC session.
   ]);
 
   return (

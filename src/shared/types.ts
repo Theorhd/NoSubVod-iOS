@@ -3,12 +3,20 @@ export interface UserInfo {
   login: string;
   displayName: string;
   profileImageURL: string;
+  createdAt?: string;
+}
+
+export interface SubNotificationPreferences {
+  enabled: boolean;
+  live: boolean;
+  vod: boolean;
 }
 
 export interface SubEntry {
   login: string;
   displayName: string;
   profileImageURL: string;
+  notifications?: SubNotificationPreferences;
 }
 
 export interface VOD {
@@ -109,6 +117,12 @@ export interface ExperienceSettings {
   preferredVideoQuality?: string;
   downloadLocalPath?: string;
   downloadNetworkSharedPath?: string;
+  desktopPairingEnabled?: boolean;
+  desktopPairingServerUrl?: string;
+  desktopPairingServerToken?: string;
+  desktopPairingDeviceId?: string;
+  desktopPairingApnsToken?: string;
+  desktopPairingPushOverride?: boolean;
   twitchImportFollows?: boolean;
   launchAtLogin?: boolean;
   autoUpdate?: boolean;
@@ -137,6 +151,9 @@ export interface TrustedDevice {
   lastSeenAt: number;
   lastIp?: string;
   userAgent?: string;
+  platform?: string;
+  apnsToken?: string;
+  pushEnabled?: boolean;
   trusted: boolean;
 }
 

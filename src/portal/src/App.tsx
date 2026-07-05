@@ -29,6 +29,7 @@ import { ErrorBoundary } from "../../shared/components/ErrorBoundary";
 import { ServerProvider, useServer } from "./ServerContext";
 import { ExtensionProvider, useExtensions } from "./ExtensionContext";
 import { navigateBackInApp } from "./utils/navigation";
+import "./styles/App.css";
 
 const Home = lazy(() => import("./Home"));
 const Channel = lazy(() => import("./Channel"));
@@ -400,9 +401,7 @@ function AppContent() {
         <div className="app-container">
           <Suspense
             fallback={
-              <div className="status-line" style={{ padding: "24px 16px" }}>
-                Loading portal...
-              </div>
+              <div className="status-line portal-loader">Loading portal...</div>
             }
           >
             <AppReadySignal />

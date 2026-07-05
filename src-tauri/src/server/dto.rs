@@ -100,12 +100,31 @@ pub struct SettingsPatch {
     pub download_local_path: Option<Option<String>>,
     #[serde(rename = "downloadNetworkSharedPath")]
     pub download_network_shared_path: Option<Option<String>>,
+    #[serde(rename = "desktopPairingEnabled")]
+    pub desktop_pairing_enabled: Option<bool>,
+    #[serde(rename = "desktopPairingServerUrl")]
+    pub desktop_pairing_server_url: Option<Option<String>>,
+    #[serde(rename = "desktopPairingServerToken")]
+    pub desktop_pairing_server_token: Option<Option<String>>,
+    #[serde(rename = "desktopPairingDeviceId")]
+    pub desktop_pairing_device_id: Option<Option<String>>,
+    #[serde(rename = "desktopPairingApnsToken")]
+    pub desktop_pairing_apns_token: Option<Option<String>>,
+    #[serde(rename = "desktopPairingPushOverride")]
+    pub desktop_pairing_push_override: Option<bool>,
     #[serde(rename = "launchAtLogin")]
     pub launch_at_login: Option<bool>,
     #[serde(rename = "autoUpdate")]
     pub auto_update: Option<bool>,
     #[serde(rename = "enabledExtensions")]
     pub enabled_extensions: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+pub struct SubNotificationsPatch {
+    pub enabled: Option<bool>,
+    pub live: Option<bool>,
+    pub vod: Option<bool>,
 }
 
 #[derive(Deserialize)]
