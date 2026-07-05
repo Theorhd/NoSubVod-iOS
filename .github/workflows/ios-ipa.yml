@@ -34,9 +34,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          DEFAULT_TWITCH_REDIRECT_URI="http://localhost:23400/api/auth/twitch/callback"
-          TWITCH_REDIRECT_URI="$DEFAULT_TWITCH_REDIRECT_URI"
-          TWITCH_REDIRECT_URI_IOS="$DEFAULT_TWITCH_REDIRECT_URI"
+          TWITCH_REDIRECT_URI="http://localhost:23400/api/auth/twitch/callback"
+          TWITCH_REDIRECT_URI_IOS="http://localhost:23455/api/auth/twitch/callback"
 
           if [ -z "${{ secrets.TWITCH_CLIENT_ID }}" ] || [ -z "${{ secrets.TWITCH_CLIENT_SECRET }}" ]; then
             echo "Missing required GitHub secrets: TWITCH_CLIENT_ID and/or TWITCH_CLIENT_SECRET"

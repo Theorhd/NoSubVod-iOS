@@ -6,7 +6,6 @@ import { safeStorageGet, safeStorageSet } from "../../shared/utils/storage";
 import {
   getActiveToken,
   getDeviceId,
-  getRemoteServerToken,
   initializeSecureTokenStorage,
   setStandaloneToken,
 } from "./utils/authTokens";
@@ -54,7 +53,7 @@ function dismissLaunchLoader(): void {
   globalThis.setTimeout(cleanup, LAUNCH_LOADER_TRANSITION_MS + 80);
 }
 
-type ApiInvokeCommand = "internal_api_request" | "proxy_remote_request";
+type ApiInvokeCommand = "internal_api_request";
 
 class ApiInvokeTimeoutError extends Error {
   public readonly command: ApiInvokeCommand;
@@ -167,28 +166,6 @@ function resolveRequestUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
-type ApiAuthTarget = "local" | "remote";
-
-const REMOTE_API_PATH_PREFIXES = [
-  "/api/screenshare",
-  "/api/downloads",
-  "/api/download/start",
-  "/api/shared-downloads",
-];
-
-function normalizeApiPathname(pathname: string): string {
-  if (!pathname) return "";
-  if (pathname.startsWith("/")) return pathname;
-  return `/${pathname}`;
-}
-
-function shouldUseRemoteApi(pathname: string): boolean {
-  const normalized = normalizeApiPathname(pathname);
-  return REMOTE_API_PATH_PREFIXES.some(
-    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
-  );
-}
-
 type ApiRequestContext = {
   isApiCall: boolean;
   apiPathname: string;
@@ -245,8 +222,6 @@ function dispatchTauriApiRequest(
   resolvedUrl: URL | null,
   init: RequestInit | undefined,
   headers: Headers,
-  shouldRouteToRemote: boolean,
-  serverUrl: string,
 ): Promise<Response> | null {
   if (!isTauriRuntime() || !resolvedUrl) {
     return null;
@@ -255,26 +230,14 @@ function dispatchTauriApiRequest(
   const method = (init?.method || "GET").toUpperCase();
   const body = extractInvokeBody(init?.body);
 
-  // Pairing mode: only selected endpoints are forwarded to Desktop.
-  if (shouldRouteToRemote && serverUrl) {
-    return invokeRemoteApiViaProxy(
-      resolvedUrl,
-      method,
-      body,
-      headers,
-      serverUrl,
-    );
-  }
-
   // Default path: keep requests on the iOS local backend.
   return invokeInternalApi(resolvedUrl, method, body, headers);
 }
 
 function injectApiAuthHeaders(
   init: RequestInit | undefined,
-  target: ApiAuthTarget,
 ): Headers {
-  const activeToken = getActiveToken(target);
+  const activeToken = getActiveToken("local");
   const deviceId = getDeviceId();
   const headers = new Headers(init?.headers);
 
@@ -344,70 +307,16 @@ async function invokeInternalApi(
   }
 }
 
-async function invokeRemoteApiViaProxy(
-  resolvedUrl: URL,
-  method: string,
-  body: string | undefined,
-  headers: Headers,
-  serverUrl: string,
-): Promise<Response> {
-  try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    const requestPayload = {
-      serverUrl,
-      method,
-      path: resolvedUrl.pathname,
-      query: resolvedUrl.search ? resolvedUrl.search.slice(1) : undefined,
-      body,
-      headers: Object.fromEntries(headers.entries()),
-    };
-
-    const maxAttempts =
-      (isIdempotentMethod(method) ? API_MAX_IDEMPOTENT_RETRIES : 0) + 1;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      try {
-        const result = await invokeWithTimeout(
-          invoke<InternalApiInvokeResponse>(
-            "proxy_remote_request",
-            requestPayload,
-          ),
-          "proxy_remote_request",
-        );
-        return buildInvokeResponse(result);
-      } catch (error) {
-        const hasAttemptsLeft = attempt < maxAttempts;
-        if (!hasAttemptsLeft) {
-          throw error;
-        }
-
-        console.warn(
-          `[fetch-guard] proxy_remote_request retry ${attempt}/${maxAttempts - 1}`,
-          error,
-        );
-        await wait(API_RETRY_DELAY_MS * attempt);
-      }
-    }
-
-    throw new Error("proxy_remote_request failed unexpectedly");
-  } catch (error) {
-    const message = normalizeErrorMessage(error);
-    const status = error instanceof ApiInvokeTimeoutError ? 504 : 500;
-    return new Response(JSON.stringify({ error: message }), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-}
-
 function normalizeErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
+  if (error instanceof ApiInvokeTimeoutError) {
     return error.message;
   }
-  if (typeof error === "object" && error !== null) {
-    return JSON.stringify(error);
+  if (typeof error === "string") {
+    return error;
   }
-  return String(error);
+  // Log the actual error internally and return a generic message to prevent information exposure
+  console.error("Internal API error:", error);
+  return "An internal error occurred during the API request.";
 }
 
 function createDeviceId(): string {
@@ -711,36 +620,15 @@ function patchFetch() {
     }
 
     // Only inject token on our own API calls
-    const { isApiCall, apiPathname, resolvedUrl } =
-      resolveApiRequestContext(url);
+    const { isApiCall, resolvedUrl } = resolveApiRequestContext(url);
 
     if (isApiCall) {
-      const serverUrl = safeStorageGet(localStorage, "nsv_server_url");
-      const serverToken = getRemoteServerToken();
-      const remoteSessionEnabled = Boolean(serverUrl && serverToken);
-      const isCrossOriginApiCall =
-        resolvedUrl !== null &&
-        resolvedUrl.origin !== globalThis.location.origin;
-      const shouldRouteToRemote =
-        remoteSessionEnabled &&
-        (shouldUseRemoteApi(apiPathname) ||
-          (apiPathname === "/api/auth/twitch/status" && isCrossOriginApiCall));
+      const headers = injectApiAuthHeaders(init);
 
-      const headers = injectApiAuthHeaders(
-        init,
-        shouldRouteToRemote ? "remote" : "local",
-      );
-
-      const tauriResponse = dispatchTauriApiRequest(
-        resolvedUrl,
-        init,
-        headers,
-        shouldRouteToRemote,
-        serverUrl,
-      );
+      const tauriResponse = dispatchTauriApiRequest(resolvedUrl, init, headers);
       if (tauriResponse) {
         // In Tauri runtime, backend API calls must stay on the native bridge
-        // (internal_api_request/proxy_remote_request) to avoid HTTP 0 failures.
+        // (internal_api_request) to avoid HTTP 0 failures.
         return tauriResponse;
       }
 
