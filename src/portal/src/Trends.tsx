@@ -5,7 +5,7 @@ import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
 import { VODCard } from "./components/VODCard";
 import { TopBar } from "./components/TopBar";
 import { navigateToPlayer } from "./utils/navigation";
-import "./styles/Trends.css";
+import "./styles/Common.css";
 
 const PAGE_SIZE = 24;
 
