@@ -27,6 +27,7 @@ export interface VOD {
   createdAt: string;
   viewCount: number;
   language?: string;
+  broadcastType?: string;
   game: { name: string } | null;
   owner?: {
     login: string;
