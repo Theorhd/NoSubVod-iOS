@@ -304,10 +304,8 @@ async function invokeInternalApi(
 
 function normalizeErrorMessage(error: unknown): string {
   if (error instanceof ApiInvokeTimeoutError) {
-    return error.message;
-  }
-  if (typeof error === "string") {
-    return error;
+    console.error("Internal API timeout:", error);
+    return "The request timed out.";
   }
   // Log the actual error internally and return a generic message to prevent information exposure
   console.error("Internal API error:", error);
