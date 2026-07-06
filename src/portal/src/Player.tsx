@@ -613,16 +613,7 @@ function VodLivePlayer({
     );
   }
 
-  if (isLoadingPlayerInfo) {
-    return (
-      <div
-        className="container"
-        style={{ textAlign: "center", padding: "100px" }}
-      >
-        <div className="card glass">Chargement du lecteur...</div>
-      </div>
-    );
-  }
+
 
   if (!source) {
     return (
