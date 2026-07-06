@@ -104,7 +104,13 @@ const ClipMode: React.FC<ClipModeProps> = ({
           type="button"
           onClick={onClose}
           className="secondary-btn"
-          style={{ padding: "5px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}
+          style={{
+            padding: "5px",
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
           title="Fermer le mode clip"
         >
           <X size={16} />

@@ -44,7 +44,10 @@ function dismissLaunchLoader(): void {
 
   const elapsed = Date.now() - loaderStartTime;
   if (elapsed < LAUNCH_LOADER_MIN_TIME_MS) {
-    globalThis.setTimeout(dismissLaunchLoader, LAUNCH_LOADER_MIN_TIME_MS - elapsed);
+    globalThis.setTimeout(
+      dismissLaunchLoader,
+      LAUNCH_LOADER_MIN_TIME_MS - elapsed,
+    );
     return;
   }
 

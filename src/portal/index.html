@@ -10,21 +10,27 @@
     <style>
       /* latin-ext */
       @font-face {
-        font-family: 'Outfit';
+        font-family: "Outfit";
         font-style: normal;
         font-weight: 100 900;
         font-display: swap;
-        src: url('/fonts/Outfit-Variable-Ext.woff2') format('woff2');
-        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+        src: url("/fonts/Outfit-Variable-Ext.woff2") format("woff2");
+        unicode-range:
+          U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+          U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+          U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
       }
       /* latin */
       @font-face {
-        font-family: 'Outfit';
+        font-family: "Outfit";
         font-style: normal;
         font-weight: 100 900;
         font-display: swap;
-        src: url('/fonts/Outfit-Variable.woff2') format('woff2');
-        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+        src: url("/fonts/Outfit-Variable.woff2") format("woff2");
+        unicode-range:
+          U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+          U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+          U+2212, U+2215, U+FEFF, U+FFFD;
       }
 
       html,
@@ -33,7 +39,13 @@
         width: 100%;
         min-height: 100%;
         background: #08080c;
-        font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family:
+          "Outfit",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
       }
 
       #root {
@@ -125,7 +137,8 @@
       }
 
       @keyframes nsv-logo-float {
-        0%, 100% {
+        0%,
+        100% {
           transform: translateY(0) scale(1);
         }
         50% {
@@ -134,7 +147,8 @@
       }
 
       @keyframes nsv-glow-pulse {
-        0%, 100% {
+        0%,
+        100% {
           opacity: 0.6;
           transform: translate(-50%, -50%) scale(0.95);
         }
@@ -149,7 +163,12 @@
         font-weight: 800;
         letter-spacing: -0.03em;
         margin: 0 0 4px 0;
-        background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f43f5e 100%);
+        background: linear-gradient(
+          135deg,
+          #a855f7 0%,
+          #ec4899 50%,
+          #f43f5e 100%
+        );
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         filter: drop-shadow(0 2px 10px rgba(168, 85, 247, 0.15));
@@ -250,21 +269,23 @@
           <div class="spinner-ring"></div>
           <div class="spinner-arc"></div>
         </div>
-        <div id="loader-status" class="loader-status">Initialisation du système...</div>
+        <div id="loader-status" class="loader-status">
+          Initialisation du système...
+        </div>
       </div>
     </div>
     <script>
-      (function() {
+      (function () {
         const statuses = [
           "Chargement de la base...",
           "Initialisation du serveur local...",
           "Vérification de la session...",
           "Connexion au bridge Tauri...",
-          "Préparation du portail..."
+          "Préparation du portail...",
         ];
         let index = 0;
         const statusEl = document.getElementById("loader-status");
-        
+
         function updateStatus() {
           if (!statusEl) return;
           statusEl.style.opacity = "0";
@@ -275,9 +296,9 @@
             }
           }, 200);
         }
-        
+
         setTimeout(updateStatus, 350);
-        
+
         const interval = setInterval(() => {
           if (index >= statuses.length) {
             clearInterval(interval);
@@ -285,7 +306,7 @@
             updateStatus();
           }
         }, 1100);
-        
+
         window.__nsvLoaderInterval = interval;
       })();
     </script>

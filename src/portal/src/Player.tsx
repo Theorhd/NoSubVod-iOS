@@ -252,7 +252,9 @@ function VodLivePlayer({
   const [markers, setMarkers] = useState<VideoMarker[]>([]);
   const [vodInfo, setVodInfo] = useState<VOD | null>(null);
   const [liveInfo, setLiveInfo] = useState<LiveStream | null>(null);
-  const [isLoadingPlayerInfo, setIsLoadingPlayerInfo] = useState(!!(vodId || liveId));
+  const [isLoadingPlayerInfo, setIsLoadingPlayerInfo] = useState(
+    !!(vodId || liveId),
+  );
 
   const [initialTime, setInitialTime] = useState(0);
   const [seekTo, setSeekTo] = useState<number | null>(null);
@@ -534,7 +536,9 @@ function VodLivePlayer({
       } catch (error) {
         console.error("Failed to fetch live player data", error);
         if (!disposed) {
-          setPlayerError("Erreur réseau lors du chargement des données du live.");
+          setPlayerError(
+            "Erreur réseau lors du chargement des données du live.",
+          );
         }
       } finally {
         if (!disposed) {
@@ -587,10 +591,21 @@ function VodLivePlayer({
 
   if (playerError) {
     return (
-      <div className="container" style={{ textAlign: "center", padding: "100px" }}>
-        <div className="card glass" style={{ color: "var(--danger-color, #ff4444)" }}>
+      <div
+        className="container"
+        style={{ textAlign: "center", padding: "100px" }}
+      >
+        <div
+          className="card glass"
+          style={{ color: "var(--danger-color, #ff4444)" }}
+        >
           <p>{playerError}</p>
-          <button className="action-btn" onClick={() => window.location.reload()} style={{ marginTop: "1rem" }} type="button">
+          <button
+            className="action-btn"
+            onClick={() => window.location.reload()}
+            style={{ marginTop: "1rem" }}
+            type="button"
+          >
             Réessayer
           </button>
         </div>
@@ -600,10 +615,11 @@ function VodLivePlayer({
 
   if (isLoadingPlayerInfo) {
     return (
-      <div className="container" style={{ textAlign: "center", padding: "100px" }}>
-        <div className="card glass">
-          Chargement du lecteur...
-        </div>
+      <div
+        className="container"
+        style={{ textAlign: "center", padding: "100px" }}
+      >
+        <div className="card glass">Chargement du lecteur...</div>
       </div>
     );
   }

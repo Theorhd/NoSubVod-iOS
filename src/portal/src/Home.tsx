@@ -166,7 +166,9 @@ export default function Home() {
         return;
       }
       console.error("Failed to fetch home data", error);
-      setDataError("Impossible de charger les données. Veuillez vérifier votre connexion.");
+      setDataError(
+        "Impossible de charger les données. Veuillez vérifier votre connexion.",
+      );
       setIsLoadingData(false);
     }
   }, []);
@@ -388,11 +390,21 @@ export default function Home() {
         />
 
         {isLoadingData ? (
-          <div className="card glass" style={{ textAlign: "center", padding: "2rem" }}>
+          <div
+            className="card glass"
+            style={{ textAlign: "center", padding: "2rem" }}
+          >
             Chargement des données...
           </div>
         ) : dataError ? (
-          <div className="card glass" style={{ textAlign: "center", padding: "2rem", color: "var(--danger-color, #ff4444)" }}>
+          <div
+            className="card glass"
+            style={{
+              textAlign: "center",
+              padding: "2rem",
+              color: "var(--danger-color, #ff4444)",
+            }}
+          >
             <p>{dataError}</p>
             <button
               className="action-btn"

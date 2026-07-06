@@ -377,12 +377,12 @@ function AppContent() {
       { path: "/", label: "Home", Icon: HomeIcon, isHome: true },
       ...(isDesktopConnected
         ? [
-          {
-            path: "/screen-share",
-            label: "Screen Share",
-            Icon: MonitorSmartphone,
-          },
-        ]
+            {
+              path: "/screen-share",
+              label: "Screen Share",
+              Icon: MonitorSmartphone,
+            },
+          ]
         : []),
       { path: "/search", label: "Search", Icon: SearchIcon },
       { path: "/downloads", label: "Downloads", Icon: Download },
