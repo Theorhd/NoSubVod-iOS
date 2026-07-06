@@ -1,6 +1,5 @@
 import React, {
   Suspense,
-  lazy,
   useCallback,
   useMemo,
   useEffect,
@@ -33,18 +32,18 @@ import { isTauriRuntime, isIosTouchRuntime } from "./utils/capabilities";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import "./styles/App.css";
 
-const OfflineHome = lazy(() => import("./OfflineHome"));
-const Home = lazy(() => import("./Home"));
-const Channel = lazy(() => import("./Channel"));
-const Player = lazy(() => import("./Player"));
-const Trends = lazy(() => import("./Trends"));
-const Search = lazy(() => import("./Search"));
-const Live = lazy(() => import("./Live"));
-const Settings = lazy(() => import("./Settings"));
-const History = lazy(() => import("./History"));
-const Downloads = lazy(() => import("./Downloads"));
-const MultiView = lazy(() => import("./MultiView"));
-const ScreenShare = lazy(() => import("./ScreenShare.tsx"));
+import OfflineHome from "./OfflineHome";
+import Home from "./Home";
+import Channel from "./Channel";
+import Player from "./Player";
+import Trends from "./Trends";
+import Search from "./Search";
+import Live from "./Live";
+import Settings from "./Settings";
+import History from "./History";
+import Downloads from "./Downloads";
+import MultiView from "./MultiView";
+import ScreenShare from "./ScreenShare";
 
 const SUSPEND_EXTENSION_LOADING = true;
 const APP_READY_EVENT_NAME = "nsv-app-ready";
@@ -378,12 +377,12 @@ function AppContent() {
       { path: "/", label: "Home", Icon: HomeIcon, isHome: true },
       ...(isDesktopConnected
         ? [
-            {
-              path: "/screen-share",
-              label: "Screen Share",
-              Icon: MonitorSmartphone,
-            },
-          ]
+          {
+            path: "/screen-share",
+            label: "Screen Share",
+            Icon: MonitorSmartphone,
+          },
+        ]
         : []),
       { path: "/search", label: "Search", Icon: SearchIcon },
       { path: "/downloads", label: "Downloads", Icon: Download },

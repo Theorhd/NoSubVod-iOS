@@ -113,6 +113,9 @@ export default function Home() {
   const [historyPreview, setHistoryPreview] = useState<HistoryVodEntry[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
 
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
+
   const [showModal, setShowModal] = useState(false);
   const [streamerInput, setStreamerInput] = useState("");
   const [modalError, setModalError] = useState("");
@@ -131,6 +134,8 @@ export default function Home() {
   }, [subs]);
 
   const loadHomeData = useCallback(async (signal: AbortSignal) => {
+    setIsLoadingData(true);
+    setDataError(null);
     try {
       const [watchlistData, historyData, remoteSubsData] = await Promise.all([
         fetchJson<WatchlistEntry[]>("/api/watchlist", signal),
@@ -155,11 +160,14 @@ export default function Home() {
       if (resolvedSubs.clearLegacyLocal) {
         localStorage.removeItem("nsv_subs");
       }
+      setIsLoadingData(false);
     } catch (error) {
       if (signal.aborted) {
         return;
       }
       console.error("Failed to fetch home data", error);
+      setDataError("Impossible de charger les données. Veuillez vérifier votre connexion.");
+      setIsLoadingData(false);
     }
   }, []);
 
@@ -379,18 +387,41 @@ export default function Home() {
           handleChannelSearch={handleChannelSearch}
         />
 
-        <MySubsList
-          subs={subs}
-          liveStatus={liveStatus}
-          handleDeleteSub={handleDeleteSub}
-        />
+        {isLoadingData ? (
+          <div className="card glass" style={{ textAlign: "center", padding: "2rem" }}>
+            Chargement des données...
+          </div>
+        ) : dataError ? (
+          <div className="card glass" style={{ textAlign: "center", padding: "2rem", color: "var(--danger-color, #ff4444)" }}>
+            <p>{dataError}</p>
+            <button
+              className="action-btn"
+              onClick={() => {
+                const controller = new AbortController();
+                void loadHomeData(controller.signal);
+              }}
+              style={{ marginTop: "1rem" }}
+              type="button"
+            >
+              Réessayer
+            </button>
+          </div>
+        ) : (
+          <>
+            <MySubsList
+              subs={subs}
+              liveStatus={liveStatus}
+              handleDeleteSub={handleDeleteSub}
+            />
 
-        <HistoryPreview historyPreview={historyPreview} />
+            <HistoryPreview historyPreview={historyPreview} />
 
-        <WatchlistPreview
-          watchlist={watchlist}
-          removeFromWatchlist={removeFromWatchlist}
-        />
+            <WatchlistPreview
+              watchlist={watchlist}
+              removeFromWatchlist={removeFromWatchlist}
+            />
+          </>
+        )}
       </div>
 
       {showModal && (

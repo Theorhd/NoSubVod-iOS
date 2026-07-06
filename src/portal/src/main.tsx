@@ -32,12 +32,24 @@ const LAUNCH_LOADER_ID = "nsv-launch-loader";
 const LAUNCH_LOADER_HIDING_CLASS = "is-hiding";
 const LAUNCH_LOADER_TRANSITION_MS = 760;
 const LAUNCH_LOADER_FALLBACK_TIMEOUT_MS = 15000;
+const LAUNCH_LOADER_MIN_TIME_MS = 1500;
 
+const loaderStartTime = Date.now();
 let hasDismissedLaunchLoader = false;
 
 function dismissLaunchLoader(): void {
   if (hasDismissedLaunchLoader) {
     return;
+  }
+
+  const elapsed = Date.now() - loaderStartTime;
+  if (elapsed < LAUNCH_LOADER_MIN_TIME_MS) {
+    globalThis.setTimeout(dismissLaunchLoader, LAUNCH_LOADER_MIN_TIME_MS - elapsed);
+    return;
+  }
+
+  if ((globalThis as any).__nsvLoaderInterval) {
+    globalThis.clearInterval((globalThis as any).__nsvLoaderInterval);
   }
 
   hasDismissedLaunchLoader = true;

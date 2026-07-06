@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Search, X } from "lucide-react";
+import { ArrowLeft, Search, X, Download } from "lucide-react";
 import {
   ChatMessage,
   ExperienceSettings,
@@ -18,6 +18,7 @@ import NSVPlayer from "./components/NSVPlayer";
 import LiveChatComponent from "./components/player/LiveChatComponent";
 import MarkerPanel from "./components/player/MarkerPanel";
 import ClipMode from "./components/player/ClipMode";
+import DownloadMenu from "./components/DownloadMenu";
 import PlayerInfo from "./components/player/PlayerInfo";
 import { formatSafeClock as formatClock } from "../../shared/utils/formatters";
 import PlayerRTC from "./PlayerRTC";
@@ -231,6 +232,7 @@ function VodLivePlayer({
 }: VodLivePlayerProps) {
   const { isMobileLayout, isLandscape } = useResponsive();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const mediaKey = useMemo(() => {
     if (vodId) return `vod:${vodId}`;
     if (liveId) return `live:${liveId}`;
@@ -246,9 +248,12 @@ function VodLivePlayer({
   const [showChat, setShowChat] = useState(false);
   const [showChatSearch, setShowChatSearch] = useState(false);
   const [showMarkers, setShowMarkers] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [markers, setMarkers] = useState<VideoMarker[]>([]);
   const [vodInfo, setVodInfo] = useState<VOD | null>(null);
   const [liveInfo, setLiveInfo] = useState<LiveStream | null>(null);
+  const [isLoadingPlayerInfo, setIsLoadingPlayerInfo] = useState(!!(vodId || liveId));
+
   const [initialTime, setInitialTime] = useState(0);
   const [seekTo, setSeekTo] = useState<number | null>(null);
 
@@ -370,11 +375,13 @@ function VodLivePlayer({
   }, [mediaKey, resetQualityState, resetChatState]);
 
   useEffect(() => {
+    if (!vodId) return;
+
     let disposed = false;
+    setIsLoadingPlayerInfo(true);
+    setPlayerError(null);
 
     const run = async () => {
-      if (!vodId) return;
-
       try {
         const authSuffix = buildAuthSuffix("local");
 
@@ -394,6 +401,8 @@ function VodLivePlayer({
 
         if (!disposed && infoRes.ok) {
           setVodInfo(await infoRes.json());
+        } else if (!disposed && !infoRes.ok) {
+          setPlayerError("Impossible de charger les informations du VOD.");
         }
 
         if (!disposed) {
@@ -421,6 +430,13 @@ function VodLivePlayer({
         }
       } catch (error) {
         console.error("Failed to fetch VOD player data", error);
+        if (!disposed) {
+          setPlayerError("Erreur réseau lors du chargement des données VOD.");
+        }
+      } finally {
+        if (!disposed) {
+          setIsLoadingPlayerInfo(false);
+        }
       }
     };
 
@@ -488,6 +504,8 @@ function VodLivePlayer({
 
         if (!disposed && infoRes.ok) {
           setLiveInfo(await infoRes.json());
+        } else if (!disposed && !infoRes.ok) {
+          setPlayerError("Impossible de charger les informations du live.");
         }
 
         if (!disposed) {
@@ -515,6 +533,13 @@ function VodLivePlayer({
         }
       } catch (error) {
         console.error("Failed to fetch live player data", error);
+        if (!disposed) {
+          setPlayerError("Erreur réseau lors du chargement des données du live.");
+        }
+      } finally {
+        if (!disposed) {
+          setIsLoadingPlayerInfo(false);
+        }
       }
     };
 
@@ -559,6 +584,29 @@ function VodLivePlayer({
     () => resolvePlayerTitle(vodId, liveId),
     [vodId, liveId],
   );
+
+  if (playerError) {
+    return (
+      <div className="container" style={{ textAlign: "center", padding: "100px" }}>
+        <div className="card glass" style={{ color: "var(--danger-color, #ff4444)" }}>
+          <p>{playerError}</p>
+          <button className="action-btn" onClick={() => window.location.reload()} style={{ marginTop: "1rem" }} type="button">
+            Réessayer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoadingPlayerInfo) {
+    return (
+      <div className="container" style={{ textAlign: "center", padding: "100px" }}>
+        <div className="card glass">
+          Chargement du lecteur...
+        </div>
+      </div>
+    );
+  }
 
   if (!source) {
     return (
@@ -657,6 +705,26 @@ function VodLivePlayer({
                   </button>
                 )}
 
+                {!liveId && (
+                  <div style={{ position: "relative" }}>
+                    <button
+                      onClick={() => setShowDownloadMenu((v) => !v)}
+                      className="secondary-btn player-action-mini-btn"
+                    >
+                      <Download size={16} />
+                      Télécharger
+                    </button>
+                    {showDownloadMenu && vodId && (
+                      <DownloadMenu
+                        vodId={vodId}
+                        title={vodInfo?.title}
+                        duration={duration}
+                        onClose={() => setShowDownloadMenu(false)}
+                      />
+                    )}
+                  </div>
+                )}
+
                 <button
                   onClick={() => setShowChat((v) => !v)}
                   className="action-btn player-action-mini-btn"
@@ -678,6 +746,11 @@ function VodLivePlayer({
                 onDownloadStart={() => {
                   setClipStart(null);
                   setClipEnd(null);
+                }}
+                onClose={() => {
+                  const newParams = new URLSearchParams(searchParams);
+                  newParams.delete("downloadMode");
+                  setSearchParams(newParams, { replace: true });
                 }}
               />
             )}

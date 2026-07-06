@@ -1,6 +1,7 @@
 import React from "react";
 import { VOD } from "../../../../shared/types";
 import { formatSafeClock as formatClock } from "../../../../shared/utils/formatters";
+import { X } from "lucide-react";
 
 interface ClipModeProps {
   duration: number;
@@ -11,6 +12,7 @@ interface ClipModeProps {
   onSetStart: () => void;
   onSetEnd: () => void;
   onDownloadStart: () => void;
+  onClose?: () => void;
 }
 
 const ClipMode: React.FC<ClipModeProps> = ({
@@ -22,6 +24,7 @@ const ClipMode: React.FC<ClipModeProps> = ({
   onSetStart,
   onSetEnd,
   onDownloadStart,
+  onClose,
 }) => {
   const handleDownload = async () => {
     try {
@@ -96,6 +99,17 @@ const ClipMode: React.FC<ClipModeProps> = ({
       >
         Download Selection
       </button>
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="secondary-btn"
+          style={{ padding: "5px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}
+          title="Fermer le mode clip"
+        >
+          <X size={16} />
+        </button>
+      )}
     </div>
   );
 };
