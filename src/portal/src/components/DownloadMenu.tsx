@@ -106,30 +106,52 @@ export default function DownloadMenu({
       </div>
 
       <div style={{ marginBottom: "16px" }}>
-        <label
-          htmlFor="quality-select"
+        <span
           style={{ display: "block", fontSize: "0.9rem", marginBottom: "8px" }}
         >
           Qualité :
-        </label>
-        <select
-          id="quality-select"
-          value={quality}
-          onChange={(e) => setQuality(e.target.value)}
+        </span>
+        <div
           style={{
-            width: "100%",
-            padding: "8px",
-            borderRadius: "4px",
-            background: "var(--bg)",
-            color: "var(--text)",
-            border: "1px solid var(--surface-soft)",
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "6px",
           }}
         >
-          <option value="best">Best (Source)</option>
-          <option value="1080p">1080p</option>
-          <option value="720p">720p</option>
-          <option value="480p">480p</option>
-        </select>
+          {[
+            { value: "best", label: "Source" },
+            { value: "1080p", label: "1080p" },
+            { value: "720p", label: "720p" },
+            { value: "480p", label: "480p" },
+          ].map((opt) => {
+            const isSelected = quality === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setQuality(opt.value)}
+                type="button"
+                style={{
+                  padding: "8px 4px",
+                  fontSize: "0.85rem",
+                  borderRadius: "6px",
+                  border: "1px solid",
+                  borderColor: isSelected
+                    ? "var(--primary)"
+                    : "var(--surface-soft)",
+                  background: isSelected ? "var(--primary)" : "var(--bg)",
+                  color: isSelected ? "#ffffff" : "var(--text)",
+                  cursor: "pointer",
+                  fontWeight: isSelected ? "bold" : "normal",
+                  transition: "all 0.2s ease",
+                  textAlign: "center",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
