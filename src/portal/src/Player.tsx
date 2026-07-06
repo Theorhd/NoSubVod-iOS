@@ -613,8 +613,6 @@ function VodLivePlayer({
     );
   }
 
-
-
   if (!source) {
     return (
       <div
