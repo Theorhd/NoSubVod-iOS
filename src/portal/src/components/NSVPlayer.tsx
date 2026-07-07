@@ -75,6 +75,7 @@ type NSVPlayerProps = {
   onQualitySelection?: (quality: string) => void;
   onSourceReady?: (sourceUrl: string) => void;
   onError?: (message: string) => void;
+  onFullscreenChange?: (isFullscreen: boolean) => void;
 };
 
 // Extracted helpers
@@ -106,6 +107,7 @@ const NSVPlayer = React.memo(
     onQualitySelection,
     onSourceReady,
     onError,
+    onFullscreenChange,
   }: NSVPlayerProps) => {
     const playerRef = useRef<any>(null);
     const store = useMediaStore(playerRef);
@@ -135,6 +137,8 @@ const NSVPlayer = React.memo(
     const recoveryAttemptsInWindowRef = useRef(0);
     const lastPlaybackProgressRef = useRef({ time: 0, observedAt: Date.now() });
     const lastNativeVodRefreshAtRef = useRef(Date.now());
+    const nativeFullscreenActiveRef = useRef(false);
+    const nativeFullscreenEndedAtRef = useRef(0);
     const [resumeRevision, setResumeRevision] = useState(0);
 
     useEffect(() => {
@@ -142,6 +146,71 @@ const NSVPlayer = React.memo(
         remote.enterFullscreen();
       }
     }, [isLandscape, _isMobileLayout, remote]);
+
+    // Track native iOS fullscreen via webkit events on the <video> element.
+    // These events fire for AVPlayer fullscreen which is distinct from the
+    // standard Fullscreen API (document.fullscreenElement).
+    useEffect(() => {
+      const getVideoElement = (): HTMLVideoElement | null => {
+        const playerRoot = (playerRef.current?.el || playerRef.current) as
+          | HTMLElement
+          | undefined;
+        return playerRoot?.querySelector("video") ?? null;
+      };
+
+      let videoEl: HTMLVideoElement | null = null;
+
+      const onBeginFullscreen = () => {
+        nativeFullscreenActiveRef.current = true;
+        onFullscreenChange?.(true);
+      };
+
+      const onEndFullscreen = () => {
+        nativeFullscreenActiveRef.current = false;
+        nativeFullscreenEndedAtRef.current = Date.now();
+        // Reset backgrounded flag so the visibility handlers don't trigger
+        // a false source recovery when the webview becomes visible again.
+        wasBackgroundedRef.current = false;
+        onFullscreenChange?.(false);
+      };
+
+      // The <video> element may not exist at mount — observe the player root
+      // and attach listeners once the video element appears.
+      const tryAttach = () => {
+        videoEl = getVideoElement();
+        if (!videoEl) return false;
+        videoEl.addEventListener("webkitbeginfullscreen", onBeginFullscreen);
+        videoEl.addEventListener("webkitendfullscreen", onEndFullscreen);
+        return true;
+      };
+
+      if (!tryAttach()) {
+        // Retry after a short delay to handle async provider setup.
+        const retryId = setTimeout(tryAttach, 500);
+        const retryId2 = setTimeout(tryAttach, 1500);
+        return () => {
+          clearTimeout(retryId);
+          clearTimeout(retryId2);
+          if (videoEl) {
+            videoEl.removeEventListener(
+              "webkitbeginfullscreen",
+              onBeginFullscreen,
+            );
+            videoEl.removeEventListener("webkitendfullscreen", onEndFullscreen);
+          }
+        };
+      }
+
+      return () => {
+        if (videoEl) {
+          videoEl.removeEventListener(
+            "webkitbeginfullscreen",
+            onBeginFullscreen,
+          );
+          videoEl.removeEventListener("webkitendfullscreen", onEndFullscreen);
+        }
+      };
+    }, [onFullscreenChange]);
 
     const useNativeResumeRefresh =
       isMobileDevice() && canPlayHlsNatively() && !canUseHlsJs();
@@ -411,7 +480,12 @@ const NSVPlayer = React.memo(
     useEffect(() => {
       if (!useNativeResumeRefresh) return;
 
+      const FULLSCREEN_EXIT_GRACE_MS = 2000;
+
       const getIsNativeFullscreen = () => {
+        // Prefer the ref tracked via webkitbeginfullscreen/webkitendfullscreen
+        // events, which is more reliable than polling webkitDisplayingFullscreen.
+        if (nativeFullscreenActiveRef.current) return true;
         try {
           const playerRoot = (playerRef.current?.el || playerRef.current) as
             | HTMLElement
@@ -423,11 +497,23 @@ const NSVPlayer = React.memo(
         }
       };
 
+      const isWithinFullscreenExitGrace = () => {
+        const endedAt = nativeFullscreenEndedAtRef.current;
+        return endedAt > 0 && Date.now() - endedAt < FULLSCREEN_EXIT_GRACE_MS;
+      };
+
       const onVisibilityChange = () => {
         if (document.visibilityState === "hidden") {
           if (!getIsNativeFullscreen()) {
             wasBackgroundedRef.current = true;
           }
+          return;
+        }
+
+        // Skip recovery if we just exited native fullscreen — the webview
+        // is becoming visible again but the stream is still active.
+        if (isWithinFullscreenExitGrace()) {
+          wasBackgroundedRef.current = false;
           return;
         }
 
@@ -449,6 +535,12 @@ const NSVPlayer = React.memo(
       };
 
       const onPageShowOrFocus = () => {
+        // Skip recovery if we just exited native fullscreen.
+        if (isWithinFullscreenExitGrace()) {
+          wasBackgroundedRef.current = false;
+          return;
+        }
+
         if (!wasBackgroundedRef.current) return;
         wasBackgroundedRef.current = false;
         recoveryWindowStartedAtRef.current = 0;

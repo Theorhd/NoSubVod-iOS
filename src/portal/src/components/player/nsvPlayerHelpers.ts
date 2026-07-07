@@ -54,7 +54,7 @@ export function setHlsLevelMode(instance: Hls, level: number) {
   }
 }
 
-export function normalizePlaylistText(raw: string): string {
+function normalizePlaylistText(raw: string): string {
   let text = raw.replaceAll(/\r\n?/g, "\n");
   if (text.codePointAt(0) === 0xfeff) {
     text = text.slice(1);

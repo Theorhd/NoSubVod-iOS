@@ -31,6 +31,7 @@ export function useHistorySync(
   currentTimeRef: React.MutableRefObject<number>,
   durationRef: React.MutableRefObject<number>,
   isPlaying: boolean,
+  isNativeFullscreen = false,
 ) {
   const activeVodIdRef = useRef<string | null>(vodId);
   const historySyncRef = useRef<HistorySyncState>({
@@ -229,14 +230,26 @@ export function useHistorySync(
 
     const intervalId = setInterval(() => {
       const syncState = historySyncRef.current;
-      if (Date.now() - syncState.lastTickAtMs > HISTORY_ACTIVE_WINDOW_MS) {
+      // During native iOS fullscreen, React may throttle state updates
+      // causing lastTickAtMs to become stale. Bypass the staleness check
+      // when the player is in native fullscreen and actively playing.
+      const isActiveNativeFullscreen = isNativeFullscreen;
+      if (
+        !isActiveNativeFullscreen &&
+        Date.now() - syncState.lastTickAtMs > HISTORY_ACTIVE_WINDOW_MS
+      ) {
         return;
       }
-      saveProgress();
+      if (isActiveNativeFullscreen) {
+        // Directly read from the ref since React state updates may be throttled.
+        saveProgress({ timecode: currentTimeRef.current });
+      } else {
+        saveProgress();
+      }
     }, HISTORY_SYNC_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, [saveProgress, vodId]);
+  }, [saveProgress, vodId, isNativeFullscreen, currentTimeRef]);
 
   useEffect(() => {
     if (!vodId) return;
