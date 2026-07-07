@@ -14,6 +14,7 @@ import type {
 } from "../../../shared/types";
 import { usePageVisibility } from "../../../shared/hooks/usePageVisibility";
 import { buildAuthQuery, getRemoteServerToken } from "../utils/authTokens";
+import { useWebRTCPlaybackHealth } from "./useWebRTCPlaybackHealth";
 
 const rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -46,32 +47,12 @@ export function useWebRTCViewer(
   const hostClientIdRef = useRef<string | null>(null);
   const viewerPeerRef = useRef<RTCPeerConnection | null>(null);
   const remoteInboundStreamRef = useRef<MediaStream | null>(null);
-  const lastPlaybackTimeRef = useRef(0);
-  const frozenTickCountRef = useRef(0);
   const lastHardRecoveryAtRef = useRef(0);
   const reconnectDelayMsRef = useRef(1500);
   const requiresRelay =
     Boolean(
       (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
     ) && !relayOrigin;
-
-  const recoverRemotePlayback = useCallback(() => {
-    const video = remoteVideoRef.current;
-    if (!video) {
-      return;
-    }
-
-    const inbound = remoteInboundStreamRef.current;
-    const currentObject = video.srcObject as MediaStream | null;
-
-    if (inbound && currentObject !== inbound) {
-      video.srcObject = inbound;
-    }
-
-    if (video.paused || video.readyState < 2) {
-      void video.play().catch(() => undefined);
-    }
-  }, [remoteVideoRef]);
 
   const forceViewerReconnect = useCallback(() => {
     const now = Date.now();
@@ -92,43 +73,13 @@ export function useWebRTCViewer(
     }
   }, []);
 
-  const evaluatePlaybackHealth = useCallback(
-    (video: HTMLVideoElement) => {
-      const currentTime = video.currentTime || 0;
-      const ready = video.readyState >= 2;
-
-      if (!video.paused && ready) {
-        if (Math.abs(currentTime - lastPlaybackTimeRef.current) < 0.001) {
-          frozenTickCountRef.current += 1;
-        } else {
-          frozenTickCountRef.current = 0;
-        }
-
-        if (frozenTickCountRef.current >= 3) {
-          recoverRemotePlayback();
-        }
-
-        if (frozenTickCountRef.current >= 6) {
-          setStreamError("Flux bloque detecte. Reconnexion du viewer...");
-          forceViewerReconnect();
-          frozenTickCountRef.current = 0;
-        }
-      } else if (!video.paused && !ready) {
-        frozenTickCountRef.current += 1;
-        if (frozenTickCountRef.current >= 4) {
-          recoverRemotePlayback();
-        }
-        if (frozenTickCountRef.current >= 7) {
-          setStreamError("Video noire detectee. Reconnexion du viewer...");
-          forceViewerReconnect();
-          frozenTickCountRef.current = 0;
-        }
-      }
-
-      lastPlaybackTimeRef.current = currentTime;
-    },
-    [forceViewerReconnect, recoverRemotePlayback],
-  );
+  const { evaluatePlaybackHealth, recoverRemotePlayback, resetHealthCounters } =
+    useWebRTCPlaybackHealth(
+      remoteVideoRef,
+      remoteInboundStreamRef,
+      setStreamError,
+      forceViewerReconnect,
+    );
 
   const attachInboundStreamToVideo = useCallback(
     (stream: MediaStream) => {
@@ -524,7 +475,7 @@ export function useWebRTCViewer(
       // Mobile fullscreen + orientation can pause rendering while stream is still alive.
       // Try to rebind and resume playback immediately.
       recoverRemotePlayback();
-      frozenTickCountRef.current = 0;
+      resetHealthCounters();
     };
 
     const onVisibilityChanged = () => {
@@ -546,12 +497,11 @@ export function useWebRTCViewer(
       document.removeEventListener("fullscreenchange", onViewportChanged);
       document.removeEventListener("visibilitychange", onVisibilityChanged);
     };
-  }, [hasRemoteStream, recoverRemotePlayback]);
+  }, [hasRemoteStream, recoverRemotePlayback, resetHealthCounters]);
 
   useEffect(() => {
     if (!hasRemoteStream || !isPageVisible) {
-      frozenTickCountRef.current = 0;
-      lastPlaybackTimeRef.current = 0;
+      resetHealthCounters();
       return;
     }
 
@@ -566,7 +516,13 @@ export function useWebRTCViewer(
     return () => {
       globalThis.clearInterval(timer);
     };
-  }, [evaluatePlaybackHealth, hasRemoteStream, remoteVideoRef, isPageVisible]);
+  }, [
+    evaluatePlaybackHealth,
+    hasRemoteStream,
+    remoteVideoRef,
+    isPageVisible,
+    resetHealthCounters,
+  ]);
 
   return {
     signalStatus: requiresRelay ? "Unavailable" : signalStatus,

@@ -186,7 +186,7 @@ export async function setRemoteServerToken(
   await persistToken(REMOTE_SERVER_TOKEN_KEY, token);
 }
 
-export function getStandaloneToken(): string | null {
+function getStandaloneToken(): string | null {
   return tokenCache[STANDALONE_TOKEN_KEY] ?? getLegacyStandaloneToken();
 }
 

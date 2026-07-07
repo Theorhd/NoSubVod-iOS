@@ -5,14 +5,14 @@ export const formatTime = (seconds: number): string => {
   return `${h > 0 ? h + ":" : ""}${h > 0 && m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
 };
 
-export const formatClock = (seconds: number): string => {
+const formatClock = (seconds: number): string => {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
   return `${h > 0 ? h + ":" : ""}${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
 };
 
-export const formatDuration = (seconds?: number): string => {
+const formatDuration = (seconds?: number): string => {
   if (!seconds) return "00:00";
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -57,7 +57,7 @@ export const formatSize = (bytes: number): string => {
   );
 };
 
-export const formatDurationHuman = (seconds?: number): string => {
+const formatDurationHuman = (seconds?: number): string => {
   if (!seconds) return "";
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);

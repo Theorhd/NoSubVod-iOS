@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { ScreenShareSessionState } from "../types";
 import { useInterval } from "./useInterval";
 
-export const DEFAULT_SCREEN_SHARE_STATE: ScreenShareSessionState = {
+const DEFAULT_SCREEN_SHARE_STATE: ScreenShareSessionState = {
   active: false,
   sessionId: null,
   sourceType: null,

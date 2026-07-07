@@ -62,7 +62,7 @@ export async function ensureNativeNotificationPermission(): Promise<boolean> {
   }
 }
 
-export async function canSendNativeNotification(): Promise<boolean> {
+async function canSendNativeNotification(): Promise<boolean> {
   const api = await getPluginApi();
   if (!api) {
     return false;
@@ -82,7 +82,7 @@ export async function canSendNativeNotification(): Promise<boolean> {
   }
 }
 
-export async function sendNativeNotification(
+async function sendNativeNotification(
   title: string,
   message: string,
 ): Promise<void> {

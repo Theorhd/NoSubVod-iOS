@@ -23,7 +23,7 @@ export function isIosTouchRuntime(): boolean {
   );
 }
 
-export function isIOSFamily(): boolean {
+function isIOSFamily(): boolean {
   const nav = globalThis.navigator;
   if (!nav) return false;
 

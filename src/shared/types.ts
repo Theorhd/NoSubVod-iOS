@@ -36,7 +36,7 @@ export interface VOD {
   };
 }
 
-export interface ExtensionManifest {
+interface ExtensionManifest {
   id: string;
   name: string;
   version: string;
@@ -59,7 +59,7 @@ export interface ExtensionContribution {
   componentProps?: any;
 }
 
-export interface ServerInfo {
+interface ServerInfo {
   ip: string;
   port: number;
   url: string;
@@ -186,7 +186,7 @@ export interface LiveStreamsPage {
 
 export type LiveStatusMap = Record<string, LiveStream>;
 
-export type ScreenShareSourceType = "browser" | "application";
+type ScreenShareSourceType = "browser" | "application";
 
 export type ScreenShareSessionState = {
   active: boolean;
@@ -224,7 +224,7 @@ export interface ActiveDownload {
   total_duration: number;
 }
 
-export type SignalPayload = {
+type SignalPayload = {
   sdp?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
 };

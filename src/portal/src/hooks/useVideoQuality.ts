@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type NormalizedQuality = "auto" | "480" | "720" | "1080" | "source";
 
-export function normalizeQualitySetting(
-  raw: string | undefined,
-): NormalizedQuality {
+function normalizeQualitySetting(raw: string | undefined): NormalizedQuality {
   const normalized = (raw || "auto").trim().toLowerCase();
   if (normalized === "source" || normalized === "chunked") {
     return "source";
@@ -17,7 +15,7 @@ export function normalizeQualitySetting(
   return "auto";
 }
 
-export function normalizeRequestedQualityValue(
+function normalizeRequestedQualityValue(
   raw: string | undefined,
 ): string | null {
   if (!raw) return null;
@@ -46,7 +44,7 @@ export function normalizeRequestedQualityValue(
   return String(height);
 }
 
-export function buildQualityQuery(
+function buildQualityQuery(
   quality: string | undefined,
   mode?: "lock" | "strict",
 ): string {
