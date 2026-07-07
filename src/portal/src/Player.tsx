@@ -261,6 +261,7 @@ function VodLivePlayer({
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
 
   const currentTimeRef = useRef(0);
@@ -280,7 +281,18 @@ function VodLivePlayer({
 
   // CUSTOM HOOKS
   const { flushHistoryBeforeExit, updateObservedTime, historySyncRef } =
-    useHistorySync(vodId, currentTimeRef, durationRef, isPlaying);
+    useHistorySync(
+      vodId,
+      currentTimeRef,
+      durationRef,
+      isPlaying,
+      isNativeFullscreen,
+    );
+
+  const handleNativeFullscreenChange = useCallback((fs: boolean) => {
+    setIsNativeFullscreen(fs);
+    setIsFullscreen(fs);
+  }, []);
 
   const {
     source,
@@ -345,11 +357,13 @@ function VodLivePlayer({
 
   useEffect(() => {
     const onFullScreenChanged = () =>
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      setIsFullscreen(
+        Boolean(document.fullscreenElement) || isNativeFullscreen,
+      );
     document.addEventListener("fullscreenchange", onFullScreenChanged);
     return () =>
       document.removeEventListener("fullscreenchange", onFullScreenChanged);
-  }, []);
+  }, [isNativeFullscreen]);
 
   useEffect(() => {
     if (previousMediaKeyRef.current === mediaKey) return;
@@ -668,6 +682,7 @@ function VodLivePlayer({
               onQualitySelection={handlePlayerQualitySelection}
               onSourceReady={(url) => handlePlayerSourceReady(url, setSeekTo)}
               onError={setPlayerError}
+              onFullscreenChange={handleNativeFullscreenChange}
             />
 
             {!liveId && showMarkers && markers.length > 0 && (
