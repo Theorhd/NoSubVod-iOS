@@ -186,9 +186,7 @@ export default function DownloadMenu({
                     fontSize: "0.9rem",
                     borderRadius: "10px",
                     border: "2px solid",
-                    borderColor: isSelected
-                      ? "var(--primary)"
-                      : "transparent",
+                    borderColor: isSelected ? "var(--primary)" : "transparent",
                     background: isSelected
                       ? "var(--primary-transparent, rgba(147, 51, 234, 0.15))" // fallback if var doesn't exist
                       : "var(--surface)",
@@ -207,7 +205,15 @@ export default function DownloadMenu({
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "auto", paddingBottom: "env(safe-area-inset-bottom, 20px)" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+            marginTop: "auto",
+            paddingBottom: "env(safe-area-inset-bottom, 20px)",
+          }}
+        >
           <button
             onClick={handleFullDownload}
             className="action-btn"
