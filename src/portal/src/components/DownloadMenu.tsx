@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { Download as DownloadIcon, Scissors, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -9,8 +9,7 @@ interface DownloadMenuProps {
   title?: string;
   duration?: number;
   onClose: () => void;
-  /** When provided the menu renders in a portal at a fixed position (escapes overflow:hidden). */
-  anchorRect?: DOMRect | null;
+  anchorRect?: DOMRect | null; // Kept for backwards compatibility if needed elsewhere
 }
 
 export default function DownloadMenu({
@@ -18,26 +17,23 @@ export default function DownloadMenu({
   title,
   duration,
   onClose,
-  anchorRect,
 }: DownloadMenuProps) {
   const [quality, setQuality] = useState("best");
+  const [isClosing, setIsClosing] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const navigate = useNavigate();
 
-  // Position: portal + fixed when anchorRect is given (escapes overflow:hidden parents),
-  // otherwise absolute for in-flow parents.
-  const positionStyle: React.CSSProperties = anchorRect
-    ? {
-        position: "fixed",
-        top: anchorRect.bottom + 8,
-        right: window.innerWidth - anchorRect.right,
-        zIndex: 9999,
-      }
-    : {
-        position: "absolute",
-        top: "100%",
-        right: "0",
-        zIndex: 50,
-      };
+  useEffect(() => {
+    // Trigger the enter transition after the first render
+    requestAnimationFrame(() => setIsMounted(true));
+  }, []);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+    }, 300); // Matches the CSS transition duration
+  };
 
   const handleFullDownload = async () => {
     try {
@@ -58,7 +54,7 @@ export default function DownloadMenu({
       } else {
         throw new Error("Failed to start download");
       }
-      onClose();
+      handleClose();
     } catch (e) {
       alert("Erreur: " + e);
     }
@@ -69,121 +65,185 @@ export default function DownloadMenu({
       vodId,
       downloadMode: true,
     });
-    onClose();
+    handleClose();
+  };
+
+  const isVisible = isMounted && !isClosing;
+
+  const overlayStyle: React.CSSProperties = {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100vw",
+    height: "100vh",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+    zIndex: 99999,
+    opacity: isVisible ? 1 : 0,
+    transition: "opacity 0.3s ease",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flex-end",
+  };
+
+  const sheetStyle: React.CSSProperties = {
+    height: "45vh",
+    background: "var(--bg-elevated)",
+    borderTopLeftRadius: "24px",
+    borderTopRightRadius: "24px",
+    padding: "0 20px 20px 20px",
+    display: "flex",
+    flexDirection: "column",
+    transform: isVisible ? "translateY(0)" : "translateY(100%)",
+    transition: "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
+    boxShadow: "0 -8px 24px rgba(0,0,0,0.4)",
+  };
+
+  const dragHandleStyle: React.CSSProperties = {
+    width: "40px",
+    height: "5px",
+    backgroundColor: "var(--surface-soft)",
+    borderRadius: "10px",
+    margin: "12px auto 20px auto",
   };
 
   const menu = (
     <div
-      style={{
-        ...positionStyle,
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--surface-soft)",
-        borderRadius: "8px",
-        padding: "16px",
-        minWidth: "250px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+      style={overlayStyle}
+      onClick={(e) => {
+        // Close if clicking on the overlay background
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: "12px",
-        }}
-      >
-        <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Télécharger</h3>
-        <button
-          onClick={onClose}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-          }}
-        >
-          <X size={20} />
-        </button>
-      </div>
+      <div style={sheetStyle} onClick={(e) => e.stopPropagation()}>
+        <div style={dragHandleStyle} />
 
-      <div style={{ marginBottom: "16px" }}>
-        <span
-          style={{ display: "block", fontSize: "0.9rem", marginBottom: "8px" }}
-        >
-          Qualité :
-        </span>
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "6px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "24px",
           }}
         >
-          {[
-            { value: "best", label: "Source" },
-            { value: "1080p", label: "1080p" },
-            { value: "720p", label: "720p" },
-            { value: "480p", label: "480p" },
-          ].map((opt) => {
-            const isSelected = quality === opt.value;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => setQuality(opt.value)}
-                type="button"
-                style={{
-                  padding: "8px 4px",
-                  fontSize: "0.85rem",
-                  borderRadius: "6px",
-                  border: "1px solid",
-                  borderColor: isSelected
-                    ? "var(--primary)"
-                    : "var(--surface-soft)",
-                  background: isSelected ? "var(--primary)" : "var(--bg)",
-                  color: isSelected ? "#ffffff" : "var(--text)",
-                  cursor: "pointer",
-                  fontWeight: isSelected ? "bold" : "normal",
-                  transition: "all 0.2s ease",
-                  textAlign: "center",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
+          <h3 style={{ margin: 0, fontSize: "1.3rem", fontWeight: "600" }}>
+            Télécharger la VOD
+          </h3>
+          <button
+            onClick={handleClose}
+            style={{
+              background: "var(--surface)",
+              border: "none",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              borderRadius: "50%",
+              width: "32px",
+              height: "32px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "background 0.2s ease",
+            }}
+          >
+            <X size={18} />
+          </button>
         </div>
-      </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        <button
-          onClick={handleFullDownload}
-          className="action-btn"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            justifyContent: "center",
-          }}
-        >
-          <DownloadIcon size={16} /> VOD Entière
-        </button>
-        <button
-          onClick={handleManualClip}
-          className="action-btn secondary-btn"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            justifyContent: "center",
-          }}
-        >
-          <Scissors size={16} /> Sélectionner une partie
-        </button>
+        <div style={{ marginBottom: "32px" }}>
+          <span
+            style={{
+              display: "block",
+              fontSize: "0.95rem",
+              marginBottom: "12px",
+              color: "var(--text-muted)",
+              fontWeight: "500",
+            }}
+          >
+            Qualité vidéo
+          </span>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: "8px",
+            }}
+          >
+            {[
+              { value: "best", label: "Source" },
+              { value: "1080p", label: "1080p" },
+              { value: "720p", label: "720p" },
+              { value: "480p", label: "480p" },
+            ].map((opt) => {
+              const isSelected = quality === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setQuality(opt.value)}
+                  type="button"
+                  style={{
+                    padding: "12px 4px",
+                    fontSize: "0.9rem",
+                    borderRadius: "10px",
+                    border: "2px solid",
+                    borderColor: isSelected
+                      ? "var(--primary)"
+                      : "transparent",
+                    background: isSelected
+                      ? "var(--primary-transparent, rgba(147, 51, 234, 0.15))" // fallback if var doesn't exist
+                      : "var(--surface)",
+                    color: isSelected ? "var(--primary)" : "var(--text)",
+                    cursor: "pointer",
+                    fontWeight: isSelected ? "600" : "500",
+                    transition: "all 0.2s ease",
+                    textAlign: "center",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "auto", paddingBottom: "env(safe-area-inset-bottom, 20px)" }}>
+          <button
+            onClick={handleFullDownload}
+            className="action-btn"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              justifyContent: "center",
+              padding: "16px",
+              borderRadius: "12px",
+              fontSize: "1rem",
+              fontWeight: "600",
+            }}
+          >
+            <DownloadIcon size={20} /> VOD Entière
+          </button>
+          <button
+            onClick={handleManualClip}
+            className="action-btn secondary-btn"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              justifyContent: "center",
+              padding: "16px",
+              borderRadius: "12px",
+              fontSize: "1rem",
+              fontWeight: "600",
+            }}
+          >
+            <Scissors size={20} /> Sélectionner une partie
+          </button>
+        </div>
       </div>
     </div>
   );
 
-  // When anchorRect is given (thumbnail cards with overflow:hidden), render via portal
-  // so the menu escapes any clipping parent.
-  return anchorRect ? ReactDOM.createPortal(menu, document.body) : menu;
+  return ReactDOM.createPortal(menu, document.body);
 }
