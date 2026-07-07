@@ -1,53 +1,56 @@
 # 🚀 NoSubVOD iOS
 
 NoSubVOD iOS est le client mobile de NoSubVOD, basé sur Tauri v2 avec un backend Rust embarqué pour lire des VODs et des lives Twitch depuis une interface React adaptée au mobile.
-NoSubVOD iOS est dérivé de NoSubVOD-Desktop. La version 0.3.7 de NSV iOS est le fruit d'un travail de refactorisation d'un code initialement prévu pour des machines Linux et Windows vers la plateforme iOS.
+NoSubVOD iOS est dérivé de NoSubVOD-Desktop. La version 0.5.0 de NSV iOS stabilise l'application pour l'utilisation en mobilité et sur le plein écran iOS natif.
 
-## 🆕 v0.3.7 — Auth Twitch, robustesse streaming et CI IPA fiabilisée
+## 🆕 v0.5.0 — Mode Hors Ligne, Clips, Audio-Only et Plein Écran iOS Natif
 
-La version 0.3.7 se concentre sur la fiabilité, la stabilité du player/chat et la reproductibilité des builds iOS en CI.
+La version 0.5.0 apporte des fonctionnalités majeures pour l'utilisation nomade de l'application et améliore grandement le confort et la stabilité visuelle sur iOS.
 
-### Points clés v0.3.7
+### Points clés v0.5.0
 
-- **Auth Twitch renforcée** : flux OAuth avec polling/popup et gestion de token plus robuste côté middleware.
-- **Chat VOD stabilisé** : alignement sur la contrainte Twitch API (`first` entre `1` et `100`) pour éviter les erreurs de replay.
-- **Streaming/serveur mobile** : normalisation des playlists HLS et ajustements d'URL serveur local.
-- **Build IPA CI durci** : no-signing forcé, sélection Xcode résiliente et collecte d'artefact avec fallback.
-- **Maintenance iOS** : suppression de plugins/dépendances Tauri inutilisés et nettoyage global du code.
+- **Mode Hors Ligne & Clips** : Accès à l'application sans connexion Internet (Offline Home) avec gestion des fichiers locaux téléchargés et intégration des Clips Twitch.
+- **Plein Écran iOS Natif Fiabilisé** : Détection robuste de l'état de plein écran (événements `webkitbeginfullscreen`) pour empêcher les fausses coupures de flux et assurer la synchronisation continue de l'historique de lecture.
+- **Support Audio-Only & Deep Linking** : Possibilité d'écouter uniquement l'audio pour économiser la bande passante et intégration de schémas de liens personnalisés pour ouvrir l'application directement.
+- **UI Ergonomique Adaptée** : Intégration complète des Safe Areas d'iOS, sélecteurs de qualité simplifiés sous forme de boutons d'accès rapide, et menu de téléchargement en feuille de style animée (Bottom Sheet).
+- **Maintenance & Refactorisation** : Remplacement de styles spécifiques par une feuille commune (`Common.css`), suppression du code mort et mise à jour globale des dépendances Tauri v2 / npm.
 
-Voir la note complète: [releasenotes/0.3.7.md](releasenotes/0.3.7.md)
+Voir la note complète : [releasenotes/0.5.0.md](releasenotes/0.5.0.md)
 
 ---
 
 ## ✨ Fonctionnalités
 
-### 🔓 VOD + Live Twitch
+### 🔓 VOD, Live, Clips & Mode Hors Ligne
 
 - Lecture des VODs via un proxy HLS du backend local.
 - Lecture des lives via des endpoints API locaux.
-- Navigation complète: Home, Live, Search, Trends, Channel, Player, Multi-View.
+- **Clips Twitch** : Prise en charge de la lecture et navigation des clips.
+- **Mode Hors Ligne** : Interface d'accueil dédiée (`OfflineHome`) pour accéder aux fonctionnalités et visionner ses vidéos téléchargées localement sans connexion.
+- Navigation complète : Home, Live, Search, Trends, Channel, Player, Multi-View.
 
-### 🎬 Expérience player
+### 🎬 Expérience player & Audio-Only
 
-- Contrôles playback complets (play/pause, seek, volume, fullscreen selon contexte).
-- Gestion de la qualité vidéo (Auto + sélection manuelle).
-- Comportement optimisé pour un usage iPhone/iPad.
+- Contrôles playback complets (play/pause, seek, volume, plein écran iOS natif robuste).
+- Gestion de la qualité vidéo (Auto, sélection manuelle par boutons d'accès rapide, et **Audio-Only** pour économiser la bande passante).
+- Support des **Safe Areas** d'iOS pour éviter les coupures de l'encoche de l'iPhone/iPad.
 
 ### 💬 Chat, historique et données
 
-- Replay chat pour VOD.
-- Historique de lecture avec reprise.
+- Replay chat pour VOD et gestion robuste du polling.
+- Historique de lecture avec reprise intelligente (même en plein écran natif).
 - Watchlist et données locales persistantes.
 
-### 🖥️ Fonctionnalités LAN / pairing
+### 🖥️ Fonctionnalités LAN, pairing & Deep Linking
 
 - Backend local iOS accessible en HTTP `23400` et HTTPS `23401`.
-- Mode pairé avec Desktop: découverte via `23456` et routage ciblé de certaines APIs (screen share/downloads).
+- **Deep Linking** : Ouverture automatique de l'application depuis des liens ou partages externes.
+- Mode pairé avec Desktop : découverte via `23456` et routage ciblé de certaines APIs (screen share/downloads).
 
 ### 🧩 Modules intégrés
 
 - Screen Share.
-- Downloads.
+- Downloads avec menu Bottom Sheet animé.
 - Auth Twitch.
 
 ---
