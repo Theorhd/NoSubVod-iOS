@@ -59,13 +59,6 @@ export interface ExtensionContribution {
   componentProps?: any;
 }
 
-interface ServerInfo {
-  ip: string;
-  port: number;
-  url: string;
-  qrcode: string;
-}
-
 export interface HistoryEntry {
   vodId: string;
   timecode: number;

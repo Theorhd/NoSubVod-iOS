@@ -7,8 +7,6 @@ import {
 } from "../../shared/types";
 import { TopBar } from "./components/TopBar";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
-import { useServer } from "./ServerContext";
-import { getDeviceId } from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
 import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 import { isMobileDevice, isTauriRuntime } from "./utils/capabilities";
@@ -36,11 +34,6 @@ const defaultSettings: ExperienceSettings = {
   launchAtLogin: false,
   enabledExtensions: [],
 };
-
-const LazyQRCodeReader = React.lazy(async () => {
-  const module = await import("./components/QRCodeReader");
-  return { default: module.QRCodeReader };
-});
 
 function buildFallbackProfileFilename(): string {
   const now = new Date();

@@ -252,9 +252,7 @@ function VodLivePlayer({
   const [markers, setMarkers] = useState<VideoMarker[]>([]);
   const [vodInfo, setVodInfo] = useState<VOD | null>(null);
   const [liveInfo, setLiveInfo] = useState<LiveStream | null>(null);
-  const [isLoadingPlayerInfo, setIsLoadingPlayerInfo] = useState(
-    !!(vodId || liveId),
-  );
+  const [, setIsLoadingPlayerInfo] = useState(!!(vodId || liveId));
 
   const [initialTime, setInitialTime] = useState(0);
   const [seekTo, setSeekTo] = useState<number | null>(null);
