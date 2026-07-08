@@ -14,6 +14,7 @@ import {
   setRemoteServerToken,
 } from "./utils/authTokens";
 import { useInterval } from "../../shared/hooks/useInterval";
+import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 
 const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
 
@@ -83,7 +84,14 @@ export function ServerProvider({
     }
   }, [serverUrlState, tokenValue]);
 
-  useInterval(checkStatus, 30000);
+  // Pause the polling interval when the app is in the background (iOS).
+  // useInterval already handles the visibilitychange, but passing null here
+  // is an explicit safety guard — we never want to accumulate failed requests
+  // while hidden.
+  const isPageVisible = usePageVisibility();
+  const pollDelay = isPageVisible ? 30000 : null;
+
+  useInterval(checkStatus, pollDelay);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

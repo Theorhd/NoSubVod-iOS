@@ -150,16 +150,23 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|_app_handle, event| match event {
+    app.run(|_app_handle, event| {
         #[cfg(mobile)]
-        tauri::RunEvent::Resumed => {
-            tracing::info!("App resumed from background, network stack should be active");
+        if let tauri::RunEvent::Resumed = &event {
+            tracing::info!("App resumed from background — notifying frontend");
+            // Notify the frontend so it can refresh data and stop accumulating
+            // stale state that built up while the network was suspended.
+            if let Err(e) = _app_handle.emit("nsv-app-resumed", ()) {
+                tracing::warn!("Failed to emit nsv-app-resumed: {e}");
+            }
         }
+
         #[cfg(mobile)]
-        tauri::RunEvent::ExitRequested { .. } => {
+        if let tauri::RunEvent::ExitRequested { .. } = &event {
             tracing::info!("App exit requested, background tasks should stop gracefully");
         }
-        _ => {}
+
+        let _ = event;
     });
 }
 

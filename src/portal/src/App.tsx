@@ -1,6 +1,8 @@
 import React, {
   Suspense,
+  createContext,
   useCallback,
+  useContext,
   useMemo,
   useEffect,
   useRef,
@@ -30,6 +32,7 @@ import { ExtensionProvider, useExtensions } from "./ExtensionContext";
 import { navigateBackInApp } from "./utils/navigation";
 import { isTauriRuntime, isIosTouchRuntime } from "./utils/capabilities";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
+import { useAppResume } from "./hooks/useAppResume";
 import "./styles/App.css";
 
 import OfflineHome from "./OfflineHome";
@@ -47,6 +50,16 @@ import ScreenShare from "./ScreenShare";
 
 const SUSPEND_EXTENSION_LOADING = true;
 const APP_READY_EVENT_NAME = "nsv-app-ready";
+
+/**
+ * Context that carries a `resumeCount` — incremented each time the app
+ * returns from the iOS background. Consumers can use it as a `key` or
+ * dependency to trigger a data refresh.
+ */
+const ResumeContext = createContext(0);
+export function useResumeCount() {
+  return useContext(ResumeContext);
+}
 
 type NavItem = {
   path: string;
@@ -355,6 +368,7 @@ function AppContent() {
   const { contributions } = useExtensions();
   const isDesktopConnected = isServerConnected && Boolean(serverUrl);
   const isOnline = useOnlineStatus();
+  const resumeCount = useAppResume();
 
   useEffect(() => {
     try {
@@ -400,52 +414,54 @@ function AppContent() {
   );
 
   return (
-    <Router>
-      <ErrorBoundary>
-        <div className="app-container">
-          <Suspense
-            fallback={
-              <div className="status-line portal-loader">Loading portal...</div>
-            }
-          >
-            <AppReadySignal />
-            <div className="content-wrap">
-              <IosSwipeBackBridge />
-              <DeepLinkListener />
-              <Routes>
-                <Route
-                  path="/"
-                  element={isOnline ? <Home /> : <OfflineHome />}
-                />
-                <Route path="/trends" element={<Trends />} />
-                <Route path="/live" element={<Live />} />
-                <Route path="/search" element={<Search />} />
-                <Route path="/player" Component={Player} />
-                <Route path="/history" element={<History />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/channel" element={<Channel />} />
-                <Route path="/multi-view" element={<MultiView />} />
-                <Route path="/downloads" element={<Downloads />} />
-                <Route path="/screen-share" element={<ScreenShare />} />
-                {/* Contribution Routes */}
-                {contributions
-                  .filter((c) => c.type === "route")
-                  .map((c) => (
-                    <Route
-                      key={c.id}
-                      path={c.path}
-                      element={<c.component {...c.componentProps} />}
-                    />
-                  ))}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </div>
-          </Suspense>
-          <BottomNav items={navItems} />
-          <NotificationCenter />
-        </div>
-      </ErrorBoundary>
-    </Router>
+    <ResumeContext.Provider value={resumeCount}>
+      <Router>
+        <ErrorBoundary>
+          <div className="app-container">
+            <Suspense
+              fallback={
+                <div className="status-line portal-loader">Loading portal...</div>
+              }
+            >
+              <AppReadySignal />
+              <div className="content-wrap">
+                <IosSwipeBackBridge />
+                <DeepLinkListener />
+                <Routes>
+                  <Route
+                    path="/"
+                    element={isOnline ? <Home key={resumeCount} /> : <OfflineHome />}
+                  />
+                  <Route path="/trends" element={<Trends key={resumeCount} />} />
+                  <Route path="/live" element={<Live key={resumeCount} />} />
+                  <Route path="/search" element={<Search key={resumeCount} />} />
+                  <Route path="/player" Component={Player} />
+                  <Route path="/history" element={<History key={resumeCount} />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/channel" element={<Channel key={resumeCount} />} />
+                  <Route path="/multi-view" element={<MultiView />} />
+                  <Route path="/downloads" element={<Downloads key={resumeCount} />} />
+                  <Route path="/screen-share" element={<ScreenShare />} />
+                  {/* Contribution Routes */}
+                  {contributions
+                    .filter((c) => c.type === "route")
+                    .map((c) => (
+                      <Route
+                        key={c.id}
+                        path={c.path}
+                        element={<c.component {...c.componentProps} />}
+                      />
+                    ))}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </div>
+            </Suspense>
+            <BottomNav items={navItems} />
+            <NotificationCenter />
+          </div>
+        </ErrorBoundary>
+      </Router>
+    </ResumeContext.Provider>
   );
 }
 

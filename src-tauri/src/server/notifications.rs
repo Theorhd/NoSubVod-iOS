@@ -76,12 +76,39 @@ impl SubNotificationService {
     async fn run(self) {
         tokio::time::sleep(STARTUP_DELAY).await;
 
+        // Consecutive error count — used for exponential back-off so that
+        // when the app is in the iOS background (network suspended) we don't
+        // hammer failing Twitch API calls.
+        let mut consecutive_errors: u32 = 0;
+
         loop {
-            if let Err(error) = self.tick().await {
-                tracing::warn!(error = %error, "Sub notification tick failed");
+            match self.tick().await {
+                Ok(()) => {
+                    // Success: reset the back-off counter.
+                    consecutive_errors = 0;
+                }
+                Err(error) => {
+                    consecutive_errors = consecutive_errors.saturating_add(1);
+                    tracing::warn!(
+                        error = %error,
+                        consecutive_errors,
+                        "Sub notification tick failed"
+                    );
+                }
             }
 
-            tokio::time::sleep(POLL_INTERVAL).await;
+            // Exponential back-off: 75s, 150s, 300s, 600s (max ~10 min).
+            // This prevents a flood of failing API calls when the iOS network
+            // is suspended (background mode).
+            let backoff_secs = if consecutive_errors == 0 {
+                POLL_INTERVAL
+            } else {
+                let factor = 1u64 << consecutive_errors.min(3); // 2^0=1 … 2^3=8
+                Duration::from_secs(POLL_INTERVAL.as_secs().saturating_mul(factor))
+                    .min(Duration::from_secs(600))
+            };
+
+            tokio::time::sleep(backoff_secs).await;
         }
     }
 

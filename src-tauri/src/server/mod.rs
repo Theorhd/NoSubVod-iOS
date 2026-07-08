@@ -207,21 +207,51 @@ pub async fn start_server(state: Arc<AppState>, app: AppHandle) {
         }
     }
 
-    match TcpListener::bind(http_addr).await {
-        Ok(listener) => {
-            eprintln!("[NoSubVOD] HTTP server listening on {http_addr}");
-            #[cfg(not(debug_assertions))]
-            match &portal_dist {
-                Some(path) => eprintln!("[NoSubVOD] Serving portal from {}", path.display()),
-                None => eprintln!("[NoSubVOD] Portal static files not found in bundle resources"),
+    // Retry loop: on iOS the process is not killed in the background but the
+    // OS can reclaim the port in edge cases. We retry with a short delay so
+    // the server self-heals without requiring a full app restart.
+    const MAX_BIND_ATTEMPTS: u32 = 5;
+    let mut attempt = 0u32;
+
+    loop {
+        attempt += 1;
+        match TcpListener::bind(http_addr).await {
+            Ok(listener) => {
+                eprintln!(
+                    "[NoSubVOD] HTTP server listening on {http_addr} (attempt {attempt})"
+                );
+                #[cfg(not(debug_assertions))]
+                match &portal_dist {
+                    Some(path) => {
+                        eprintln!("[NoSubVOD] Serving portal from {}", path.display())
+                    }
+                    None => eprintln!(
+                        "[NoSubVOD] Portal static files not found in bundle resources"
+                    ),
+                }
+                if let Err(e) = axum::serve(listener, router.clone()).await {
+                    eprintln!("[NoSubVOD] Server error: {e}");
+                }
+                // If axum::serve returns (which normally it never does unless
+                // there's a fatal error), wait a moment before retrying.
             }
-            if let Err(e) = axum::serve(listener, router).await {
-                eprintln!("[NoSubVOD] Server error: {e}");
+            Err(e) => {
+                eprintln!(
+                    "[NoSubVOD] Failed to bind port {SERVER_PORT} (attempt {attempt}/{MAX_BIND_ATTEMPTS}): {e}"
+                );
             }
         }
-        Err(e) => {
-            eprintln!("[NoSubVOD] Failed to bind port {SERVER_PORT}: {e}");
+
+        if attempt >= MAX_BIND_ATTEMPTS {
+            eprintln!(
+                "[NoSubVOD] Giving up after {MAX_BIND_ATTEMPTS} failed bind attempts on port {SERVER_PORT}"
+            );
+            break;
         }
+
+        // Wait before retrying — increasing delay (1s, 2s, 4s, …)
+        let delay_secs = 1u64 << attempt.min(4);
+        tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
     }
 }
 

@@ -651,6 +651,7 @@ function patchFetch() {
 type AppErrorBoundaryState = {
   hasError: boolean;
   message: string;
+  retryCount: number;
 };
 
 class AppErrorBoundary extends React.Component<
@@ -659,12 +660,14 @@ class AppErrorBoundary extends React.Component<
 > {
   public constructor(props: React.PropsWithChildren) {
     super(props);
-    this.state = { hasError: false, message: "" };
+    this.state = { hasError: false, message: "", retryCount: 0 };
+    this.handleReset = this.handleReset.bind(this);
+    this.handleForceReload = this.handleForceReload.bind(this);
   }
 
   public static getDerivedStateFromError(
     error: unknown,
-  ): AppErrorBoundaryState {
+  ): Partial<AppErrorBoundaryState> {
     return {
       hasError: true,
       message: normalizeErrorMessage(error),
@@ -675,14 +678,45 @@ class AppErrorBoundary extends React.Component<
     console.error("Portal runtime error:", error);
   }
 
+  private handleReset() {
+    this.setState((prev) => ({
+      hasError: false,
+      message: "",
+      retryCount: prev.retryCount + 1,
+    }));
+  }
+
+  private handleForceReload() {
+    globalThis.location.reload();
+  }
+
   public override render() {
     if (this.state.hasError) {
+      const isRetryable = this.state.retryCount < 3;
       return (
         <div className="app-error-container">
-          <h2 className="app-error-title">Portal error</h2>
+          <h2 className="app-error-title">Une erreur est survenue</h2>
           <p className="app-error-message">
-            {this.state.message || "Unknown runtime error"}
+            {this.state.message || "Erreur inattendue"}
           </p>
+          <div className="app-error-actions">
+            {isRetryable && (
+              <button
+                className="app-error-btn app-error-btn--retry"
+                onClick={this.handleReset}
+                type="button"
+              >
+                Réessayer
+              </button>
+            )}
+            <button
+              className="app-error-btn app-error-btn--reload"
+              onClick={this.handleForceReload}
+              type="button"
+            >
+              Recharger l&apos;app
+            </button>
+          </div>
         </div>
       );
     }
