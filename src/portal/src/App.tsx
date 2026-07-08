@@ -420,7 +420,9 @@ function AppContent() {
           <div className="app-container">
             <Suspense
               fallback={
-                <div className="status-line portal-loader">Loading portal...</div>
+                <div className="status-line portal-loader">
+                  Loading portal...
+                </div>
               }
             >
               <AppReadySignal />
@@ -430,17 +432,34 @@ function AppContent() {
                 <Routes>
                   <Route
                     path="/"
-                    element={isOnline ? <Home key={resumeCount} /> : <OfflineHome />}
+                    element={
+                      isOnline ? <Home key={resumeCount} /> : <OfflineHome />
+                    }
                   />
-                  <Route path="/trends" element={<Trends key={resumeCount} />} />
+                  <Route
+                    path="/trends"
+                    element={<Trends key={resumeCount} />}
+                  />
                   <Route path="/live" element={<Live key={resumeCount} />} />
-                  <Route path="/search" element={<Search key={resumeCount} />} />
+                  <Route
+                    path="/search"
+                    element={<Search key={resumeCount} />}
+                  />
                   <Route path="/player" Component={Player} />
-                  <Route path="/history" element={<History key={resumeCount} />} />
+                  <Route
+                    path="/history"
+                    element={<History key={resumeCount} />}
+                  />
                   <Route path="/settings" element={<Settings />} />
-                  <Route path="/channel" element={<Channel key={resumeCount} />} />
+                  <Route
+                    path="/channel"
+                    element={<Channel key={resumeCount} />}
+                  />
                   <Route path="/multi-view" element={<MultiView />} />
-                  <Route path="/downloads" element={<Downloads key={resumeCount} />} />
+                  <Route
+                    path="/downloads"
+                    element={<Downloads key={resumeCount} />}
+                  />
                   <Route path="/screen-share" element={<ScreenShare />} />
                   {/* Contribution Routes */}
                   {contributions

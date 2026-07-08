@@ -217,17 +217,15 @@ pub async fn start_server(state: Arc<AppState>, app: AppHandle) {
         attempt += 1;
         match TcpListener::bind(http_addr).await {
             Ok(listener) => {
-                eprintln!(
-                    "[NoSubVOD] HTTP server listening on {http_addr} (attempt {attempt})"
-                );
+                eprintln!("[NoSubVOD] HTTP server listening on {http_addr} (attempt {attempt})");
                 #[cfg(not(debug_assertions))]
                 match &portal_dist {
                     Some(path) => {
                         eprintln!("[NoSubVOD] Serving portal from {}", path.display())
                     }
-                    None => eprintln!(
-                        "[NoSubVOD] Portal static files not found in bundle resources"
-                    ),
+                    None => {
+                        eprintln!("[NoSubVOD] Portal static files not found in bundle resources")
+                    }
                 }
                 if let Err(e) = axum::serve(listener, router.clone()).await {
                     eprintln!("[NoSubVOD] Server error: {e}");
