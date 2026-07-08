@@ -271,16 +271,10 @@ export default function DownloadMenu({
             flexShrink: 0,
           }}
         >
-          <style>{`
-            @keyframes spin-menu { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            .spin-menu-icon { animation: spin-menu 1s linear infinite; }
-            .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(168, 85, 247, 0.3); }
-            .btn-secondary:hover { background: rgba(255, 255, 255, 0.08); }
-          `}</style>
-
           <button
             onClick={handleFullDownload}
             className="btn-primary"
+            disabled={downloadStatus !== "idle"}
             style={{
               display: "flex",
               alignItems: "center",
@@ -299,10 +293,11 @@ export default function DownloadMenu({
               cursor: "pointer",
               transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
               boxShadow: "0 4px 14px rgba(168, 85, 247, 0.2)",
+              opacity: downloadStatus === "idle" ? 1 : 0.92,
             }}
           >
             {downloadStatus === "loading" ? (
-              <Loader2 size={22} className="spin-menu-icon" />
+              <Loader2 size={22} className="spinning" />
             ) : downloadStatus === "success" ? (
               <Check size={22} />
             ) : (

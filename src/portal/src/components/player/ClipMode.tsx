@@ -192,14 +192,10 @@ const ClipMode: React.FC<ClipModeProps> = ({
         </span>
       </div>
 
-      <style>{`
-        @keyframes spin-menu { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .spin-menu-icon { animation: spin-menu 1s linear infinite; }
-      `}</style>
-
       <button
         type="button"
         onClick={handleDownload}
+        disabled={downloadStatus !== "idle"}
         style={{
           marginLeft: "auto",
           padding: "8px 16px",
@@ -221,6 +217,7 @@ const ClipMode: React.FC<ClipModeProps> = ({
             downloadStatus === "success"
               ? "0 4px 12px rgba(34, 197, 94, 0.3)"
               : "0 4px 12px rgba(168, 85, 247, 0.3)",
+          opacity: downloadStatus === "idle" ? 1 : 0.92,
         }}
         onMouseOver={(e) => {
           if (downloadStatus !== "success")
@@ -232,7 +229,7 @@ const ClipMode: React.FC<ClipModeProps> = ({
         }}
       >
         {downloadStatus === "loading" ? (
-          <Loader2 size={16} className="spin-menu-icon" />
+          <Loader2 size={16} className="spinning" />
         ) : downloadStatus === "success" ? (
           <Check size={16} />
         ) : (
