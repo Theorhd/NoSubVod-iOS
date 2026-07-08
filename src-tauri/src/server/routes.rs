@@ -24,7 +24,7 @@ use tower_http::trace::TraceLayer;
 use super::{
     download_paths::{
         build_master_m3u8_url, build_output_file_base_path, build_output_file_path,
-        resolve_download_output_dir,
+        resolve_download_dir,
     },
     dto::{
         ChatQuery, ChatSendBody, DownloadRequest, DownloadedFile, HistoryBody, HistoryListQuery,
@@ -944,14 +944,10 @@ async fn handle_shared_downloads(
     req: axum::extract::Request,
 ) -> AppResult<Response> {
     let settings = state.history.get_settings().await;
-    let Some(base_path) = settings
-        .download_local_path
-        .or(settings.download_network_shared_path)
-    else {
-        return Err(AppError::NotFound(
-            "Download path is not configured".to_string(),
-        ));
-    };
+    let base_path = resolve_download_dir(
+        settings.download_local_path,
+        settings.download_network_shared_path,
+    );
 
     // Treat the configured download directory as the base path.
     let base_dir = std::path::Path::new(&base_path);
@@ -994,12 +990,10 @@ async fn handle_shared_downloads(
 
 async fn handle_get_downloads(State(state): State<ApiState>) -> impl IntoResponse {
     let settings = state.history.get_settings().await;
-    let Some(base_path) = settings
-        .download_local_path
-        .or(settings.download_network_shared_path)
-    else {
-        return Json(Vec::<DownloadedFile>::new()).into_response();
-    };
+    let base_path = resolve_download_dir(
+        settings.download_local_path,
+        settings.download_network_shared_path,
+    );
 
     // Try cache first (5s TTL)
     if let Some(cached) = state.download_cache.get("list").await {
@@ -1170,14 +1164,10 @@ async fn handle_download_hls(
     }
 
     let settings = state.history.get_settings().await;
-    let Some(base_path) = settings
-        .download_local_path
-        .or(settings.download_network_shared_path)
-    else {
-        return Err(AppError::NotFound(
-            "Download path is not configured".to_string(),
-        ));
-    };
+    let base_path = resolve_download_dir(
+        settings.download_local_path,
+        settings.download_network_shared_path,
+    );
 
     let full_path = std::path::PathBuf::from(&base_path).join(&file_name);
     let file_size = match tokio::fs::metadata(&full_path).await {
@@ -1218,7 +1208,10 @@ async fn handle_start_download(
     Json(req): Json<DownloadRequest>,
 ) -> AppResult<Response> {
     let settings = state.history.get_settings().await;
-    let out_dir = resolve_download_output_dir(settings.download_local_path);
+    let out_dir = resolve_download_dir(
+        settings.download_local_path,
+        settings.download_network_shared_path,
+    );
     if let Err(e) = tokio::fs::create_dir_all(&out_dir).await {
         return Err(AppError::Internal(format!(
             "Failed to create download directory: {e}"

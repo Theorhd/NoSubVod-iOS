@@ -1,11 +1,43 @@
 use std::path::PathBuf;
 
-pub fn resolve_download_output_dir(configured_path: Option<String>) -> String {
-    configured_path.unwrap_or_else(|| {
-        dirs::download_dir()
-            .map(|path| path.to_string_lossy().to_string())
-            .unwrap_or_else(|| ".".to_string())
-    })
+pub fn fix_sandbox_path(path: &str) -> String {
+    if !path.contains("/Containers/Data/Application/") {
+        return path.to_string();
+    }
+
+    let default_dir = dirs::download_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    if default_dir.contains("/Containers/Data/Application/") {
+        let parts: Vec<&str> = default_dir.split("/Containers/Data/Application/").collect();
+        if parts.len() == 2 {
+            let right_parts: Vec<&str> = parts[1].split('/').collect();
+            if !right_parts.is_empty() {
+                let current_uuid = right_parts[0];
+
+                let old_parts: Vec<&str> = path.split("/Containers/Data/Application/").collect();
+                if old_parts.len() == 2 {
+                    let old_right: Vec<&str> = old_parts[1].split('/').collect();
+                    if !old_right.is_empty() {
+                        let old_uuid = old_right[0];
+                        return path.replace(old_uuid, current_uuid);
+                    }
+                }
+            }
+        }
+    }
+    path.to_string()
+}
+
+pub fn resolve_download_dir(local_path: Option<String>, network_path: Option<String>) -> String {
+    let path = local_path.or(network_path);
+    if let Some(p) = path {
+        return fix_sandbox_path(&p);
+    }
+    dirs::download_dir()
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_else(|| ".".to_string())
 }
 
 pub fn build_master_m3u8_url(port: u16, vod_id: &str, quality: &str) -> String {
@@ -44,13 +76,13 @@ mod tests {
 
     #[test]
     fn resolves_configured_download_dir() {
-        let dir = resolve_download_output_dir(Some("/custom/path".to_string()));
+        let dir = resolve_download_dir(Some("/custom/path".to_string()), None);
         assert_eq!(dir, "/custom/path");
     }
 
     #[test]
     fn resolves_default_download_dir() {
-        let dir = resolve_download_output_dir(None);
+        let dir = resolve_download_dir(None, None);
         assert!(!dir.is_empty());
     }
 
