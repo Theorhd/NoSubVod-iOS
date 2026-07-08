@@ -67,6 +67,7 @@ export default function DownloadMenu({
         throw new Error("Failed to start download");
       }
     } catch (e) {
+      console.error("[DownloadMenu] Download error:", e);
       alert("Erreur: " + e);
       setDownloadStatus("idle");
     }
@@ -100,13 +101,14 @@ export default function DownloadMenu({
   };
 
   const sheetStyle: React.CSSProperties = {
-    height: "45vh",
+    maxHeight: "70vh",
     background: "var(--bg-elevated)",
     borderTopLeftRadius: "24px",
     borderTopRightRadius: "24px",
     padding: "0 20px 20px 20px",
     display: "flex",
     flexDirection: "column",
+    overflowY: "auto",
     transform: isVisible ? "translateY(0)" : "translateY(100%)",
     transition: "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
     boxShadow: "0 -8px 24px rgba(0,0,0,0.4)",
@@ -179,6 +181,7 @@ export default function DownloadMenu({
               display: "grid",
               gridTemplateColumns: "repeat(4, 1fr)",
               gap: "8px",
+              flexShrink: 0,
             }}
           >
             {[
@@ -225,7 +228,8 @@ export default function DownloadMenu({
             display: "flex",
             flexDirection: "column",
             gap: "12px",
-            marginTop: "auto",
+            flexShrink: 0,
+            paddingTop: "8px",
             paddingBottom: "env(safe-area-inset-bottom, 20px)",
           }}
         >
