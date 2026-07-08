@@ -6,6 +6,7 @@ import {
   X,
   Loader2,
   Check,
+  ChevronRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { navigateToPlayer } from "../utils/navigation";
@@ -16,7 +17,7 @@ interface DownloadMenuProps {
   title?: string;
   duration?: number;
   onClose: () => void;
-  anchorRect?: DOMRect | null; // Kept for backwards compatibility if needed elsewhere
+  anchorRect?: DOMRect | null;
 }
 
 export default function DownloadMenu({
@@ -29,24 +30,29 @@ export default function DownloadMenu({
   const [isClosing, setIsClosing] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<
-    "idle" | "loading" | "success"
+    "idle" | "loading" | "success" | "error"
   >("idle");
+
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Trigger the enter transition after the first render
     requestAnimationFrame(() => setIsMounted(true));
+    // Prevent background scrolling on iOS when sheet is open
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, []);
 
   const handleClose = () => {
     setIsClosing(true);
     setTimeout(() => {
       onClose();
-    }, 400); // Matches the CSS transition duration
+    }, 400);
   };
 
   const handleFullDownload = async () => {
-    if (downloadStatus !== "idle") return;
+    if (downloadStatus !== "idle" && downloadStatus !== "error") return;
     setDownloadStatus("loading");
     try {
       const authSuffix = buildAuthSuffix("local");
@@ -70,8 +76,8 @@ export default function DownloadMenu({
       }
     } catch (e) {
       console.error("[DownloadMenu] Download error:", e);
-      alert("Erreur: " + e);
-      setDownloadStatus("idle");
+      setDownloadStatus("error");
+      setTimeout(() => setDownloadStatus("idle"), 3000);
     }
   };
 
@@ -85,125 +91,147 @@ export default function DownloadMenu({
 
   const isVisible = isMounted && !isClosing;
 
-  const overlayStyle: React.CSSProperties = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100vw",
-    height: "100vh",
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    backdropFilter: "blur(12px)",
-    WebkitBackdropFilter: "blur(12px)",
-    zIndex: 99999,
-    opacity: isVisible ? 1 : 0,
-    transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "flex-end",
-    alignItems: "center", // Center horizontally on large screens
-    paddingBottom: "env(safe-area-inset-bottom, 24px)",
-    paddingLeft: "16px",
-    paddingRight: "16px",
-  };
-
-  const sheetStyle: React.CSSProperties = {
-    width: "100%",
-    maxWidth: "480px", // Limit width on desktop
-    background: "rgba(30, 30, 34, 0.85)", // Deep dark glassmorphism
-    border: "1px solid rgba(255, 255, 255, 0.08)",
-    borderRadius: "28px",
-    padding: "24px 28px",
-    display: "flex",
-    flexDirection: "column",
-    overflowY: "auto",
-    transform: isVisible
-      ? "translateY(0) scale(1)"
-      : "translateY(40px) scale(0.95)",
-    transition:
-      "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease",
-    boxShadow:
-      "0 24px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
-    marginBottom: "16px",
-  };
-
-  const menu = (
+  return ReactDOM.createPortal(
     <div
-      style={overlayStyle}
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.6)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        zIndex: 99999,
+        opacity: isVisible ? 1 : 0,
+        transition: "opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-end",
+        alignItems: "center",
+        paddingBottom: "env(safe-area-inset-bottom, 24px)",
+        paddingLeft: "16px",
+        paddingRight: "16px",
+        touchAction: "none", // Prevent scrolling on the overlay itself
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();
       }}
     >
-      <div style={sheetStyle} onClick={(e) => e.stopPropagation()}>
+      {/* CSS for touch states and animations since inline pseudo-classes are tricky */}
+      <style>{`
+        .ios-btn {
+          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, opacity 0.2s ease;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .ios-btn:active {
+          transform: scale(0.96);
+        }
+        .quality-btn {
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .quality-btn:active {
+          transform: scale(0.92);
+        }
+        .dl-sheet {
+          transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease;
+        }
+      `}</style>
+
+      <div
+        className="dl-sheet"
+        style={{
+          width: "100%",
+          maxWidth: "500px",
+          background: "rgba(24, 24, 28, 0.95)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          borderRadius: "32px",
+          padding: "28px 24px 32px",
+          display: "flex",
+          flexDirection: "column",
+          transform: isVisible
+            ? "translateY(0) scale(1)"
+            : "translateY(40px) scale(0.95)",
+          boxShadow:
+            "0 24px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)",
+          marginBottom: "16px",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "28px",
+            marginBottom: "32px",
           }}
         >
-          <h3
-            style={{
-              margin: 0,
-              fontSize: "1.4rem",
-              fontWeight: "700",
-              letterSpacing: "-0.02em",
-              color: "#fff",
-            }}
-          >
-            Téléchargement
-          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "1.6rem",
+                fontWeight: "800",
+                letterSpacing: "-0.03em",
+                color: "#fff",
+              }}
+            >
+              Télécharger
+            </h3>
+            {title && (
+              <span
+                style={{
+                  fontSize: "0.85rem",
+                  color: "rgba(255, 255, 255, 0.5)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: "250px",
+                }}
+              >
+                {title}
+              </span>
+            )}
+          </div>
+
           <button
+            className="ios-btn"
             onClick={handleClose}
             style={{
-              background: "rgba(255, 255, 255, 0.1)",
-              border: "1px solid rgba(255, 255, 255, 0.05)",
+              background: "rgba(255, 255, 255, 0.08)",
+              border: "none",
               color: "#fff",
               cursor: "pointer",
               borderRadius: "50%",
-              width: "36px",
-              height: "36px",
+              width: "44px",
+              height: "44px", // Minimum touch target size for iOS
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              transition: "all 0.2s ease",
-            }}
-            onMouseOver={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(255, 255, 255, 0.2)";
-              (e.currentTarget as HTMLButtonElement).style.transform =
-                "scale(1.05)";
-            }}
-            onMouseOut={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(255, 255, 255, 0.1)";
-              (e.currentTarget as HTMLButtonElement).style.transform =
-                "scale(1)";
+              flexShrink: 0,
             }}
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
-        <div style={{ marginBottom: "36px" }}>
+        <div style={{ marginBottom: "40px" }}>
           <span
             style={{
               display: "block",
-              fontSize: "0.8rem",
+              fontSize: "0.75rem",
               textTransform: "uppercase",
-              letterSpacing: "0.1em",
+              letterSpacing: "0.15em",
               marginBottom: "16px",
-              color: "rgba(255, 255, 255, 0.5)",
-              fontWeight: "600",
+              color: "rgba(255, 255, 255, 0.4)",
+              fontWeight: "700",
             }}
           >
-            Résolution
+            Sélectionner la qualité
           </span>
           <div
             style={{
               display: "flex",
               flexWrap: "wrap",
-              gap: "10px",
+              gap: "8px",
             }}
           >
             {[
@@ -219,41 +247,28 @@ export default function DownloadMenu({
               return (
                 <button
                   key={opt.value}
+                  className="quality-btn"
                   onClick={() => setQuality(opt.value)}
                   type="button"
                   style={{
-                    padding: "10px 18px",
+                    padding: "12px 20px",
                     fontSize: "0.95rem",
-                    borderRadius: "20px",
+                    borderRadius: "24px",
                     border: "1px solid",
                     borderColor: isSelected
                       ? "var(--primary, #a855f7)"
-                      : "rgba(255, 255, 255, 0.1)",
+                      : "rgba(255, 255, 255, 0.08)",
                     background: isSelected
-                      ? "var(--primary-transparent, rgba(168, 85, 247, 0.15))"
-                      : "rgba(255, 255, 255, 0.03)",
-                    color: isSelected ? "var(--primary, #d8b4fe)" : "#e2e8f0",
+                      ? "var(--primary, #a855f7)"
+                      : "rgba(255, 255, 255, 0.04)",
+                    color: isSelected ? "#fff" : "rgba(255, 255, 255, 0.8)",
                     cursor: "pointer",
-                    fontWeight: isSelected ? "600" : "500",
-                    transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
-                    whiteSpace: "nowrap",
-                    backdropFilter: "blur(4px)",
-                  }}
-                  onMouseOver={(e) => {
-                    if (!isSelected) {
-                      (e.currentTarget as HTMLButtonElement).style.background =
-                        "rgba(255, 255, 255, 0.08)";
-                      (e.currentTarget as HTMLButtonElement).style.borderColor =
-                        "rgba(255, 255, 255, 0.2)";
-                    }
-                  }}
-                  onMouseOut={(e) => {
-                    if (!isSelected) {
-                      (e.currentTarget as HTMLButtonElement).style.background =
-                        "rgba(255, 255, 255, 0.03)";
-                      (e.currentTarget as HTMLButtonElement).style.borderColor =
-                        "rgba(255, 255, 255, 0.1)";
-                    }
+                    fontWeight: isSelected ? "700" : "500",
+                    boxShadow: isSelected
+                      ? "0 8px 16px rgba(168, 85, 247, 0.25)"
+                      : "none",
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
                   }}
                 >
                   {opt.label}
@@ -267,74 +282,123 @@ export default function DownloadMenu({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: "14px",
+            gap: "16px",
             flexShrink: 0,
           }}
         >
           <button
             onClick={handleFullDownload}
-            className="btn-primary"
-            disabled={downloadStatus !== "idle"}
+            disabled={
+              downloadStatus === "loading" || downloadStatus === "success"
+            }
+            className="ios-btn"
             style={{
               display: "flex",
               alignItems: "center",
               gap: "12px",
               justifyContent: "center",
-              padding: "18px",
-              borderRadius: "16px",
-              fontSize: "1.05rem",
-              fontWeight: "600",
+              padding: "20px",
+              borderRadius: "20px",
+              fontSize: "1.1rem",
+              fontWeight: "700",
               border: "none",
               background:
                 downloadStatus === "success"
-                  ? "#22c55e"
-                  : "linear-gradient(135deg, var(--primary, #a855f7) 0%, #7e22ce 100%)",
+                  ? "#10b981"
+                  : downloadStatus === "error"
+                    ? "#ef4444"
+                    : "var(--primary, #a855f7)",
               color: "#fff",
               cursor: "pointer",
-              transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-              boxShadow: "0 4px 14px rgba(168, 85, 247, 0.2)",
-              opacity: downloadStatus === "idle" ? 1 : 0.92,
+              boxShadow:
+                downloadStatus === "idle"
+                  ? "0 8px 24px rgba(168, 85, 247, 0.3)"
+                  : "none",
+              opacity:
+                downloadStatus === "loading" || downloadStatus === "success"
+                  ? 0.9
+                  : 1,
+              position: "relative",
+              overflow: "hidden",
             }}
           >
             {downloadStatus === "loading" ? (
-              <Loader2 size={22} className="spinning" />
+              <Loader2 size={24} className="spinning" />
             ) : downloadStatus === "success" ? (
-              <Check size={22} />
+              <Check size={24} />
+            ) : downloadStatus === "error" ? (
+              <X size={24} />
             ) : (
-              <DownloadIcon size={22} />
+              <DownloadIcon size={24} />
             )}
-            {downloadStatus === "loading"
-              ? "Démarrage en cours..."
-              : downloadStatus === "success"
-                ? "Téléchargement lancé"
-                : "Télécharger la vidéo complète"}
+
+            <span>
+              {downloadStatus === "loading"
+                ? "Démarrage..."
+                : downloadStatus === "success"
+                  ? "Téléchargement lancé"
+                  : downloadStatus === "error"
+                    ? "Erreur - Réessayer"
+                    : "Télécharger la vidéo complète"}
+            </span>
           </button>
 
           <button
             onClick={handleManualClip}
-            className="btn-secondary"
+            className="ios-btn"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "10px",
-              justifyContent: "center",
-              padding: "16px",
-              borderRadius: "16px",
-              fontSize: "1rem",
+              justifyContent: "space-between",
+              padding: "20px 24px",
+              borderRadius: "20px",
+              fontSize: "1.05rem",
               fontWeight: "600",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
               background: "rgba(255, 255, 255, 0.03)",
-              color: "#e2e8f0",
+              color: "#fff",
               cursor: "pointer",
-              transition: "all 0.2s ease",
             }}
           >
-            <Scissors size={20} style={{ opacity: 0.8 }} /> Extraire un clip
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.1)",
+                  padding: "8px",
+                  borderRadius: "50%",
+                  display: "flex",
+                }}
+              >
+                <Scissors size={20} />
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  gap: "2px",
+                }}
+              >
+                <span>Extraire un clip</span>
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "rgba(255, 255, 255, 0.4)",
+                    fontWeight: "500",
+                  }}
+                >
+                  Télécharger un extrait précis
+                </span>
+              </div>
+            </div>
+            <ChevronRight
+              size={20}
+              style={{ color: "rgba(255, 255, 255, 0.3)" }}
+            />
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
-
-  return ReactDOM.createPortal(menu, document.body);
 }

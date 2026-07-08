@@ -34,11 +34,11 @@ const ClipMode: React.FC<ClipModeProps> = ({
   onClose,
 }) => {
   const [downloadStatus, setDownloadStatus] = useState<
-    "idle" | "loading" | "success"
+    "idle" | "loading" | "success" | "error"
   >("idle");
 
   const handleDownload = async () => {
-    if (downloadStatus !== "idle") return;
+    if (downloadStatus !== "idle" && downloadStatus !== "error") return;
     setDownloadStatus("loading");
     try {
       const authSuffix = buildAuthSuffix("local");
@@ -64,8 +64,9 @@ const ClipMode: React.FC<ClipModeProps> = ({
         throw new Error("Failed to start clip download");
       }
     } catch (e) {
-      alert(`Error: ${e}`);
-      setDownloadStatus("idle");
+      console.error("[ClipMode] Error:", e);
+      setDownloadStatus("error");
+      setTimeout(() => setDownloadStatus("idle"), 3000);
     }
   };
 
@@ -76,27 +77,50 @@ const ClipMode: React.FC<ClipModeProps> = ({
         gap: "12px",
         alignItems: "center",
         margin: "12px 16px",
-        background: "rgba(30, 30, 34, 0.8)",
-        padding: "8px 12px 8px 16px",
-        borderRadius: "16px",
+        background: "rgba(30, 30, 34, 0.95)",
+        padding: "10px 14px",
+        borderRadius: "20px",
         border: "1px solid rgba(255, 255, 255, 0.1)",
         flexWrap: "wrap",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
       }}
     >
+      <style>{`
+        .clip-btn {
+          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, opacity 0.2s ease;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .clip-btn:active {
+          transform: scale(0.92);
+        }
+        .clip-action-btn:active {
+          transform: scale(0.96);
+        }
+      `}</style>
+
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "6px",
+          gap: "8px",
           marginRight: "4px",
         }}
       >
-        <Scissors size={16} color="var(--primary, #a855f7)" />
+        <div
+          style={{
+            background: "rgba(168, 85, 247, 0.2)",
+            padding: "6px",
+            borderRadius: "50%",
+          }}
+        >
+          <Scissors size={18} color="var(--primary, #a855f7)" />
+        </div>
         <span
           style={{
             color: "#fff",
-            fontWeight: "600",
-            fontSize: "0.9rem",
+            fontWeight: "700",
+            fontSize: "0.95rem",
             letterSpacing: "0.02em",
           }}
         >
@@ -108,40 +132,35 @@ const ClipMode: React.FC<ClipModeProps> = ({
         style={{
           display: "flex",
           alignItems: "center",
-          background: "rgba(0,0,0,0.3)",
+          background: "rgba(0,0,0,0.4)",
           borderRadius: "16px",
           padding: "4px",
         }}
       >
         <button
+          className="clip-btn"
           type="button"
           onClick={onSetStart}
           style={{
-            padding: "6px 12px",
-            fontSize: "0.8rem",
-            fontWeight: "600",
-            background: "rgba(255, 255, 255, 0.08)",
+            padding: "8px 14px",
+            fontSize: "0.85rem",
+            fontWeight: "700",
+            background: "rgba(255, 255, 255, 0.1)",
             color: "#fff",
             border: "none",
             borderRadius: "12px",
             cursor: "pointer",
-            transition: "background 0.2s ease",
           }}
-          onMouseOver={(e) =>
-            (e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)")
-          }
-          onMouseOut={(e) =>
-            (e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)")
-          }
         >
           Début
         </button>
         <span
           style={{
-            fontSize: "0.85rem",
-            color: "#a1a1aa",
+            fontSize: "0.9rem",
+            color: "#e4e4e7",
             fontFamily: "monospace",
-            padding: "0 10px",
+            fontWeight: "600",
+            padding: "0 12px",
           }}
         >
           {formatClock(clipStart || 0)}
@@ -152,40 +171,35 @@ const ClipMode: React.FC<ClipModeProps> = ({
         style={{
           display: "flex",
           alignItems: "center",
-          background: "rgba(0,0,0,0.3)",
+          background: "rgba(0,0,0,0.4)",
           borderRadius: "16px",
           padding: "4px",
         }}
       >
         <button
+          className="clip-btn"
           type="button"
           onClick={onSetEnd}
           style={{
-            padding: "6px 12px",
-            fontSize: "0.8rem",
-            fontWeight: "600",
-            background: "rgba(255, 255, 255, 0.08)",
+            padding: "8px 14px",
+            fontSize: "0.85rem",
+            fontWeight: "700",
+            background: "rgba(255, 255, 255, 0.1)",
             color: "#fff",
             border: "none",
             borderRadius: "12px",
             cursor: "pointer",
-            transition: "background 0.2s ease",
           }}
-          onMouseOver={(e) =>
-            (e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)")
-          }
-          onMouseOut={(e) =>
-            (e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)")
-          }
         >
           Fin
         </button>
         <span
           style={{
-            fontSize: "0.85rem",
-            color: "#a1a1aa",
+            fontSize: "0.9rem",
+            color: "#e4e4e7",
             fontFamily: "monospace",
-            padding: "0 10px",
+            fontWeight: "600",
+            padding: "0 12px",
           }}
         >
           {formatClock(clipEnd ?? duration)}
@@ -194,14 +208,15 @@ const ClipMode: React.FC<ClipModeProps> = ({
 
       <button
         type="button"
+        className="clip-btn clip-action-btn"
         onClick={handleDownload}
-        disabled={downloadStatus !== "idle"}
+        disabled={downloadStatus === "loading" || downloadStatus === "success"}
         style={{
           marginLeft: "auto",
-          padding: "8px 16px",
-          fontSize: "0.85rem",
-          fontWeight: "600",
-          borderRadius: "14px",
+          padding: "10px 18px",
+          fontSize: "0.9rem",
+          fontWeight: "700",
+          borderRadius: "16px",
           border: "none",
           cursor: "pointer",
           display: "flex",
@@ -209,67 +224,61 @@ const ClipMode: React.FC<ClipModeProps> = ({
           gap: "8px",
           background:
             downloadStatus === "success"
-              ? "#22c55e"
-              : "var(--primary, #a855f7)",
+              ? "#10b981"
+              : downloadStatus === "error"
+                ? "#ef4444"
+                : "var(--primary, #a855f7)",
           color: "#fff",
-          transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
           boxShadow:
-            downloadStatus === "success"
-              ? "0 4px 12px rgba(34, 197, 94, 0.3)"
-              : "0 4px 12px rgba(168, 85, 247, 0.3)",
-          opacity: downloadStatus === "idle" ? 1 : 0.92,
-        }}
-        onMouseOver={(e) => {
-          if (downloadStatus !== "success")
-            e.currentTarget.style.transform = "scale(1.05)";
-        }}
-        onMouseOut={(e) => {
-          if (downloadStatus !== "success")
-            e.currentTarget.style.transform = "scale(1)";
+            downloadStatus === "idle"
+              ? "0 4px 16px rgba(168, 85, 247, 0.3)"
+              : "none",
+          opacity:
+            downloadStatus === "loading" || downloadStatus === "success"
+              ? 0.9
+              : 1,
         }}
       >
         {downloadStatus === "loading" ? (
-          <Loader2 size={16} className="spinning" />
+          <Loader2 size={18} className="spinning" />
         ) : downloadStatus === "success" ? (
-          <Check size={16} />
+          <Check size={18} />
+        ) : downloadStatus === "error" ? (
+          <X size={18} />
         ) : (
-          <DownloadIcon size={16} />
+          <DownloadIcon size={18} />
         )}
-        {downloadStatus === "loading"
-          ? "Lancement..."
-          : downloadStatus === "success"
-            ? "Lancé"
-            : "Télécharger"}
+        <span>
+          {downloadStatus === "loading"
+            ? "Lancement..."
+            : downloadStatus === "success"
+              ? "Lancé"
+              : downloadStatus === "error"
+                ? "Erreur - Réessayer"
+                : "Télécharger"}
+        </span>
       </button>
 
       {onClose && (
         <button
+          className="clip-btn"
           type="button"
           onClick={onClose}
           style={{
-            padding: "8px",
-            background: "transparent",
-            color: "rgba(255, 255, 255, 0.6)",
+            padding: "10px",
+            background: "rgba(255, 255, 255, 0.05)",
+            color: "rgba(255, 255, 255, 0.8)",
             border: "none",
             borderRadius: "50%",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             cursor: "pointer",
-            transition: "all 0.2s ease",
             marginLeft: "4px",
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)";
-            e.currentTarget.style.color = "#fff";
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "rgba(255, 255, 255, 0.6)";
           }}
           title="Fermer le mode clip"
         >
-          <X size={18} />
+          <X size={20} />
         </button>
       )}
     </div>
