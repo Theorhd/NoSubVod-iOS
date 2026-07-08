@@ -1,7 +1,14 @@
 import React, { useState } from "react";
 import { VOD } from "../../../../shared/types";
 import { formatSafeClock as formatClock } from "../../../../shared/utils/formatters";
-import { X, Download as DownloadIcon, Loader2, Check } from "lucide-react";
+import {
+  X,
+  Download as DownloadIcon,
+  Loader2,
+  Check,
+  Scissors,
+} from "lucide-react";
+import { buildAuthSuffix } from "../../utils/authTokens";
 
 interface ClipModeProps {
   duration: number;
@@ -34,7 +41,8 @@ const ClipMode: React.FC<ClipModeProps> = ({
     if (downloadStatus !== "idle") return;
     setDownloadStatus("loading");
     try {
-      const res = await fetch("/api/download/start", {
+      const authSuffix = buildAuthSuffix("local");
+      const res = await fetch(`/api/download/start${authSuffix}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -65,93 +73,206 @@ const ClipMode: React.FC<ClipModeProps> = ({
     <div
       style={{
         display: "flex",
-        gap: "10px",
+        gap: "12px",
         alignItems: "center",
         margin: "12px 16px",
-        background: "rgba(0,0,0,0.35)",
-        padding: "10px",
-        borderRadius: "10px",
+        background: "rgba(30, 30, 34, 0.8)",
+        padding: "8px 12px 8px 16px",
+        borderRadius: "16px",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
         flexWrap: "wrap",
       }}
     >
-      <span
-        style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.9rem" }}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          marginRight: "4px",
+        }}
       >
-        Clip Mode
-      </span>
-      <button
-        type="button"
-        onClick={onSetStart}
-        className="action-btn"
-        style={{ padding: "5px 10px", fontSize: "0.8rem" }}
+        <Scissors size={16} color="var(--primary, #a855f7)" />
+        <span
+          style={{
+            color: "#fff",
+            fontWeight: "600",
+            fontSize: "0.9rem",
+            letterSpacing: "0.02em",
+          }}
+        >
+          Clip
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          background: "rgba(0,0,0,0.3)",
+          borderRadius: "16px",
+          padding: "4px",
+        }}
       >
-        Set Start
-      </button>
-      <span style={{ fontSize: "0.85rem", color: "#adadb8" }}>
-        {formatClock(clipStart || 0)}
-      </span>
-      <button
-        type="button"
-        onClick={onSetEnd}
-        className="action-btn"
-        style={{ padding: "5px 10px", fontSize: "0.8rem" }}
+        <button
+          type="button"
+          onClick={onSetStart}
+          style={{
+            padding: "6px 12px",
+            fontSize: "0.8rem",
+            fontWeight: "600",
+            background: "rgba(255, 255, 255, 0.08)",
+            color: "#fff",
+            border: "none",
+            borderRadius: "12px",
+            cursor: "pointer",
+            transition: "background 0.2s ease",
+          }}
+          onMouseOver={(e) =>
+            (e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)")
+          }
+          onMouseOut={(e) =>
+            (e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)")
+          }
+        >
+          Début
+        </button>
+        <span
+          style={{
+            fontSize: "0.85rem",
+            color: "#a1a1aa",
+            fontFamily: "monospace",
+            padding: "0 10px",
+          }}
+        >
+          {formatClock(clipStart || 0)}
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          background: "rgba(0,0,0,0.3)",
+          borderRadius: "16px",
+          padding: "4px",
+        }}
       >
-        Set End
-      </button>
-      <span style={{ fontSize: "0.85rem", color: "#adadb8" }}>
-        {formatClock(clipEnd ?? duration)}
-      </span>
+        <button
+          type="button"
+          onClick={onSetEnd}
+          style={{
+            padding: "6px 12px",
+            fontSize: "0.8rem",
+            fontWeight: "600",
+            background: "rgba(255, 255, 255, 0.08)",
+            color: "#fff",
+            border: "none",
+            borderRadius: "12px",
+            cursor: "pointer",
+            transition: "background 0.2s ease",
+          }}
+          onMouseOver={(e) =>
+            (e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)")
+          }
+          onMouseOut={(e) =>
+            (e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)")
+          }
+        >
+          Fin
+        </button>
+        <span
+          style={{
+            fontSize: "0.85rem",
+            color: "#a1a1aa",
+            fontFamily: "monospace",
+            padding: "0 10px",
+          }}
+        >
+          {formatClock(clipEnd ?? duration)}
+        </span>
+      </div>
+
       <style>{`
         @keyframes spin-menu { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spin-menu-icon { animation: spin-menu 1s linear infinite; }
       `}</style>
+
       <button
         type="button"
         onClick={handleDownload}
-        className="action-btn"
         style={{
           marginLeft: "auto",
-          padding: "5px 12px",
-          fontSize: "0.8rem",
+          padding: "8px 16px",
+          fontSize: "0.85rem",
+          fontWeight: "600",
+          borderRadius: "14px",
+          border: "none",
+          cursor: "pointer",
           display: "flex",
           alignItems: "center",
-          gap: "6px",
+          gap: "8px",
           background:
             downloadStatus === "success"
-              ? "var(--success, #22c55e)"
-              : undefined,
-          color: downloadStatus === "success" ? "white" : undefined,
-          transition: "all 0.3s ease",
+              ? "#22c55e"
+              : "var(--primary, #a855f7)",
+          color: "#fff",
+          transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+          boxShadow:
+            downloadStatus === "success"
+              ? "0 4px 12px rgba(34, 197, 94, 0.3)"
+              : "0 4px 12px rgba(168, 85, 247, 0.3)",
+        }}
+        onMouseOver={(e) => {
+          if (downloadStatus !== "success")
+            e.currentTarget.style.transform = "scale(1.05)";
+        }}
+        onMouseOut={(e) => {
+          if (downloadStatus !== "success")
+            e.currentTarget.style.transform = "scale(1)";
         }}
       >
         {downloadStatus === "loading" ? (
-          <Loader2 size={14} className="spin-menu-icon" />
+          <Loader2 size={16} className="spin-menu-icon" />
         ) : downloadStatus === "success" ? (
-          <Check size={14} />
+          <Check size={16} />
         ) : (
-          <DownloadIcon size={14} />
+          <DownloadIcon size={16} />
         )}
         {downloadStatus === "loading"
           ? "Lancement..."
           : downloadStatus === "success"
             ? "Lancé"
-            : "Télécharger la sélection"}
+            : "Télécharger"}
       </button>
+
       {onClose && (
         <button
           type="button"
           onClick={onClose}
-          className="secondary-btn"
           style={{
-            padding: "5px",
+            padding: "8px",
+            background: "transparent",
+            color: "rgba(255, 255, 255, 0.6)",
+            border: "none",
             borderRadius: "50%",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            marginLeft: "4px",
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)";
+            e.currentTarget.style.color = "#fff";
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "rgba(255, 255, 255, 0.6)";
           }}
           title="Fermer le mode clip"
         >
-          <X size={16} />
+          <X size={18} />
         </button>
       )}
     </div>

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { navigateToPlayer } from "../utils/navigation";
+import { buildAuthSuffix } from "../utils/authTokens";
 
 interface DownloadMenuProps {
   vodId: string;
@@ -41,14 +42,15 @@ export default function DownloadMenu({
     setIsClosing(true);
     setTimeout(() => {
       onClose();
-    }, 300); // Matches the CSS transition duration
+    }, 400); // Matches the CSS transition duration
   };
 
   const handleFullDownload = async () => {
     if (downloadStatus !== "idle") return;
     setDownloadStatus("loading");
     try {
-      const res = await fetch("/api/download/start", {
+      const authSuffix = buildAuthSuffix("local");
+      const res = await fetch(`/api/download/start${authSuffix}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,99 +91,119 @@ export default function DownloadMenu({
     left: 0,
     width: "100vw",
     height: "100vh",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    backdropFilter: "blur(8px)",
-    WebkitBackdropFilter: "blur(8px)",
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
     zIndex: 99999,
     opacity: isVisible ? 1 : 0,
-    transition: "opacity 0.3s ease",
+    transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
     display: "flex",
     flexDirection: "column",
     justifyContent: "flex-end",
+    alignItems: "center", // Center horizontally on large screens
+    paddingBottom: "env(safe-area-inset-bottom, 24px)",
+    paddingLeft: "16px",
+    paddingRight: "16px",
   };
 
   const sheetStyle: React.CSSProperties = {
-    maxHeight: "70vh",
-    background: "var(--bg-elevated)",
-    borderTopLeftRadius: "24px",
-    borderTopRightRadius: "24px",
-    padding: "0 20px 20px 20px",
+    width: "100%",
+    maxWidth: "480px", // Limit width on desktop
+    background: "rgba(30, 30, 34, 0.85)", // Deep dark glassmorphism
+    border: "1px solid rgba(255, 255, 255, 0.08)",
+    borderRadius: "28px",
+    padding: "24px 28px",
     display: "flex",
     flexDirection: "column",
     overflowY: "auto",
-    transform: isVisible ? "translateY(0)" : "translateY(100%)",
-    transition: "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
-    boxShadow: "0 -8px 24px rgba(0,0,0,0.4)",
-  };
-
-  const dragHandleStyle: React.CSSProperties = {
-    width: "40px",
-    height: "5px",
-    backgroundColor: "var(--surface-soft)",
-    borderRadius: "10px",
-    margin: "12px auto 20px auto",
+    transform: isVisible
+      ? "translateY(0) scale(1)"
+      : "translateY(40px) scale(0.95)",
+    transition:
+      "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease",
+    boxShadow:
+      "0 24px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
+    marginBottom: "16px",
   };
 
   const menu = (
     <div
       style={overlayStyle}
       onClick={(e) => {
-        // Close if clicking on the overlay background
         if (e.target === e.currentTarget) handleClose();
       }}
     >
       <div style={sheetStyle} onClick={(e) => e.stopPropagation()}>
-        <div style={dragHandleStyle} />
-
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "24px",
+            marginBottom: "28px",
           }}
         >
-          <h3 style={{ margin: 0, fontSize: "1.3rem", fontWeight: "600" }}>
-            Télécharger la VOD
+          <h3
+            style={{
+              margin: 0,
+              fontSize: "1.4rem",
+              fontWeight: "700",
+              letterSpacing: "-0.02em",
+              color: "#fff",
+            }}
+          >
+            Téléchargement
           </h3>
           <button
             onClick={handleClose}
             style={{
-              background: "var(--surface)",
-              border: "none",
-              color: "var(--text-muted)",
+              background: "rgba(255, 255, 255, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.05)",
+              color: "#fff",
               cursor: "pointer",
               borderRadius: "50%",
-              width: "32px",
-              height: "32px",
+              width: "36px",
+              height: "36px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              transition: "background 0.2s ease",
+              transition: "all 0.2s ease",
+            }}
+            onMouseOver={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(255, 255, 255, 0.2)";
+              (e.currentTarget as HTMLButtonElement).style.transform =
+                "scale(1.05)";
+            }}
+            onMouseOut={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(255, 255, 255, 0.1)";
+              (e.currentTarget as HTMLButtonElement).style.transform =
+                "scale(1)";
             }}
           >
             <X size={18} />
           </button>
         </div>
 
-        <div style={{ marginBottom: "32px" }}>
+        <div style={{ marginBottom: "36px" }}>
           <span
             style={{
               display: "block",
-              fontSize: "0.95rem",
-              marginBottom: "12px",
-              color: "var(--text-muted)",
-              fontWeight: "500",
+              fontSize: "0.8rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              marginBottom: "16px",
+              color: "rgba(255, 255, 255, 0.5)",
+              fontWeight: "600",
             }}
           >
-            Qualité vidéo
+            Résolution
           </span>
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: "8px",
-              flexShrink: 0,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "10px",
             }}
           >
             {[
@@ -200,20 +222,38 @@ export default function DownloadMenu({
                   onClick={() => setQuality(opt.value)}
                   type="button"
                   style={{
-                    padding: "12px 4px",
-                    fontSize: "0.9rem",
-                    borderRadius: "10px",
-                    border: "2px solid",
-                    borderColor: isSelected ? "var(--primary)" : "transparent",
+                    padding: "10px 18px",
+                    fontSize: "0.95rem",
+                    borderRadius: "20px",
+                    border: "1px solid",
+                    borderColor: isSelected
+                      ? "var(--primary, #a855f7)"
+                      : "rgba(255, 255, 255, 0.1)",
                     background: isSelected
-                      ? "var(--primary-transparent, rgba(147, 51, 234, 0.15))" // fallback if var doesn't exist
-                      : "var(--surface)",
-                    color: isSelected ? "var(--primary)" : "var(--text)",
+                      ? "var(--primary-transparent, rgba(168, 85, 247, 0.15))"
+                      : "rgba(255, 255, 255, 0.03)",
+                    color: isSelected ? "var(--primary, #d8b4fe)" : "#e2e8f0",
                     cursor: "pointer",
                     fontWeight: isSelected ? "600" : "500",
-                    transition: "all 0.2s ease",
-                    textAlign: "center",
+                    transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
                     whiteSpace: "nowrap",
+                    backdropFilter: "blur(4px)",
+                  }}
+                  onMouseOver={(e) => {
+                    if (!isSelected) {
+                      (e.currentTarget as HTMLButtonElement).style.background =
+                        "rgba(255, 255, 255, 0.08)";
+                      (e.currentTarget as HTMLButtonElement).style.borderColor =
+                        "rgba(255, 255, 255, 0.2)";
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (!isSelected) {
+                      (e.currentTarget as HTMLButtonElement).style.background =
+                        "rgba(255, 255, 255, 0.03)";
+                      (e.currentTarget as HTMLButtonElement).style.borderColor =
+                        "rgba(255, 255, 255, 0.1)";
+                    }
                   }}
                 >
                   {opt.label}
@@ -227,64 +267,74 @@ export default function DownloadMenu({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: "12px",
+            gap: "14px",
             flexShrink: 0,
-            paddingTop: "8px",
-            paddingBottom: "env(safe-area-inset-bottom, 20px)",
           }}
         >
           <style>{`
             @keyframes spin-menu { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
             .spin-menu-icon { animation: spin-menu 1s linear infinite; }
+            .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(168, 85, 247, 0.3); }
+            .btn-secondary:hover { background: rgba(255, 255, 255, 0.08); }
           `}</style>
+
           <button
             onClick={handleFullDownload}
-            className="action-btn"
+            className="btn-primary"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "10px",
+              gap: "12px",
               justifyContent: "center",
-              padding: "16px",
-              borderRadius: "12px",
-              fontSize: "1rem",
+              padding: "18px",
+              borderRadius: "16px",
+              fontSize: "1.05rem",
               fontWeight: "600",
+              border: "none",
               background:
                 downloadStatus === "success"
-                  ? "var(--success, #22c55e)"
-                  : undefined,
-              color: downloadStatus === "success" ? "white" : undefined,
-              transition: "all 0.3s ease",
+                  ? "#22c55e"
+                  : "linear-gradient(135deg, var(--primary, #a855f7) 0%, #7e22ce 100%)",
+              color: "#fff",
+              cursor: "pointer",
+              transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+              boxShadow: "0 4px 14px rgba(168, 85, 247, 0.2)",
             }}
           >
             {downloadStatus === "loading" ? (
-              <Loader2 size={20} className="spin-menu-icon" />
+              <Loader2 size={22} className="spin-menu-icon" />
             ) : downloadStatus === "success" ? (
-              <Check size={20} />
+              <Check size={22} />
             ) : (
-              <DownloadIcon size={20} />
+              <DownloadIcon size={22} />
             )}
             {downloadStatus === "loading"
-              ? "Lancement..."
+              ? "Démarrage en cours..."
               : downloadStatus === "success"
                 ? "Téléchargement lancé"
-                : "VOD Entière"}
+                : "Télécharger la vidéo complète"}
           </button>
+
           <button
             onClick={handleManualClip}
-            className="action-btn secondary-btn"
+            className="btn-secondary"
             style={{
               display: "flex",
               alignItems: "center",
               gap: "10px",
               justifyContent: "center",
               padding: "16px",
-              borderRadius: "12px",
+              borderRadius: "16px",
               fontSize: "1rem",
               fontWeight: "600",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              background: "rgba(255, 255, 255, 0.03)",
+              color: "#e2e8f0",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
             }}
           >
-            <Scissors size={20} /> Sélectionner une partie
+            <Scissors size={20} style={{ opacity: 0.8 }} /> Extraire un clip
           </button>
         </div>
       </div>
