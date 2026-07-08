@@ -1219,9 +1219,14 @@ async fn handle_start_download(
 ) -> AppResult<Response> {
     let settings = state.history.get_settings().await;
     let out_dir = resolve_download_output_dir(settings.download_local_path);
+    if let Err(e) = tokio::fs::create_dir_all(&out_dir).await {
+        return Err(AppError::Internal(format!(
+            "Failed to create download directory: {e}"
+        )));
+    }
 
     let port = super::SERVER_PORT;
-    let master_m3u8_url = build_master_m3u8_url(port, &req.vod_id);
+    let master_m3u8_url = build_master_m3u8_url(port, &req.vod_id, &req.quality);
     let output_file_base = build_output_file_base_path(&out_dir, &req.vod_id, &req.quality);
     let output_file = build_output_file_path(&out_dir, &req.vod_id, &req.quality, "ts");
     let output_json = format!("{output_file_base}.json");

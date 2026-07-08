@@ -8,8 +8,12 @@ pub fn resolve_download_output_dir(configured_path: Option<String>) -> String {
     })
 }
 
-pub fn build_master_m3u8_url(port: u16, vod_id: &str) -> String {
-    format!("http://127.0.0.1:{port}/api/vod/{vod_id}/master.m3u8")
+pub fn build_master_m3u8_url(port: u16, vod_id: &str, quality: &str) -> String {
+    if quality.is_empty() || quality == "best" {
+        format!("http://127.0.0.1:{port}/api/vod/{vod_id}/master.m3u8")
+    } else {
+        format!("http://127.0.0.1:{port}/api/vod/{vod_id}/master.m3u8?quality={quality}&qualityMode=lock")
+    }
 }
 
 pub fn build_output_file_base_path(out_dir: &str, vod_id: &str, quality: &str) -> String {
@@ -52,8 +56,14 @@ mod tests {
 
     #[test]
     fn builds_master_playlist_url() {
-        let url = build_master_m3u8_url(23455, "123456789");
+        let url = build_master_m3u8_url(23455, "123456789", "best");
         assert_eq!(url, "http://127.0.0.1:23455/api/vod/123456789/master.m3u8");
+
+        let url_quality = build_master_m3u8_url(23455, "123456789", "720p");
+        assert_eq!(
+            url_quality,
+            "http://127.0.0.1:23455/api/vod/123456789/master.m3u8?quality=720p&qualityMode=lock"
+        );
     }
 
     #[test]

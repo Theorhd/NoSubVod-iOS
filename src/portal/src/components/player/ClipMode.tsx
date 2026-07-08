@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { VOD } from "../../../../shared/types";
 import { formatSafeClock as formatClock } from "../../../../shared/utils/formatters";
-import { X } from "lucide-react";
+import { X, Download as DownloadIcon, Loader2, Check } from "lucide-react";
 
 interface ClipModeProps {
   duration: number;
@@ -26,7 +26,13 @@ const ClipMode: React.FC<ClipModeProps> = ({
   onDownloadStart,
   onClose,
 }) => {
+  const [downloadStatus, setDownloadStatus] = useState<
+    "idle" | "loading" | "success"
+  >("idle");
+
   const handleDownload = async () => {
+    if (downloadStatus !== "idle") return;
+    setDownloadStatus("loading");
     try {
       const res = await fetch("/api/download/start", {
         method: "POST",
@@ -41,13 +47,17 @@ const ClipMode: React.FC<ClipModeProps> = ({
         }),
       });
       if (res.ok) {
-        alert("Clip download started in background.");
-        onDownloadStart();
+        setDownloadStatus("success");
+        setTimeout(() => {
+          onDownloadStart();
+          setDownloadStatus("idle");
+        }, 1500);
       } else {
         throw new Error("Failed to start clip download");
       }
     } catch (e) {
       alert(`Error: ${e}`);
+      setDownloadStatus("idle");
     }
   };
 
@@ -91,13 +101,41 @@ const ClipMode: React.FC<ClipModeProps> = ({
       <span style={{ fontSize: "0.85rem", color: "#adadb8" }}>
         {formatClock(clipEnd ?? duration)}
       </span>
+      <style>{`
+        @keyframes spin-menu { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin-menu-icon { animation: spin-menu 1s linear infinite; }
+      `}</style>
       <button
         type="button"
         onClick={handleDownload}
         className="action-btn"
-        style={{ marginLeft: "auto", padding: "5px 12px", fontSize: "0.8rem" }}
+        style={{
+          marginLeft: "auto",
+          padding: "5px 12px",
+          fontSize: "0.8rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          background:
+            downloadStatus === "success"
+              ? "var(--success, #22c55e)"
+              : undefined,
+          color: downloadStatus === "success" ? "white" : undefined,
+          transition: "all 0.3s ease",
+        }}
       >
-        Download Selection
+        {downloadStatus === "loading" ? (
+          <Loader2 size={14} className="spin-menu-icon" />
+        ) : downloadStatus === "success" ? (
+          <Check size={14} />
+        ) : (
+          <DownloadIcon size={14} />
+        )}
+        {downloadStatus === "loading"
+          ? "Lancement..."
+          : downloadStatus === "success"
+            ? "Lancé"
+            : "Télécharger la sélection"}
       </button>
       {onClose && (
         <button

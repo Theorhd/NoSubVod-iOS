@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { Download as DownloadIcon, Scissors, X } from "lucide-react";
+import {
+  Download as DownloadIcon,
+  Scissors,
+  X,
+  Loader2,
+  Check,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { navigateToPlayer } from "../utils/navigation";
 
@@ -21,6 +27,9 @@ export default function DownloadMenu({
   const [quality, setQuality] = useState("best");
   const [isClosing, setIsClosing] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState<
+    "idle" | "loading" | "success"
+  >("idle");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,6 +45,8 @@ export default function DownloadMenu({
   };
 
   const handleFullDownload = async () => {
+    if (downloadStatus !== "idle") return;
+    setDownloadStatus("loading");
     try {
       const res = await fetch("/api/download/start", {
         method: "POST",
@@ -50,13 +61,14 @@ export default function DownloadMenu({
         }),
       });
       if (res.ok) {
-        alert("Téléchargement lancé en arrière-plan !");
+        setDownloadStatus("success");
+        setTimeout(() => handleClose(), 1500);
       } else {
         throw new Error("Failed to start download");
       }
-      handleClose();
     } catch (e) {
       alert("Erreur: " + e);
+      setDownloadStatus("idle");
     }
   };
 
@@ -174,6 +186,9 @@ export default function DownloadMenu({
               { value: "1080p", label: "1080p" },
               { value: "720p", label: "720p" },
               { value: "480p", label: "480p" },
+              { value: "360p", label: "360p" },
+              { value: "160p", label: "160p" },
+              { value: "audio", label: "Audio" },
             ].map((opt) => {
               const isSelected = quality === opt.value;
               return (
@@ -214,6 +229,10 @@ export default function DownloadMenu({
             paddingBottom: "env(safe-area-inset-bottom, 20px)",
           }}
         >
+          <style>{`
+            @keyframes spin-menu { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            .spin-menu-icon { animation: spin-menu 1s linear infinite; }
+          `}</style>
           <button
             onClick={handleFullDownload}
             className="action-btn"
@@ -226,9 +245,26 @@ export default function DownloadMenu({
               borderRadius: "12px",
               fontSize: "1rem",
               fontWeight: "600",
+              background:
+                downloadStatus === "success"
+                  ? "var(--success, #22c55e)"
+                  : undefined,
+              color: downloadStatus === "success" ? "white" : undefined,
+              transition: "all 0.3s ease",
             }}
           >
-            <DownloadIcon size={20} /> VOD Entière
+            {downloadStatus === "loading" ? (
+              <Loader2 size={20} className="spin-menu-icon" />
+            ) : downloadStatus === "success" ? (
+              <Check size={20} />
+            ) : (
+              <DownloadIcon size={20} />
+            )}
+            {downloadStatus === "loading"
+              ? "Lancement..."
+              : downloadStatus === "success"
+                ? "Téléchargement lancé"
+                : "VOD Entière"}
           </button>
           <button
             onClick={handleManualClip}
