@@ -153,6 +153,7 @@ pub fn run() {
     app.run(|_app_handle, event| {
         #[cfg(mobile)]
         if let tauri::RunEvent::Resumed = &event {
+            use tauri::Emitter;
             tracing::info!("App resumed from background — notifying frontend");
             // Notify the frontend so it can refresh data and stop accumulating
             // stale state that built up while the network was suspended.
