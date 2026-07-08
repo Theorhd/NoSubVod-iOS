@@ -37,17 +37,46 @@ pub fn fix_sandbox_path(path: &str) -> String {
     path.to_string()
 }
 
+pub fn remap_ios_downloads_to_documents(path: &str) -> String {
+    if let Some(idx) = path.find("/Containers/Data/Application/") {
+        let remainder = &path[idx + "/Containers/Data/Application/".len()..];
+        let mut parts = remainder.split('/');
+        if let Some(uuid) = parts.next() {
+            if let Some(folder) = parts.next() {
+                if folder == "Downloads" {
+                    let bad_part = format!("/Containers/Data/Application/{}/Downloads", uuid);
+                    let good_part =
+                        format!("/Containers/Data/Application/{}/Documents/Downloads", uuid);
+                    return path.replace(&bad_part, &good_part);
+                }
+            }
+        }
+    }
+    path.to_string()
+}
+
 pub fn resolve_download_dir(local_path: Option<String>, network_path: Option<String>) -> String {
     let path = local_path
         .filter(|p| !p.trim().is_empty())
         .or_else(|| network_path.filter(|p| !p.trim().is_empty()));
 
     if let Some(p) = path {
-        return fix_sandbox_path(&p);
+        let fixed = fix_sandbox_path(&p);
+        return remap_ios_downloads_to_documents(&fixed);
     }
-    dirs::download_dir()
-        .map(|path| path.to_string_lossy().to_string())
-        .unwrap_or_else(|| ".".to_string())
+
+    if cfg!(target_os = "ios") {
+        dirs::document_dir()
+            .map(|mut p| {
+                p.push("Downloads");
+                p.to_string_lossy().to_string()
+            })
+            .unwrap_or_else(|| ".".to_string())
+    } else {
+        dirs::download_dir()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_else(|| ".".to_string())
+    }
 }
 
 pub fn build_master_m3u8_url(port: u16, vod_id: &str, quality: &str) -> String {
