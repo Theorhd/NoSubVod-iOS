@@ -1,29 +1,36 @@
 use std::path::PathBuf;
 
+fn current_ios_uuid() -> Option<String> {
+    let check_paths = [
+        dirs::download_dir(),
+        dirs::document_dir(),
+        dirs::data_local_dir(),
+        dirs::cache_dir(),
+    ];
+    for p in check_paths.into_iter().flatten() {
+        let s = p.to_string_lossy();
+        if let Some(idx) = s.find("/Containers/Data/Application/") {
+            let remainder = &s[idx + "/Containers/Data/Application/".len()..];
+            if let Some(uuid) = remainder.split('/').next() {
+                return Some(uuid.to_string());
+            }
+        }
+    }
+    None
+}
+
 pub fn fix_sandbox_path(path: &str) -> String {
     if !path.contains("/Containers/Data/Application/") {
         return path.to_string();
     }
 
-    let default_dir = dirs::download_dir()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
-
-    if default_dir.contains("/Containers/Data/Application/") {
-        let parts: Vec<&str> = default_dir.split("/Containers/Data/Application/").collect();
+    if let Some(current_uuid) = current_ios_uuid() {
+        let parts: Vec<&str> = path.split("/Containers/Data/Application/").collect();
         if parts.len() == 2 {
-            let right_parts: Vec<&str> = parts[1].split('/').collect();
-            if !right_parts.is_empty() {
-                let current_uuid = right_parts[0];
-
-                let old_parts: Vec<&str> = path.split("/Containers/Data/Application/").collect();
-                if old_parts.len() == 2 {
-                    let old_right: Vec<&str> = old_parts[1].split('/').collect();
-                    if !old_right.is_empty() {
-                        let old_uuid = old_right[0];
-                        return path.replace(old_uuid, current_uuid);
-                    }
-                }
+            let old_right: Vec<&str> = parts[1].split('/').collect();
+            if !old_right.is_empty() {
+                let old_uuid = old_right[0];
+                return path.replace(old_uuid, &current_uuid);
             }
         }
     }
@@ -31,7 +38,10 @@ pub fn fix_sandbox_path(path: &str) -> String {
 }
 
 pub fn resolve_download_dir(local_path: Option<String>, network_path: Option<String>) -> String {
-    let path = local_path.or(network_path);
+    let path = local_path
+        .filter(|p| !p.trim().is_empty())
+        .or_else(|| network_path.filter(|p| !p.trim().is_empty()));
+
     if let Some(p) = path {
         return fix_sandbox_path(&p);
     }

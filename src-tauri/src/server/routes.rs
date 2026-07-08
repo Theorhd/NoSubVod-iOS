@@ -1213,6 +1213,7 @@ async fn handle_start_download(
         settings.download_network_shared_path,
     );
     if let Err(e) = tokio::fs::create_dir_all(&out_dir).await {
+        tracing::error!("Failed to create download directory {}: {}", out_dir, e);
         return Err(AppError::Internal(format!(
             "Failed to create download directory: {e}"
         )));
@@ -1238,7 +1239,7 @@ async fn handle_start_download(
         }
     }
 
-    state
+    if let Err(e) = state
         .download
         .start_download(
             req.vod_id,
@@ -1249,7 +1250,11 @@ async fn handle_start_download(
             req.end_time,
             duration,
         )
-        .await?;
+        .await
+    {
+        tracing::error!("start_download internal error: {}", e);
+        return Err(e);
+    }
 
     Ok(Json(serde_json::json!({ "message": "Download started" })).into_response())
 }
