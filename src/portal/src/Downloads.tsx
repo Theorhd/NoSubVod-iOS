@@ -4,14 +4,13 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  ChevronLeft,
-  ChevronRight,
   Play,
-  Pause,
   X,
+  Trash2,
+  MoreVertical,
 } from "lucide-react";
 import NSVPlayer, { NSVMediaSource } from "./components/NSVPlayer";
-import { formatSize } from "../../shared/utils/formatters";
+import { formatSize, formatSafeClock } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
 import { useDownloadsData } from "./hooks/useDownloadsData";
 import { ActiveDownload, DownloadedFile } from "../../shared/types";
@@ -23,10 +22,10 @@ const formatDate = (value?: string) => {
   return Number.isNaN(d.getTime())
     ? "Date inconnue"
     : d.toLocaleDateString("fr-FR", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
 };
 
 const getStatusDisplay = (status: any) => {
@@ -118,62 +117,49 @@ const DownloadPlayer = React.memo(
 DownloadPlayer.displayName = "DownloadPlayer";
 
 const QueueItem = React.memo(
-  ({ dl, knownFile }: { dl: ActiveDownload; knownFile?: DownloadedFile }) => {
+  ({
+    dl,
+    knownFile,
+    cancelDownload,
+  }: {
+    dl: ActiveDownload;
+    knownFile?: DownloadedFile;
+    cancelDownload: (id: string) => void;
+  }) => {
     const statusInfo = getStatusDisplay(dl.status);
     const statusName = typeof dl.status === "string" ? dl.status : "";
     const thumbnail =
       dl.progress > 0 ? knownFile?.metadata?.previewThumbnailURL || null : null;
 
     return (
-      <article className="download-queue-card">
-        <div className="download-queue-top">
-          <div className="queue-thumb-wrap">
-            {thumbnail ? (
-              <img src={thumbnail} alt="" className="queue-thumb" />
-            ) : (
-              <div className="queue-thumb-placeholder">
-                <DownloadIcon size={18} />
-              </div>
-            )}
+      <article
+        className="download-queue-card"
+        style={{ "--progress-width": `${dl.progress}%` } as React.CSSProperties}
+      >
+        <div className="queue-thumb-wrap">
+          {thumbnail ? (
+            <img src={thumbnail} alt="" className="queue-thumb" />
+          ) : (
+            <DownloadIcon size={20} color="var(--vault-muted)" />
+          )}
+        </div>
+        <div className="download-queue-main">
+          <div className="download-title-row">
+            <h3>{dl.title}</h3>
+            <div className="queue-actions">
+              <span className="queue-percent">{dl.progress.toFixed(0)}%</span>
+              <button
+                className="queue-cancel-btn"
+                title="Annuler"
+                onClick={() => cancelDownload(dl.vod_id)}
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
-          <div className="download-queue-main">
-            <div className="download-title-row">
-              <h3>{dl.title}</h3>
-              <span
-                className="queue-status-dot download-status-text"
-                style={
-                  { "--status-color": statusInfo.color } as React.CSSProperties
-                }
-              >
-                {statusName === "Downloading" ? (
-                  <Pause size={14} />
-                ) : (
-                  statusInfo.icon
-                )}
-              </span>
-            </div>
-            <div className="download-queue-subline">
-              {dl.current_time || "En cours"}
-            </div>
-            <div className="download-progress-track">
-              <div
-                className={`download-progress-fill ${statusName === "Downloading" ? "download-progress-fill-active" : ""}`}
-                style={{
-                  width: `${dl.progress}%`,
-                }}
-              />
-            </div>
-            <div className="download-queue-meta">
-              <span>{dl.progress.toFixed(0)}%</span>
-              <span
-                className="download-status-text"
-                style={
-                  { "--status-color": statusInfo.color } as React.CSSProperties
-                }
-              >
-                {statusInfo.label}
-              </span>
-            </div>
+          <div className="download-queue-subline">
+            {statusInfo.icon} {statusInfo.label} •{" "}
+            {dl.current_time || "En cours"}
           </div>
         </div>
       </article>
@@ -182,6 +168,129 @@ const QueueItem = React.memo(
 );
 QueueItem.displayName = "QueueItem";
 
+const DownloadCard = ({
+  file,
+  handlePlay,
+  formatDate,
+  resolveDownloadUrl,
+  deleteDownload,
+}: {
+  file: DownloadedFile;
+  handlePlay: (file: DownloadedFile) => void;
+  formatDate: (val?: string) => string;
+  resolveDownloadUrl: (url: string) => string;
+  deleteDownload: (name: string) => void;
+}) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    if (menuOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
+
+  return (
+    <article className="download-library-card">
+      <button
+        type="button"
+        className="download-library-thumb-btn"
+        onClick={() => handlePlay(file)}
+      >
+        {file.metadata?.previewThumbnailURL ? (
+          <img
+            src={file.metadata.previewThumbnailURL}
+            alt=""
+            className="download-library-thumb"
+          />
+        ) : (
+          <div
+            className="download-library-thumb"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(255,255,255,0.02)",
+            }}
+          >
+            <DownloadIcon size={32} color="var(--vault-muted)" />
+          </div>
+        )}
+        <div className="download-play-overlay">
+          <Play fill="white" size={24} />
+        </div>
+        <span className="download-complete-chip">
+          <CheckCircle2 size={12} />
+          COMPLETED
+        </span>
+        {file.metadata?.lengthSeconds ? (
+          <span className="download-duration-chip">
+            {formatSafeClock(file.metadata.lengthSeconds)}
+          </span>
+        ) : null}
+      </button>
+      <div className="download-library-body">
+        <div className="download-title-row">
+          <h3 className="download-file-title">
+            {file.metadata?.title || file.name}
+          </h3>
+          <div className="download-card-actions-wrapper" ref={menuRef}>
+            <button
+              type="button"
+              className="download-more-btn"
+              onClick={() => setMenuOpen(!menuOpen)}
+            >
+              <MoreVertical size={18} />
+            </button>
+            <div className={`vault-context-menu ${menuOpen ? "open" : ""}`}>
+              <button
+                type="button"
+                className="vault-menu-item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  handlePlay(file);
+                }}
+              >
+                <Play size={16} /> Lire
+              </button>
+              <a
+                href={resolveDownloadUrl(file.url)}
+                download={file.name}
+                className="vault-menu-item"
+                onClick={() => setMenuOpen(false)}
+              >
+                <DownloadIcon size={16} /> Fichier source
+              </a>
+              <button
+                type="button"
+                className="vault-menu-item danger"
+                onClick={() => {
+                  setMenuOpen(false);
+                  deleteDownload(file.name);
+                }}
+              >
+                <Trash2 size={16} /> Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="download-meta-row muted">
+          <span>{file.metadata?.owner?.displayName || "Unknown channel"}</span>
+          <span>{formatSize(file.size)}</span>
+        </div>
+        <div className="download-meta-row muted">
+          <span>{file.metadata?.game?.name || ""}</span>
+          <span>{formatDate(file.metadata?.createdAt)}</span>
+        </div>
+      </div>
+    </article>
+  );
+};
+
 const DownloadLibrary = React.memo(
   ({
     loading,
@@ -189,12 +298,14 @@ const DownloadLibrary = React.memo(
     handlePlay,
     formatDate,
     resolveDownloadUrl,
+    deleteDownload,
   }: {
     loading: boolean;
     files: DownloadedFile[];
     handlePlay: (file: DownloadedFile) => void;
     formatDate: (val?: string) => string;
     resolveDownloadUrl: (url: string) => string;
+    deleteDownload: (name: string) => void;
   }) => {
     if (loading && files.length === 0) {
       return <div className="status-line">Chargement...</div>;
@@ -207,64 +318,14 @@ const DownloadLibrary = React.memo(
     return (
       <div className="download-library-grid">
         {files.map((file) => (
-          <article key={file.name} className="download-library-card">
-            <button
-              type="button"
-              className="download-library-thumb-btn"
-              onClick={() => handlePlay(file)}
-            >
-              <div className="download-library-thumb-wrap">
-                {file.metadata?.previewThumbnailURL ? (
-                  <img
-                    src={file.metadata.previewThumbnailURL}
-                    alt=""
-                    className="download-library-thumb"
-                  />
-                ) : (
-                  <div className="download-library-thumb-placeholder">
-                    <DownloadIcon size={22} />
-                  </div>
-                )}
-                <span className="download-complete-chip">
-                  <CheckCircle2 size={12} />
-                  COMPLETED
-                </span>
-              </div>
-            </button>
-            <div className="download-library-body">
-              <h3 className="download-file-title">
-                {file.metadata?.title || file.name}
-              </h3>
-              <div className="download-meta-row">
-                <span>
-                  {file.metadata?.owner?.displayName || "Unknown channel"}
-                </span>
-                {file.metadata?.game?.name && (
-                  <span>{file.metadata.game.name}</span>
-                )}
-              </div>
-              <div className="download-meta-row muted">
-                <span>Size: {formatSize(file.size)}</span>
-                <span>Date: {formatDate(file.metadata?.createdAt)}</span>
-              </div>
-              <div className="download-card-actions">
-                <button
-                  onClick={() => handlePlay(file)}
-                  className="download-card-btn primary"
-                  type="button"
-                >
-                  <Play size={14} /> Lire
-                </button>
-                <a
-                  href={resolveDownloadUrl(file.url)}
-                  download={file.name}
-                  className="download-card-btn secondary"
-                >
-                  <DownloadIcon size={14} /> Télécharger
-                </a>
-              </div>
-            </div>
-          </article>
+          <DownloadCard
+            key={file.name}
+            file={file}
+            handlePlay={handlePlay}
+            formatDate={formatDate}
+            resolveDownloadUrl={resolveDownloadUrl}
+            deleteDownload={deleteDownload}
+          />
         ))}
       </div>
     );
@@ -273,10 +334,15 @@ const DownloadLibrary = React.memo(
 DownloadLibrary.displayName = "DownloadLibrary";
 
 export default function Downloads() {
-  const { files, activeDownloads, loading, resolveDownloadUrl } =
-    useDownloadsData();
+  const {
+    files,
+    activeDownloads,
+    loading,
+    resolveDownloadUrl,
+    deleteDownload,
+    cancelDownload,
+  } = useDownloadsData();
   const [playingFile, setPlayingFile] = useState<DownloadedFile | null>(null);
-  const queueRef = useRef<HTMLDivElement | null>(null);
 
   const knownVodById = useMemo(() => {
     const byId: Record<string, DownloadedFile> = {};
@@ -285,13 +351,6 @@ export default function Downloads() {
     });
     return byId;
   }, [files]);
-
-  const scrollQueue = useCallback((direction: "left" | "right") => {
-    queueRef.current?.scrollBy({
-      left: direction === "left" ? -360 : 360,
-      behavior: "smooth",
-    });
-  }, []);
 
   const handlePlay = useCallback((file: DownloadedFile) => {
     setPlayingFile(file);
@@ -314,29 +373,14 @@ export default function Downloads() {
           <section className="download-section">
             <div className="download-section-head">
               <h2>Download Queue</h2>
-              <div className="queue-nav-group">
-                <button
-                  type="button"
-                  className="queue-nav-btn"
-                  onClick={() => scrollQueue("left")}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="queue-nav-btn"
-                  onClick={() => scrollQueue("right")}
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
             </div>
-            <div className="download-queue-track" ref={queueRef}>
+            <div className="download-queue-track">
               {activeDownloads.map((dl) => (
                 <QueueItem
                   key={dl.vod_id}
                   dl={dl}
                   knownFile={knownVodById[dl.vod_id]}
+                  cancelDownload={cancelDownload}
                 />
               ))}
             </div>
@@ -353,6 +397,7 @@ export default function Downloads() {
             handlePlay={handlePlay}
             formatDate={formatDate}
             resolveDownloadUrl={resolveDownloadUrl}
+            deleteDownload={deleteDownload}
           />
         </section>
       </div>

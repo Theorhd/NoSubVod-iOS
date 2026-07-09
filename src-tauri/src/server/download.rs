@@ -223,6 +223,20 @@ impl DownloadManager {
             let mut seg_iter = segments.into_iter().peekable();
 
             'outer: while seg_iter.peek().is_some() {
+                // Check for cancellation
+                {
+                    let lock = active_downloads.read().await;
+                    if !lock.contains_key(&vod_id_task) {
+                        tracing::info!("Download for {} was cancelled", vod_id_task);
+                        let _ = tokio::fs::remove_file(&output_path).await;
+                        // Also try to remove the JSON file
+                        let json_path =
+                            std::path::PathBuf::from(&output_path).with_extension("json");
+                        let _ = tokio::fs::remove_file(json_path).await;
+                        break 'outer;
+                    }
+                }
+
                 let batch: Vec<Segment> = seg_iter.by_ref().take(SEGMENT_CONCURRENCY).collect();
 
                 // Segments already have Arc<str> for URLs
@@ -322,6 +336,11 @@ impl DownloadManager {
             ),
             Err(_) => true,
         });
+    }
+
+    pub async fn cancel_download(&self, vod_id: &str) {
+        let mut lock = self.active_downloads.write().await;
+        lock.remove(vod_id);
     }
 }
 

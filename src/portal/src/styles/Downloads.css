@@ -1,7 +1,373 @@
-.download-status-text {
-  color: var(--status-color, var(--text-muted));
+/* THE OBSIDIAN VAULT - Premium Offline Library Styling */
+
+.download-page {
+  --vault-bg: #0a0a0c;
+  --vault-surface: #18181c;
+  --vault-border: rgba(255, 255, 255, 0.05);
+  --vault-accent: #8b5cf6;
+  --vault-accent-hover: #a78bfa;
+  --vault-danger: #ef4444;
+  --vault-danger-hover: #f87171;
+  --vault-text: #fafafa;
+  --vault-muted: #a1a1aa;
+  --vault-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+
+  padding-bottom: 80px;
+  background-color: var(--vault-bg);
+  min-height: 100vh;
 }
 
-.download-progress-fill-active {
-  background: linear-gradient(90deg, #a855f7, #3b82f6);
+.download-section {
+  margin-bottom: 40px;
+}
+
+.download-section-head h2 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--vault-text);
+  margin-bottom: 24px;
+}
+
+/* --- ACTIVE DOWNLOADS (FLUID PROGRESS) --- */
+
+.download-queue-track {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.download-queue-card {
+  position: relative;
+  background: var(--vault-surface);
+  border: 1px solid var(--vault-border);
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+/* The fluid progress background */
+.download-queue-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(139, 92, 246, 0.15),
+    rgba(139, 92, 246, 0.05)
+  );
+  width: var(--progress-width, 0%);
+  z-index: 0;
+  transition: width 0.3s ease-out;
+}
+
+.download-queue-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.queue-thumb-wrap {
+  width: 80px;
+  height: 45px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.queue-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.download-queue-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.download-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.download-title-row h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--vault-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.download-queue-subline {
+  font-size: 0.85rem;
+  color: var(--vault-muted);
+}
+
+.queue-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.queue-cancel-btn {
+  background: transparent;
+  border: none;
+  color: var(--vault-muted);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.queue-cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--vault-danger);
+}
+
+.queue-percent {
+  font-weight: 700;
+  color: var(--vault-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- COMPLETED DOWNLOADS (VAULT LIBRARY) --- */
+
+.download-library-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.download-library-card {
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.download-library-thumb-btn {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--vault-surface);
+  border: 1px solid var(--vault-border);
+  padding: 0;
+  cursor: pointer;
+  box-shadow: var(--vault-shadow);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.download-library-thumb-btn:active {
+  transform: scale(0.98);
+}
+
+.download-library-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.2s ease;
+}
+
+.download-library-thumb-btn:hover .download-library-thumb {
+  opacity: 0.85;
+}
+
+.download-play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  background: rgba(10, 10, 12, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.download-library-thumb-btn:hover .download-play-overlay {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.download-complete-chip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(10, 10, 12, 0.8);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: #4ade80;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 100px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+.download-duration-chip {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(10, 10, 12, 0.8);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.download-library-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.download-file-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--vault-text);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.download-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: var(--vault-muted);
+}
+
+.download-card-actions-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.download-more-btn {
+  background: transparent;
+  border: none;
+  color: var(--vault-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.download-more-btn:hover {
+  background: var(--vault-surface);
+  color: var(--vault-text);
+}
+
+/* The Animated Context Menu */
+.vault-context-menu {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background: rgba(24, 24, 28, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--vault-border);
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+  box-shadow: var(--vault-shadow);
+  z-index: 100;
+
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+  pointer-events: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top right;
+}
+
+.vault-context-menu.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.vault-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--vault-text);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  text-decoration: none;
+  width: 100%;
+  text-align: left;
+}
+
+.vault-menu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.vault-menu-item.danger {
+  color: var(--vault-danger);
+}
+
+.vault-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Empty states */
+.status-line {
+  color: var(--vault-muted);
+  font-size: 1rem;
+  padding: 24px 0;
 }

@@ -1155,6 +1155,26 @@ async fn handle_live_chat_send(
     }
 }
 
+fn parse_twitch_duration(d: &str) -> f64 {
+    let mut total_secs = 0.0;
+    let mut current_num = String::new();
+    for c in d.chars() {
+        if c.is_ascii_digit() {
+            current_num.push(c);
+        } else {
+            let val = current_num.parse::<f64>().unwrap_or(0.0);
+            current_num.clear();
+            match c {
+                'h' => total_secs += val * 3600.0,
+                'm' => total_secs += val * 60.0,
+                's' => total_secs += val,
+                _ => {}
+            }
+        }
+    }
+    total_secs
+}
+
 async fn handle_download_hls(
     Path(file_name): Path<String>,
     State(state): State<ApiState>,
@@ -1170,35 +1190,45 @@ async fn handle_download_hls(
     );
 
     let full_path = std::path::PathBuf::from(&base_path).join(&file_name);
-    let file_size = match tokio::fs::metadata(&full_path).await {
+    let _ = match tokio::fs::metadata(&full_path).await {
         Ok(m) if m.is_file() => m.len(),
         _ => return Err(AppError::NotFound("File not found".to_string())),
     };
 
-    // Build a byte-range HLS playlist so hls.js can load the file progressively.
-    // TS packets are 188 bytes. Aligning chunks to multiples of 188 prevents sync errors.
-    const CHUNK_BYTES: u64 = 188 * 50000; // ~9.4 MB per segment, perfectly aligned
-    const EST_SECS: f64 = 12.0;
-    let num_chunks = file_size.div_ceil(CHUNK_BYTES);
+    // Build a single-segment HLS playlist.
+    // iOS AVPlayer will use HTTP Range requests automatically to buffer the file.
+    // We try to read the total duration from the accompanying .json metadata file.
+    let mut duration = 0.0;
+    let json_path = full_path.with_extension("json");
+    if let Ok(json_str) = tokio::fs::read_to_string(&json_path).await {
+        if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&json_str) {
+            if let Some(d) = metadata.get("duration").and_then(|v| v.as_f64()) {
+                duration = d;
+            } else if let Some(d_str) = metadata.get("duration").and_then(|v| v.as_str()) {
+                // Twitch duration format e.g. "1h2m3s"
+                duration = parse_twitch_duration(d_str);
+            }
+        }
+    }
 
-    let mut playlist = format!(
-        "#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-TARGETDURATION:{}\n#EXT-X-MEDIA-SEQUENCE:0\n",
-        EST_SECS.ceil() as u64
-    );
+    if duration == 0.0 {
+        // Fallback if metadata is missing or unparseable.
+        // We use a large arbitrary value, AVPlayer will update it based on the file's internal PTS.
+        duration = 36000.0;
+    }
 
     let encoded_name = urlencoding::encode(&file_name);
     let segment_url = format!(
         "/api/shared-downloads/{encoded_name}?t={}",
         state.server_token
     );
-    for i in 0..num_chunks {
-        let offset = i * CHUNK_BYTES;
-        let length = std::cmp::min(CHUNK_BYTES, file_size - offset);
-        playlist.push_str(&format!(
-            "#EXTINF:{EST_SECS:.3},\n#EXT-X-BYTERANGE:{length}@{offset}\n{segment_url}\n"
-        ));
-    }
-    playlist.push_str("#EXT-X-ENDLIST\n");
+
+    let playlist = format!(
+        "#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-TARGETDURATION:{}\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:{:.3},\n{}\n#EXT-X-ENDLIST\n",
+        duration.ceil() as u64,
+        duration,
+        segment_url
+    );
 
     Ok(m3u8_response(playlist))
 }
@@ -1245,7 +1275,7 @@ async fn handle_start_download(
             req.vod_id,
             title,
             master_m3u8_url,
-            output_file,
+            output_file.clone(),
             req.start_time,
             req.end_time,
             duration,
@@ -1256,7 +1286,48 @@ async fn handle_start_download(
         return Err(e);
     }
 
-    Ok(Json(serde_json::json!({ "message": "Download started" })).into_response())
+    Ok(Json(serde_json::json!({ "status": "started", "output": output_file })).into_response())
+}
+
+async fn handle_cancel_download(
+    Path(vod_id): Path<String>,
+    State(state): State<ApiState>,
+) -> AppResult<Response> {
+    state.download.cancel_download(&vod_id).await;
+    Ok(Json(serde_json::json!({ "status": "cancelled" })).into_response())
+}
+
+async fn handle_delete_download(
+    Path(file_name): Path<String>,
+    State(state): State<ApiState>,
+) -> AppResult<Response> {
+    if file_name.contains('/') || file_name.contains('\\') || file_name.contains("..") {
+        return Err(AppError::BadRequest("Invalid file name".to_string()));
+    }
+
+    let settings = state.history.get_settings().await;
+    let base_path = resolve_download_dir(
+        settings.download_local_path,
+        settings.download_network_shared_path,
+    );
+    let full_path = std::path::PathBuf::from(&base_path).join(&file_name);
+    let json_path = full_path.with_extension("json");
+
+    let mut deleted_any = false;
+    if tokio::fs::metadata(&full_path).await.is_ok() {
+        let _ = tokio::fs::remove_file(&full_path).await;
+        deleted_any = true;
+    }
+    if tokio::fs::metadata(&json_path).await.is_ok() {
+        let _ = tokio::fs::remove_file(&json_path).await;
+        deleted_any = true;
+    }
+
+    if deleted_any {
+        Ok(Json(serde_json::json!({ "status": "deleted" })).into_response())
+    } else {
+        Err(AppError::NotFound("File not found".to_string()))
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -1393,6 +1464,11 @@ pub fn build_router(mut state: ApiState, portal_dist: Option<std::path::PathBuf>
         .route(
             "/download/start",
             axum::routing::post(handle_start_download),
+        )
+        .route("/download/:file_name", delete(handle_delete_download))
+        .route(
+            "/download/:vod_id/cancel",
+            axum::routing::post(handle_cancel_download),
         )
         .route("/system/dialog/folder", get(handle_system_dialog_folder))
         // Watchlist

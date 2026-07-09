@@ -146,11 +146,42 @@ export function useDownloadsData() {
     return resolved;
   }, []);
 
+  const deleteDownload = useCallback(async (fileName: string) => {
+    try {
+      const res = await fetch(`/api/download/${encodeURIComponent(fileName)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setFiles((prev) => prev.filter((f) => f.name !== fileName));
+      }
+    } catch (error) {
+      console.error("[Downloads] Failed to delete download", error);
+    }
+  }, []);
+
+  const cancelDownload = useCallback(async (vodId: string) => {
+    try {
+      const res = await fetch(
+        `/api/download/${encodeURIComponent(vodId)}/cancel`,
+        {
+          method: "POST",
+        },
+      );
+      if (res.ok) {
+        setActiveDownloads((prev) => prev.filter((d) => d.vod_id !== vodId));
+      }
+    } catch (error) {
+      console.error("[Downloads] Failed to cancel download", error);
+    }
+  }, []);
+
   return {
     files,
     activeDownloads,
     loading,
     fetchDownloads,
     resolveDownloadUrl,
+    deleteDownload,
+    cancelDownload,
   };
 }

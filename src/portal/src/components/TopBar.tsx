@@ -65,7 +65,7 @@ export const TopBar = React.memo(
               aria-label="Home"
             >
               <img
-                src="/icon.png"
+                src="/icon_2.png"
                 alt="NoSubVod"
                 style={{ width: "28px", height: "28px" }}
               />
