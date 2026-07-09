@@ -87,31 +87,38 @@ type WebkitPresentationVideo = HTMLVideoElement & {
 };
 
 const NSVPlayer = React.memo(
-  ({
-    source,
-    title,
-    poster,
-    streamType = "on-demand",
-    autoPlay = false,
-    muted = false,
-    startTime,
-    seekTo,
-    defaultQuality,
-    isMobileLayout: _isMobileLayout = false,
-    isLandscape = false,
-    className,
-    textTracks = [],
-    onTimeUpdate,
-    onDurationChange,
-    onPlayStateChange,
-    onQualitySelection,
-    onSourceReady,
-    onError,
-    onFullscreenChange,
-  }: NSVPlayerProps) => {
+  React.forwardRef(
+    (
+      {
+        source,
+        title,
+        poster,
+        streamType = "on-demand",
+        autoPlay = false,
+        muted = false,
+        startTime,
+        seekTo,
+        defaultQuality,
+        isMobileLayout: _isMobileLayout = false,
+        isLandscape = false,
+        className,
+        textTracks = [],
+        onTimeUpdate,
+        onDurationChange,
+        onPlayStateChange,
+        onQualitySelection,
+        onSourceReady,
+        onError,
+        onFullscreenChange,
+      }: NSVPlayerProps,
+      ref: React.ForwardedRef<any>,
+    ) => {
     const playerRef = useRef<any>(null);
     const store = useMediaStore(playerRef);
     const remote = useMediaRemote(playerRef);
+
+    // Forward the internal playerRef to the external ref if provided
+    React.useImperativeHandle(ref, () => playerRef.current);
 
     const remoteRef = useRef(remote);
     const storeRef = useRef(store);
@@ -295,25 +302,29 @@ const NSVPlayer = React.memo(
         });
       }
 
-      const playerRoot = (playerRef.current?.el ?? playerRef.current) as any;
-      const activeVideo =
-        playerRoot && typeof playerRoot.querySelector === "function"
-          ? playerRoot.querySelector("video")
-          : null;
-      const webkitVideo = activeVideo as WebkitPresentationVideo | null;
+      try {
+        const playerRoot = (playerRef.current?.el ?? playerRef.current) as any;
+        const activeVideo =
+          playerRoot && typeof playerRoot.querySelector === "function"
+            ? playerRoot.querySelector("video")
+            : null;
+        const webkitVideo = activeVideo as WebkitPresentationVideo | null;
 
-      if (
-        webkitVideo &&
-        typeof webkitVideo.webkitSetPresentationMode === "function" &&
-        webkitVideo.webkitPresentationMode === "picture-in-picture"
-      ) {
-        void Promise.resolve()
-          .then(() => {
-            webkitVideo.webkitSetPresentationMode?.("inline");
-          })
-          .catch(() => {
-            // Ignore WebKit-specific transition errors during teardown.
-          });
+        if (
+          webkitVideo &&
+          typeof webkitVideo.webkitSetPresentationMode === "function" &&
+          webkitVideo.webkitPresentationMode === "picture-in-picture"
+        ) {
+          void Promise.resolve()
+            .then(() => {
+              webkitVideo.webkitSetPresentationMode?.("inline");
+            })
+            .catch(() => {
+              // Ignore WebKit-specific transition errors during teardown.
+            });
+        }
+      } catch {
+        // Ignore errors when player root or querySelector is not ready
       }
     }, []);
 
@@ -974,7 +985,8 @@ const NSVPlayer = React.memo(
         <DefaultVideoLayout icons={defaultLayoutIcons} />
       </MediaPlayer>
     );
-  },
+    },
+  ),
 );
 
 NSVPlayer.displayName = "NSVPlayer";

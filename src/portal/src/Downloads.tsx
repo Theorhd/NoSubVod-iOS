@@ -98,10 +98,8 @@ const DownloadPlayer = React.memo(
           </button>
         </div>
         <NSVPlayer
-          key={file.name}
           source={source}
           title={file.metadata?.title || file.name}
-          autoPlay
           streamType="on-demand"
           className="nsv-download-player"
           onError={() =>
