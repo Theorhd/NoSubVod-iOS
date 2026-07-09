@@ -4,6 +4,8 @@ import {
   ProxyInfo,
   TrustedDevice,
 } from "../../../../shared/types";
+import styles from "./UISections.module.scss";
+import { useTranslation } from "react-i18next";
 
 interface SectionProps {
   readonly settings: ExperienceSettings;
@@ -370,8 +372,7 @@ const TwitchAccountSection = React.memo(
                 onClick={() => {
                   openTwitchManual(twitchManualAuthUrl);
                 }}
-                className="action-btn secondary-btn soft-outline-btn"
-                style={{ marginTop: "10px", display: "inline-flex" }}
+                className={`action-btn secondary-btn soft-outline-btn ${styles["extracted-style-1"]}`}
               >
                 Ouvrir Twitch manuellement
               </button>
@@ -454,10 +455,10 @@ const ProfileBackupSection = React.memo(
         ref={importInputRef}
         type="file"
         accept="application/json,.json"
-        style={{ display: "none" }}
         onChange={(event) => {
           void onImportFileSelected(event);
         }}
+        className={styles["extracted-style-2"]}
       />
 
       <div className="btn-row">
@@ -524,7 +525,42 @@ const DiagnosticsLogsSection = React.memo(
 );
 DiagnosticsLogsSection.displayName = "DiagnosticsLogsSection";
 
+const LanguageSection = React.memo(() => {
+  const { t, i18n } = useTranslation();
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem("nsv_language", lng);
+  };
+
+  return (
+    <div className="card settings-card">
+      <h2>{t("settings.language")}</h2>
+      <p className="settings-description">
+        Sélectionnez la langue de l&apos;application.
+      </p>
+
+      <div className="settings-group">
+        <label htmlFor="languageSelect" className="settings-label">
+          {t("settings.language")}
+        </label>
+        <select
+          id="languageSelect"
+          className="settings-select"
+          value={i18n.language}
+          onChange={(e) => changeLanguage(e.target.value)}
+        >
+          <option value="fr">{t("settings.language_fr")}</option>
+          <option value="en">{t("settings.language_en")}</option>
+        </select>
+      </div>
+    </div>
+  );
+});
+LanguageSection.displayName = "LanguageSection";
+
 export {
+  LanguageSection,
   VideoPlayerSection,
   AdblockSection,
   DownloadsSection,

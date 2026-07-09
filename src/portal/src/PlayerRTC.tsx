@@ -10,7 +10,8 @@ import { useWebRTCViewer } from "./hooks/useWebRTCViewer";
 import { usePlayerControls } from "./hooks/usePlayerControls";
 import { navigateBackInApp } from "./utils/navigation";
 import { buildAuthQuery, getRemoteServerToken } from "./utils/authTokens";
-import "./styles/PlayerRTC.css";
+import "./styles/PlayerRTC.scss";
+import styles from "./PlayerRTC.module.scss";
 
 const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
 
@@ -324,14 +325,7 @@ function PlayerRTCViewport({
   toggleFullscreen,
 }: PlayerRTCViewportProps) {
   const remoteStreamNode = useNativeMobilePlayer ? (
-    <div
-      className="rtc-video"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
+    <div className={`rtc-video ${styles["extracted-style-1"]}`}>
       <video
         ref={remoteVideoRef}
         className="screen-share-video rtc-video"
@@ -387,10 +381,10 @@ function PlayerRTCViewport({
         remoteStreamNode
       ) : (
         <div className="rtc-waiting-host">
-          <div style={{ fontSize: "18px", marginBottom: "8px" }}>
+          <div className={styles["extracted-style-2"]}>
             Waiting for host stream...
           </div>
-          <div className="rtc-label-small" style={{ fontSize: "14px" }}>
+          <div className={`rtc-label-small ${styles["extracted-style-3"]}`}>
             {state.streamMessage ||
               "When the host starts sharing, the WebRTC feed will appear here."}
           </div>
@@ -442,14 +436,14 @@ function PlayerRTCSidebar({
       />
 
       <div>
-        <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
+        <div className={`rtc-label-small ${styles["extracted-style-4"]}`}>
           Session
         </div>
         <div className="rtc-value-bold">{state.sessionId || "Not started"}</div>
       </div>
 
       <div>
-        <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
+        <div className={`rtc-label-small ${styles["extracted-style-5"]}`}>
           Source
         </div>
         <div className="rtc-value-bold">
@@ -457,17 +451,15 @@ function PlayerRTCSidebar({
         </div>
       </div>
 
-      <div
-        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}
-      >
+      <div className={styles["extracted-style-6"]}>
         <div>
-          <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
+          <div className={`rtc-label-small ${styles["extracted-style-7"]}`}>
             Status
           </div>
           <div className="rtc-value-normal">{statusLabel}</div>
         </div>
         <div>
-          <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
+          <div className={`rtc-label-small ${styles["extracted-style-8"]}`}>
             Viewers
           </div>
           <div className="rtc-value-normal">
@@ -475,13 +467,13 @@ function PlayerRTCSidebar({
           </div>
         </div>
         <div>
-          <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
+          <div className={`rtc-label-small ${styles["extracted-style-9"]}`}>
             Signal
           </div>
           <div className="rtc-value-normal">{signalStatus}</div>
         </div>
         <div>
-          <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
+          <div className={`rtc-label-small ${styles["extracted-style-10"]}`}>
             WebRTC
           </div>
           <div className="rtc-value-normal">{rtcStatus}</div>
@@ -489,7 +481,7 @@ function PlayerRTCSidebar({
       </div>
 
       <div>
-        <div className="rtc-label-small" style={{ marginBottom: "4px" }}>
+        <div className={`rtc-label-small ${styles["extracted-style-11"]}`}>
           Started
         </div>
         <div className="rtc-value-normal">
@@ -497,7 +489,7 @@ function PlayerRTCSidebar({
         </div>
       </div>
 
-      <div className="rtc-label-small" style={{ marginTop: "8px" }}>
+      <div className={`rtc-label-small ${styles["extracted-style-12"]}`}>
         {state.interactive
           ? "Pointer/keyboard input forwarded to host."
           : "Remote control disabled by host."}

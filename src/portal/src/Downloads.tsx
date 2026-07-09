@@ -14,7 +14,8 @@ import { formatSize, formatSafeClock } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
 import { useDownloadsData } from "./hooks/useDownloadsData";
 import { ActiveDownload, DownloadedFile } from "../../shared/types";
-import "./styles/Downloads.css";
+import "./styles/Downloads.scss";
+import styles from "./Downloads.module.scss";
 
 const formatDate = (value?: string) => {
   if (!value) return "Date inconnue";
@@ -209,13 +210,7 @@ const DownloadCard = ({
           />
         ) : (
           <div
-            className="download-library-thumb"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(255,255,255,0.02)",
-            }}
+            className={`download-library-thumb ${styles["extracted-style-1"]}`}
           >
             <DownloadIcon size={32} color="var(--vault-muted)" />
           </div>

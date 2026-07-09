@@ -2,6 +2,7 @@ import React from "react";
 import { VOD, HistoryEntry } from "../../../shared/types";
 import { formatTime, formatViews } from "../../../shared/utils/formatters";
 import { Clock, Users, Play } from "lucide-react";
+import styles from "./VODCard.module.scss";
 
 export type VODCardProps = {
   vod: VOD;
@@ -26,51 +27,21 @@ export const VODCard = React.memo<VODCardProps>(
             alt={vod.title}
             className="vod-thumb"
           />
-          <div
-            className="vod-badge"
-            style={{ display: "flex", alignItems: "center", gap: "4px" }}
-          >
+          <div className={`vod-badge ${styles["extracted-style-1"]}`}>
             <Clock size={12} />
             {formatTime(vod.lengthSeconds)}
           </div>
 
-          <div
-            className="vod-play-overlay"
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(143, 87, 255, 0.2)",
-              opacity: 0,
-              transition: "opacity 0.3s ease",
-              pointerEvents: "none",
-              zIndex: 2,
-            }}
-          >
-            <div
-              style={{
-                width: "48px",
-                height: "48px",
-                borderRadius: "50%",
-                background: "var(--primary)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#000",
-                boxShadow: "0 0 20px var(--primary-glow)",
-              }}
-            >
+          <div className={`vod-play-overlay ${styles["extracted-style-2"]}`}>
+            <div className={styles["extracted-style-3"]}>
               <Play size={24} fill="currentColor" />
             </div>
           </div>
 
           <button
-            className="stretched-link"
+            className={`stretched-link ${styles["extracted-style-4"]}`}
             aria-label={`Regarder la VOD: ${vod.title}`}
             onClick={() => onWatch(vod.id)}
-            style={{ background: "none", border: "none", padding: 0 }}
           />
 
           {onAddToWatchlist && (
@@ -80,18 +51,7 @@ export const VODCard = React.memo<VODCardProps>(
                 e.stopPropagation();
                 onAddToWatchlist(e, vod);
               }}
-              className="secondary-btn"
-              style={{
-                position: "absolute",
-                zIndex: 5,
-                top: "8px",
-                right: "8px",
-                width: "32px",
-                height: "32px",
-                padding: 0,
-                borderRadius: "50%",
-                fontSize: "18px",
-              }}
+              className={`secondary-btn ${styles["extracted-style-5"]}`}
               title="Add to watch later"
             >
               +
@@ -99,18 +59,7 @@ export const VODCard = React.memo<VODCardProps>(
           )}
 
           {progress > 0 && (
-            <div
-              className="progress-track"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: "3px",
-                borderRadius: 0,
-                background: "rgba(255,255,255,0.1)",
-              }}
-            >
+            <div className={`progress-track ${styles["extracted-style-6"]}`}>
               <div
                 className="progress-fill"
                 style={{
@@ -123,20 +72,17 @@ export const VODCard = React.memo<VODCardProps>(
           )}
         </div>
 
-        <div className="vod-body" style={{ position: "relative", zIndex: 3 }}>
+        <div className={`vod-body ${styles["extracted-style-7"]}`}>
           {showOwner && vod.owner && (
-            <div
-              className="vod-meta"
-              style={{ marginBottom: "8px", color: "var(--text)" }}
-            >
+            <div className={`vod-meta ${styles["extracted-style-8"]}`}>
               {vod.owner.profileImageURL && (
                 <img
                   src={vod.owner.profileImageURL}
                   alt={vod.owner.displayName}
-                  style={{ width: "20px", height: "20px", borderRadius: "50%" }}
+                  className={styles["extracted-style-9"]}
                 />
               )}
-              <span style={{ fontWeight: 600 }}>
+              <span className={styles["extracted-style-10"]}>
                 {vod.owner.displayName || "Unknown Streamer"}
               </span>
             </div>
@@ -146,35 +92,18 @@ export const VODCard = React.memo<VODCardProps>(
             {vod.title}
           </h3>
 
-          <div
-            className="vod-meta"
-            style={{ justifyContent: "space-between", marginTop: "8px" }}
-          >
-            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-              <span
-                style={{
-                  color: "var(--primary)",
-                  fontWeight: 600,
-                  fontSize: "0.75rem",
-                }}
-              >
+          <div className={`vod-meta ${styles["extracted-style-11"]}`}>
+            <div className={styles["extracted-style-12"]}>
+              <span className={styles["extracted-style-13"]}>
                 {vod.game?.name || "No Category"}
               </span>
-              <span
-                style={{ display: "flex", alignItems: "center", gap: "4px" }}
-              >
+              <span className={styles["extracted-style-14"]}>
                 <Users size={12} />
                 {formatViews(vod.viewCount)}
               </span>
             </div>
           </div>
-          <div
-            style={{
-              marginTop: "8px",
-              fontSize: "0.7rem",
-              color: "var(--text-muted)",
-            }}
-          >
+          <div className={styles["extracted-style-15"]}>
             {new Date(vod.createdAt).toLocaleDateString()}
           </div>
         </div>

@@ -13,7 +13,8 @@ import HistoryPreview from "./components/home/HistoryPreview";
 import WatchlistPreview from "./components/home/WatchlistPreview";
 import { TopBar } from "./components/TopBar";
 import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
-import "./styles/Home.css";
+import "./styles/Home.scss";
+import styles from "./Home.module.scss";
 
 async function fetchJson<T>(
   url: string,
@@ -390,29 +391,18 @@ export default function Home() {
         />
 
         {isLoadingData ? (
-          <div
-            className="card glass"
-            style={{ textAlign: "center", padding: "2rem" }}
-          >
+          <div className={`card glass ${styles["extracted-style-1"]}`}>
             Chargement des données...
           </div>
         ) : dataError ? (
-          <div
-            className="card glass"
-            style={{
-              textAlign: "center",
-              padding: "2rem",
-              color: "var(--danger-color, #ff4444)",
-            }}
-          >
+          <div className={`card glass ${styles["extracted-style-2"]}`}>
             <p>{dataError}</p>
             <button
-              className="action-btn"
+              className={`action-btn ${styles["extracted-style-3"]}`}
               onClick={() => {
                 const controller = new AbortController();
                 void loadHomeData(controller.signal);
               }}
-              style={{ marginTop: "1rem" }}
               type="button"
             >
               Réessayer

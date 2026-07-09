@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { VOD, LiveStream } from "../../../../shared/types";
-import "../../styles/PlayerInfo.css";
+import "../../styles/PlayerInfo.scss";
 
 interface PlayerInfoProps {
   vodInfo: VOD | null;

@@ -9,6 +9,7 @@ import {
   Scissors,
 } from "lucide-react";
 import { buildAuthSuffix } from "../../utils/authTokens";
+import styles from "./ClipMode.module.scss";
 
 interface ClipModeProps {
   duration: number;
@@ -71,20 +72,7 @@ const ClipMode: React.FC<ClipModeProps> = ({
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: "12px",
-        alignItems: "center",
-        margin: "12px 16px",
-        background: "rgba(30, 30, 34, 0.95)",
-        padding: "10px 14px",
-        borderRadius: "20px",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
-        flexWrap: "wrap",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-      }}
-    >
+    <div className={styles["extracted-style-1"]}>
       <style>{`
         .clip-btn {
           transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, opacity 0.2s ease;
@@ -99,109 +87,35 @@ const ClipMode: React.FC<ClipModeProps> = ({
         }
       `}</style>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          marginRight: "4px",
-        }}
-      >
-        <div
-          style={{
-            background: "rgba(168, 85, 247, 0.2)",
-            padding: "6px",
-            borderRadius: "50%",
-          }}
-        >
+      <div className={styles["extracted-style-2"]}>
+        <div className={styles["extracted-style-3"]}>
           <Scissors size={18} color="var(--primary, #a855f7)" />
         </div>
-        <span
-          style={{
-            color: "#fff",
-            fontWeight: "700",
-            fontSize: "0.95rem",
-            letterSpacing: "0.02em",
-          }}
-        >
-          Clip
-        </span>
+        <span className={styles["extracted-style-4"]}>Clip</span>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          background: "rgba(0,0,0,0.4)",
-          borderRadius: "16px",
-          padding: "4px",
-        }}
-      >
+      <div className={styles["extracted-style-5"]}>
         <button
-          className="clip-btn"
+          className={`clip-btn ${styles["extracted-style-6"]}`}
           type="button"
           onClick={onSetStart}
-          style={{
-            padding: "8px 14px",
-            fontSize: "0.85rem",
-            fontWeight: "700",
-            background: "rgba(255, 255, 255, 0.1)",
-            color: "#fff",
-            border: "none",
-            borderRadius: "12px",
-            cursor: "pointer",
-          }}
         >
           Début
         </button>
-        <span
-          style={{
-            fontSize: "0.9rem",
-            color: "#e4e4e7",
-            fontFamily: "monospace",
-            fontWeight: "600",
-            padding: "0 12px",
-          }}
-        >
+        <span className={styles["extracted-style-7"]}>
           {formatClock(clipStart || 0)}
         </span>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          background: "rgba(0,0,0,0.4)",
-          borderRadius: "16px",
-          padding: "4px",
-        }}
-      >
+      <div className={styles["extracted-style-8"]}>
         <button
-          className="clip-btn"
+          className={`clip-btn ${styles["extracted-style-9"]}`}
           type="button"
           onClick={onSetEnd}
-          style={{
-            padding: "8px 14px",
-            fontSize: "0.85rem",
-            fontWeight: "700",
-            background: "rgba(255, 255, 255, 0.1)",
-            color: "#fff",
-            border: "none",
-            borderRadius: "12px",
-            cursor: "pointer",
-          }}
         >
           Fin
         </button>
-        <span
-          style={{
-            fontSize: "0.9rem",
-            color: "#e4e4e7",
-            fontFamily: "monospace",
-            fontWeight: "600",
-            padding: "0 12px",
-          }}
-        >
+        <span className={styles["extracted-style-10"]}>
           {formatClock(clipEnd ?? duration)}
         </span>
       </div>
@@ -261,21 +175,9 @@ const ClipMode: React.FC<ClipModeProps> = ({
 
       {onClose && (
         <button
-          className="clip-btn"
+          className={`clip-btn ${styles["extracted-style-11"]}`}
           type="button"
           onClick={onClose}
-          style={{
-            padding: "10px",
-            background: "rgba(255, 255, 255, 0.05)",
-            color: "rgba(255, 255, 255, 0.8)",
-            border: "none",
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            marginLeft: "4px",
-          }}
           title="Fermer le mode clip"
         >
           <X size={20} />

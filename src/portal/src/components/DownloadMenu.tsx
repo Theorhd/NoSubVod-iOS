@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { navigateToPlayer } from "../utils/navigation";
 import { buildAuthSuffix } from "../utils/authTokens";
+import styles from "./DownloadMenu.module.scss";
 
 interface DownloadMenuProps {
   vodId: string;
@@ -156,84 +157,27 @@ export default function DownloadMenu({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "32px",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: "1.6rem",
-                fontWeight: "800",
-                letterSpacing: "-0.03em",
-                color: "#fff",
-              }}
-            >
-              Télécharger
-            </h3>
+        <div className={styles["extracted-style-1"]}>
+          <div className={styles["extracted-style-2"]}>
+            <h3 className={styles["extracted-style-3"]}>Télécharger</h3>
             {title && (
-              <span
-                style={{
-                  fontSize: "0.85rem",
-                  color: "rgba(255, 255, 255, 0.5)",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  maxWidth: "250px",
-                }}
-              >
-                {title}
-              </span>
+              <span className={styles["extracted-style-4"]}>{title}</span>
             )}
           </div>
 
           <button
-            className="ios-btn"
+            className={`ios-btn ${styles["extracted-style-5"]}`}
             onClick={handleClose}
-            style={{
-              background: "rgba(255, 255, 255, 0.08)",
-              border: "none",
-              color: "#fff",
-              cursor: "pointer",
-              borderRadius: "50%",
-              width: "44px",
-              height: "44px", // Minimum touch target size for iOS
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
           >
             <X size={20} />
           </button>
         </div>
 
-        <div style={{ marginBottom: "40px" }}>
-          <span
-            style={{
-              display: "block",
-              fontSize: "0.75rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.15em",
-              marginBottom: "16px",
-              color: "rgba(255, 255, 255, 0.4)",
-              fontWeight: "700",
-            }}
-          >
+        <div className={styles["extracted-style-6"]}>
+          <span className={styles["extracted-style-7"]}>
             Sélectionner la qualité
           </span>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "8px",
-            }}
-          >
+          <div className={styles["extracted-style-8"]}>
             {[
               { value: "best", label: "Source" },
               { value: "1080p", label: "1080p" },
@@ -278,14 +222,7 @@ export default function DownloadMenu({
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-            flexShrink: 0,
-          }}
-        >
+        <div className={styles["extracted-style-9"]}>
           <button
             onClick={handleFullDownload}
             disabled={
@@ -345,56 +282,20 @@ export default function DownloadMenu({
 
           <button
             onClick={handleManualClip}
-            className="ios-btn"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "20px 24px",
-              borderRadius: "20px",
-              fontSize: "1.05rem",
-              fontWeight: "600",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              background: "rgba(255, 255, 255, 0.03)",
-              color: "#fff",
-              cursor: "pointer",
-            }}
+            className={`ios-btn ${styles["extracted-style-10"]}`}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div
-                style={{
-                  background: "rgba(255, 255, 255, 0.1)",
-                  padding: "8px",
-                  borderRadius: "50%",
-                  display: "flex",
-                }}
-              >
+            <div className={styles["extracted-style-11"]}>
+              <div className={styles["extracted-style-12"]}>
                 <Scissors size={20} />
               </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                  gap: "2px",
-                }}
-              >
+              <div className={styles["extracted-style-13"]}>
                 <span>Extraire un clip</span>
-                <span
-                  style={{
-                    fontSize: "0.8rem",
-                    color: "rgba(255, 255, 255, 0.4)",
-                    fontWeight: "500",
-                  }}
-                >
+                <span className={styles["extracted-style-14"]}>
                   Télécharger un extrait précis
                 </span>
               </div>
             </div>
-            <ChevronRight
-              size={20}
-              style={{ color: "rgba(255, 255, 255, 0.3)" }}
-            />
+            <ChevronRight size={20} className={styles["extracted-style-15"]} />
           </button>
         </div>
       </div>

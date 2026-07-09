@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { buildAuthQuery } from "../../utils/authTokens";
 import { isTauriRuntime } from "../../utils/capabilities";
+import styles from "./LiveChatComponent.module.scss";
 
 interface LiveChatComponentProps {
   liveId: string;
@@ -327,17 +328,7 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
 
   return (
     <>
-      <div
-        style={{
-          padding: "15px",
-          borderBottom: "1px solid #3a3a3d",
-          fontWeight: "bold",
-          color: "#efeff1",
-          fontSize: "0.9rem",
-          display: "flex",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className={styles["extracted-style-1"]}>
         <span>LIVE CHAT</span>
         <span
           style={{
@@ -349,40 +340,26 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
         </span>
       </div>
 
-      <div
-        ref={chatScrollRef}
-        style={{ flex: 1, overflowY: "auto", padding: "10px" }}
-      >
+      <div ref={chatScrollRef} className={styles["extracted-style-2"]}>
         {messages.map((message, index) => (
           <div
             key={message.id || index}
-            style={{
-              marginBottom: "8px",
-              fontSize: "0.85rem",
-              lineHeight: "1.4",
-              wordWrap: "break-word",
-            }}
+            className={styles["extracted-style-3"]}
           >
             <span
               style={{ fontWeight: "bold", color: message.color || "#bf94ff" }}
             >
               {message.displayName || "Unknown"}:{" "}
             </span>
-            <span style={{ color: "#efeff1" }}>{message.message || ""}</span>
+            <span className={styles["extracted-style-4"]}>
+              {message.message || ""}
+            </span>
           </div>
         ))}
       </div>
 
       {twitchLinked && (
-        <div
-          style={{
-            padding: "8px",
-            borderTop: "1px solid #3a3a3d",
-            display: "flex",
-            gap: "6px",
-            flexShrink: 0,
-          }}
-        >
+        <div className={styles["extracted-style-5"]}>
           <input
             type="text"
             value={chatInput}
@@ -399,16 +376,7 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
             }}
             placeholder={`Message as ${twitchDisplayName}`}
             maxLength={500}
-            style={{
-              flex: 1,
-              padding: "6px 10px",
-              background: "#1f1f23",
-              border: "1px solid #3a3a3d",
-              borderRadius: "4px",
-              color: "#efeff1",
-              fontSize: "0.85rem",
-              outline: "none",
-            }}
+            className={styles["extracted-style-6"]}
           />
 
           <button
@@ -434,17 +402,7 @@ const LiveChatComponent: React.FC<LiveChatComponentProps> = ({
       )}
 
       {sendError && (
-        <div
-          style={{
-            padding: "8px 10px",
-            color: "#f87171",
-            fontSize: "0.8rem",
-            borderTop: "1px solid #3a3a3d",
-            background: "#140f12",
-          }}
-        >
-          {sendError}
-        </div>
+        <div className={styles["extracted-style-7"]}>{sendError}</div>
       )}
     </>
   );

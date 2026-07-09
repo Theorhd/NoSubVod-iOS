@@ -6,7 +6,7 @@ import { ExperienceSettings } from "../../shared/types";
 import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { navigateBackInApp } from "./utils/navigation";
-import "./styles/MultiView.css";
+import "./styles/MultiView.scss";
 
 interface MultiPlayerSlot {
   id: string;

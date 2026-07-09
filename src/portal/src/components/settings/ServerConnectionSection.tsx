@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useServer } from "../../ServerContext";
 import { getDeviceId } from "../../utils/authTokens";
 import { ExperienceSettings } from "../../../../shared/types";
+import styles from "./ServerConnectionSection.module.scss";
 
 const LazyQRCodeReader = React.lazy(async () => {
   const module = await import("../QRCodeReader");
@@ -333,21 +334,9 @@ const ServerConnectionSection = React.memo(() => {
 
       {desktopServers.length > 0 && (!serverUrl || !token) && (
         <div className="server-list-container">
-          <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>
-            Serveurs découverts :
-          </h3>
+          <h3 className={styles["extracted-style-1"]}>Serveurs découverts :</h3>
           {desktopServers.map((s) => (
-            <div
-              key={s}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px",
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "8px",
-              }}
-            >
+            <div key={s} className={styles["extracted-style-2"]}>
               <span>{s}</span>
               <button
                 className="action-btn"
@@ -365,78 +354,38 @@ const ServerConnectionSection = React.memo(() => {
       )}
 
       {selectedServer && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.8)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "20px",
-          }}
-        >
-          <div
-            style={{
-              background: "#18181b",
-              padding: "24px",
-              borderRadius: "12px",
-              width: "100%",
-              maxWidth: "400px",
-            }}
-          >
-            <h3 style={{ marginTop: 0 }}>Connexion à {selectedServer}</h3>
+        <div className={styles["extracted-style-3"]}>
+          <div className={styles["extracted-style-4"]}>
+            <h3 className={styles["extracted-style-5"]}>
+              Connexion à {selectedServer}
+            </h3>
 
             <button
-              className="action-btn"
-              style={{ width: "100%", marginBottom: "16px" }}
+              className={`action-btn ${styles["extracted-style-6"]}`}
               onClick={() => setShowQRScanner(true)}
             >
               Scanner le QR Code
             </button>
 
-            <div
-              style={{
-                textAlign: "center",
-                margin: "16px 0",
-                color: "#a3a3a3",
-              }}
-            >
-              OU
-            </div>
+            <div className={styles["extracted-style-7"]}>OU</div>
 
             <input
               type="password"
-              className="search-input"
+              className={`search-input ${styles["extracted-style-8"]}`}
               placeholder="Entrer le token manuellement"
               value={manualToken}
               onChange={(e) => setManualToken(e.target.value)}
-              style={{
-                width: "100%",
-                marginBottom: "16px",
-                boxSizing: "border-box",
-              }}
             />
 
-            <div style={{ display: "flex", gap: "10px" }}>
+            <div className={styles["extracted-style-9"]}>
               <button
-                className="action-btn"
-                style={{
-                  flex: 1,
-                  background: "transparent",
-                  border: "1px solid #333",
-                }}
+                className={`action-btn ${styles["extracted-style-10"]}`}
                 onClick={() => setSelectedServer(null)}
               >
                 Annuler
               </button>
               <button
-                className="action-btn"
-                style={{ flex: 1 }}
+                className={`action-btn ${styles["extracted-style-11"]}`}
                 onClick={async () => {
                   if (
                     !selectedServer ||
@@ -484,22 +433,7 @@ const ServerConnectionSection = React.memo(() => {
       {showQRScanner && (
         <React.Suspense
           fallback={
-            <div
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0,0,0,0.8)",
-                zIndex: 9999,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#a3a3a3",
-                fontSize: "14px",
-              }}
-            >
+            <div className={styles["extracted-style-12"]}>
               Chargement du scanner...
             </div>
           }

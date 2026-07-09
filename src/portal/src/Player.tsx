@@ -26,10 +26,11 @@ import { useResponsive } from "./hooks/useResponsive";
 import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { navigateBackInApp } from "./utils/navigation";
 import { buildAuthSuffix } from "./utils/authTokens";
-import "./styles/Player.css";
+import "./styles/Player.scss";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVideoQuality } from "./hooks/useVideoQuality";
 import { useChatReplay } from "./hooks/useChatReplay";
+import styles from "./Player.module.scss";
 
 const DEFAULT_SETTINGS: ExperienceSettings = {
   oneSync: false,
@@ -603,19 +604,12 @@ function VodLivePlayer({
 
   if (playerError) {
     return (
-      <div
-        className="container"
-        style={{ textAlign: "center", padding: "100px" }}
-      >
-        <div
-          className="card glass"
-          style={{ color: "var(--danger-color, #ff4444)" }}
-        >
+      <div className={`container ${styles["extracted-style-1"]}`}>
+        <div className={`card glass ${styles["extracted-style-2"]}`}>
           <p>{playerError}</p>
           <button
-            className="action-btn"
+            className={`action-btn ${styles["extracted-style-3"]}`}
             onClick={() => window.location.reload()}
-            style={{ marginTop: "1rem" }}
             type="button"
           >
             Réessayer
@@ -627,10 +621,7 @@ function VodLivePlayer({
 
   if (!source) {
     return (
-      <div
-        className="container"
-        style={{ textAlign: "center", padding: "100px" }}
-      >
+      <div className={`container ${styles["extracted-style-4"]}`}>
         <div className="card glass">
           Missing player source. Please provide vod or live query parameter.
         </div>
@@ -724,7 +715,7 @@ function VodLivePlayer({
                 )}
 
                 {!liveId && (
-                  <div style={{ position: "relative" }}>
+                  <div className={styles["extracted-style-5"]}>
                     <button
                       onClick={() => setShowDownloadMenu((v) => !v)}
                       className="secondary-btn player-action-mini-btn"

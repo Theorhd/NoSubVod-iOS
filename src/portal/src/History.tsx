@@ -4,7 +4,7 @@ import { HistoryVodEntry } from "../../shared/types";
 import { formatRelative } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
 import { navigateToPlayer } from "./utils/navigation";
-import "./styles/History.css";
+import "./styles/History.scss";
 
 type HistoryItemProps = Readonly<{
   entry: HistoryVodEntry;

@@ -9,7 +9,7 @@ import React, {
 import { Extension, ExtensionContribution } from "../../shared/types";
 import { getActiveToken } from "./utils/authTokens";
 import { isTauriRuntime } from "./utils/capabilities";
-import "./styles/Extension.css";
+import "./styles/Extension.scss";
 
 interface ExtensionContextType {
   extensions: Extension[];

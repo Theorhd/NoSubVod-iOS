@@ -2,7 +2,8 @@ import React from "react";
 import { LiveStream } from "../../../shared/types";
 import { formatViewers, formatUptime } from "../../../shared/utils/formatters";
 import { Users, Clock, Play } from "lucide-react";
-import "../styles/StreamCard.css";
+import "../styles/StreamCard.scss";
+import styles from "./StreamCard.module.scss";
 
 type StreamCardProps = {
   stream: LiveStream;
@@ -47,7 +48,7 @@ export const StreamCard = React.memo<StreamCardProps>(
           />
         </div>
 
-        <div className="vod-body" style={{ position: "relative", zIndex: 3 }}>
+        <div className={`vod-body ${styles["extracted-style-1"]}`}>
           {showBroadcaster && stream.broadcaster && (
             <div className="vod-meta stream-broadcaster">
               {stream.broadcaster.profileImageURL && (

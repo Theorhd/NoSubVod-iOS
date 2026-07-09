@@ -10,7 +10,7 @@ import { UserInfo } from "../../shared/types";
 import { formatViewers } from "../../shared/utils/formatters";
 import { TopBar } from "./components/TopBar";
 import { navigateToPlayer } from "./utils/navigation";
-import "./styles/Search.css";
+import "./styles/Search.scss";
 
 type SearchGame = {
   id: string;

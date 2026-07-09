@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { WifiOff, Download } from "lucide-react";
-import "./styles/OfflineHome.css";
+import "./styles/OfflineHome.scss";
 
 export default function OfflineHome() {
   const navigate = useNavigate();

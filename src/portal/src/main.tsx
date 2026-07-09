@@ -1,8 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import "./styles/index.css";
-import "./styles/AppError.css";
+import "./i18n";
+import "./styles/index.scss";
+import "./styles/AppError.scss";
 import { safeStorageGet, safeStorageSet } from "../../shared/utils/storage";
 import {
   getActiveToken,

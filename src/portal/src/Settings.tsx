@@ -10,7 +10,7 @@ import { normalizeExperienceSettings } from "./utils/experienceSettings";
 import { useInterval } from "../../shared/hooks/useInterval";
 import { usePageVisibility } from "../../shared/hooks/usePageVisibility";
 import { isMobileDevice, isTauriRuntime } from "./utils/capabilities";
-import "./styles/Settings.css";
+import "./styles/Settings.scss";
 import { ServerConnectionSection } from "./components/settings/ServerConnectionSection";
 import {
   VideoPlayerSection,
@@ -20,6 +20,7 @@ import {
   TrustedDevicesSection,
   ProfileBackupSection,
   DiagnosticsLogsSection,
+  LanguageSection,
 } from "./components/settings/UISections";
 
 const defaultSettings: ExperienceSettings = {
@@ -769,6 +770,7 @@ export default function Settings() {
           exporting={diagnosticsExporting}
           onExport={exportDiagnosticLogs}
         />
+        <LanguageSection />
         <ServerConnectionSection />
         <div className="card settings-card settings-footer-card">
           {error && <div className="error-text">{error}</div>}

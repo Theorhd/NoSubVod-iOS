@@ -8,6 +8,7 @@ import { TopBar } from "./components/TopBar";
 import { useChannelData } from "./hooks/useChannelData";
 import { navigateToPlayer } from "./utils/navigation";
 import { ensureNativeNotificationPermission } from "./utils/nativeNotifications";
+import styles from "./Channel.module.scss";
 
 const normalizeSubLogin = (value: string): string => value.trim().toLowerCase();
 
@@ -359,7 +360,7 @@ export default function Channel() {
           !liveStream && <div className="empty-state">No content found.</div>}
 
         {!loading && !error && isUserMode && streamerInfo && (
-          <div className="block-section" style={{ marginTop: 0 }}>
+          <div className={`block-section ${styles["extracted-style-1"]}`}>
             <StreamerInfoCard
               streamer={streamerInfo}
               isSubbed={isStreamerSubbed}
@@ -386,7 +387,7 @@ export default function Channel() {
 
         {/* User live (user-channel mode) */}
         {!loading && !error && liveStream && isUserMode && (
-          <div className="block-section" style={{ marginTop: 0 }}>
+          <div className={`block-section ${styles["extracted-style-2"]}`}>
             <h2>Live</h2>
             <div className="vod-grid">
               <StreamCard
@@ -404,7 +405,7 @@ export default function Channel() {
 
         {/* Category live streams */}
         {!loading && !error && isCategoryMode && catLiveStreams.length > 0 && (
-          <div className="block-section" style={{ marginTop: 0 }}>
+          <div className={`block-section ${styles["extracted-style-3"]}`}>
             <div className="section-header-row">
               <h2>Lives en ce moment</h2>
               <span className="section-count">
@@ -492,12 +493,7 @@ export default function Channel() {
 
         {/* Clips */}
         {!loading && !error && clips.length > 0 && (
-          <div
-            className="block-section"
-            style={{
-              marginTop: "16px",
-            }}
-          >
+          <div className={`block-section ${styles["extracted-style-4"]}`}>
             <div className="section-header-row">
               <h2>Clips</h2>
               <span className="section-count">

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "./components/TopBar";
 import { useServer } from "./ServerContext";
-import "./styles/ScreenShare.css";
+import "./styles/ScreenShare.scss";
 
 const RELAY_STORAGE_KEY = "nsv_remote_relay_origin";
 

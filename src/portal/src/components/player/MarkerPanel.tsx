@@ -2,6 +2,7 @@ import React from "react";
 import { VideoMarker } from "../../../../shared/types";
 import { formatSafeClock as formatClock } from "../../../../shared/utils/formatters";
 import { Play, Tag, X } from "lucide-react";
+import styles from "./MarkerPanel.module.scss";
 
 interface MarkerPanelProps {
   markers: VideoMarker[];
@@ -19,66 +20,19 @@ const MarkerPanel: React.FC<MarkerPanelProps> = ({
   if (markers.length === 0) return null;
 
   return (
-    <div
-      className="glass"
-      style={{
-        position: "absolute",
-        top: "20px",
-        right: "20px",
-        width: "320px",
-        maxHeight: "calc(100% - 40px)",
-        borderRadius: "var(--radius-lg)",
-        zIndex: 100,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        boxShadow: "var(--shadow-lg)",
-        border: "1px solid var(--border)",
-        animation: "page-fade-in 0.3s ease-out",
-      }}
-    >
-      <div
-        style={{
-          padding: "16px",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: "rgba(0,0,0,0.3)",
-        }}
-      >
-        <h3
-          style={{
-            margin: 0,
-            fontSize: "1rem",
-            fontWeight: 800,
-            color: "#fff",
-          }}
-        >
-          Chapitres
-        </h3>
+    <div className={`glass ${styles["extracted-style-1"]}`}>
+      <div className={styles["extracted-style-2"]}>
+        <h3 className={styles["extracted-style-3"]}>Chapitres</h3>
         <button
           onClick={onClose}
-          className="secondary-btn"
-          style={{
-            width: "32px",
-            height: "32px",
-            padding: 0,
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          className={`secondary-btn ${styles["extracted-style-4"]}`}
           aria-label="Fermer"
         >
           <X size={18} />
         </button>
       </div>
 
-      <div
-        style={{ flex: 1, overflowY: "auto", padding: "12px" }}
-        className="custom-marker-list"
-      >
+      <div className={`custom-marker-list ${styles["extracted-style-5"]}`}>
         {markers.map((marker, index) => {
           const nextTime = markers[index + 1]?.displayTime || Infinity;
           const isActive =
@@ -109,39 +63,19 @@ const MarkerPanel: React.FC<MarkerPanelProps> = ({
                 color: "inherit",
               }}
             >
-              <div
-                style={{
-                  width: "44px",
-                  height: "60px",
-                  borderRadius: "6px",
-                  overflow: "hidden",
-                  background: "#000",
-                  flexShrink: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                }}
-              >
+              <div className={styles["extracted-style-6"]}>
                 {marker.url ? (
                   <img
                     src={marker.url}
                     alt=""
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
+                    className={styles["extracted-style-7"]}
                   />
                 ) : (
-                  <Tag
-                    size={18}
-                    style={{ color: "var(--text-muted)", opacity: 0.5 }}
-                  />
+                  <Tag size={18} className={styles["extracted-style-8"]} />
                 )}
               </div>
 
-              <div style={{ minWidth: 0, flex: 1 }}>
+              <div className={styles["extracted-style-9"]}>
                 <div
                   style={{
                     color: isActive ? "#fff" : "var(--text)",

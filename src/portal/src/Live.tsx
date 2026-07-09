@@ -12,7 +12,7 @@ import { StreamCard } from "./components/StreamCard";
 import { TopBar } from "./components/TopBar";
 import { useServer } from "./ServerContext";
 import { navigateToPlayer } from "./utils/navigation";
-import "./styles/Common.css";
+import "./styles/Common.scss";
 
 const PAGE_SIZE = 24;
 

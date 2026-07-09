@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import styles from "./QRCodeReader.module.scss";
 
 type Html5QrcodeModule = typeof import("html5-qrcode");
 type Html5QrcodeScannerType = InstanceType<
@@ -166,123 +167,39 @@ export const QRCodeReader: React.FC<QRCodeReaderProps> = ({
   }, [onScan]);
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.8)",
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "20px",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "400px",
-          backgroundColor: "#18181b",
-          borderRadius: "8px",
-          padding: "16px",
-          boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: "16px",
-          }}
-        >
-          <h3 style={{ margin: 0, color: "#fff" }}>Scan QR Code</h3>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#a3a3a3",
-              fontSize: "24px",
-              cursor: "pointer",
-              lineHeight: "1",
-            }}
-          >
+    <div className={styles["extracted-style-1"]}>
+      <div className={styles["extracted-style-2"]}>
+        <div className={styles["extracted-style-3"]}>
+          <h3 className={styles["extracted-style-4"]}>Scan QR Code</h3>
+          <button onClick={onClose} className={styles["extracted-style-5"]}>
             &times;
           </button>
         </div>
 
         {scannerStatus === "loading" && (
-          <p
-            style={{
-              marginBottom: "12px",
-              color: "#a3a3a3",
-              fontSize: "14px",
-              textAlign: "center",
-            }}
-          >
+          <p className={styles["extracted-style-6"]}>
             Initialisation du scanner...
           </p>
         )}
 
         {scannerStatus === "error" && (
-          <p
-            style={{
-              marginBottom: "12px",
-              color: "#ef4444",
-              fontSize: "14px",
-              textAlign: "center",
-            }}
-          >
+          <p className={styles["extracted-style-7"]}>
             Impossible de charger le scanner QR.
           </p>
         )}
 
         {useNative ? (
-          <div
-            style={{
-              position: "relative",
-              width: "100%",
-              borderRadius: "8px",
-              overflow: "hidden",
-              aspectRatio: "1",
-            }}
-          >
-            <video
-              ref={videoRef}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            >
+          <div className={styles["extracted-style-8"]}>
+            <video ref={videoRef} className={styles["extracted-style-9"]}>
               <track kind="captions" />
             </video>
-            <div
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: "200px",
-                height: "200px",
-                border: "2px solid rgba(143, 87, 255, 0.8)",
-                boxShadow: "0 0 0 4000px rgba(0,0,0,0.5)",
-                pointerEvents: "none",
-              }}
-            />
+            <div className={styles["extracted-style-10"]} />
           </div>
         ) : (
-          <div id={containerId} style={{ width: "100%", color: "#000" }}></div>
+          <div id={containerId} className={styles["extracted-style-11"]}></div>
         )}
 
-        <p
-          style={{
-            marginTop: "16px",
-            color: "#a3a3a3",
-            fontSize: "14px",
-            textAlign: "center",
-          }}
-        >
+        <p className={styles["extracted-style-12"]}>
           Pointez votre caméra vers le QR code sur votre application Desktop.
         </p>
       </div>

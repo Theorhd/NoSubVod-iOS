@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { WatchlistEntry } from "../../../../shared/types";
 import { Bookmark, X, Play } from "lucide-react";
 import { navigateToPlayer } from "../../utils/navigation";
+import styles from "./WatchlistPreview.module.scss";
 
 interface WatchlistPreviewProps {
   readonly watchlist: WatchlistEntry[];
@@ -18,24 +19,18 @@ const WatchlistPreview = React.memo(
     }
 
     return (
-      <div style={{ marginBottom: "32px" }}>
+      <div className={styles["extracted-style-1"]}>
         <div className="section-header">
           <h2>
             <Bookmark size={20} /> Watch Later
           </h2>
         </div>
 
-        <div
-          className="vod-grid"
-          style={{
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-          }}
-        >
+        <div className={`vod-grid ${styles["extracted-style-2"]}`}>
           {watchlist.map((vod) => (
             <div
               key={vod.vodId}
-              className="vod-card glass-hover"
-              style={{ position: "relative" }}
+              className={`vod-card glass-hover ${styles["extracted-style-3"]}`}
             >
               <div className="vod-thumb-wrap">
                 <img
@@ -44,64 +39,27 @@ const WatchlistPreview = React.memo(
                   className="vod-thumb"
                 />
                 <div
-                  className="vod-play-overlay"
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "rgba(143, 87, 255, 0.2)",
-                    opacity: 0,
-                    transition: "opacity 0.3s ease",
-                    pointerEvents: "none",
-                    zIndex: 2,
-                  }}
+                  className={`vod-play-overlay ${styles["extracted-style-4"]}`}
                 >
-                  <div
-                    style={{
-                      width: "40px",
-                      height: "40px",
-                      borderRadius: "50%",
-                      background: "var(--primary)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#000",
-                      boxShadow: "0 0 16px var(--primary-glow)",
-                    }}
-                  >
+                  <div className={styles["extracted-style-5"]}>
                     <Play size={20} fill="currentColor" />
                   </div>
                 </div>
 
                 <button
-                  className="stretched-link"
+                  className={`stretched-link ${styles["extracted-style-6"]}`}
                   aria-label={`Regarder ${vod.title}`}
                   onClick={() =>
                     navigateToPlayer(navigate, {
                       vodId: vod.vodId,
                     })
                   }
-                  style={{ background: "none", border: "none", padding: 0 }}
                 />
 
                 <button
                   type="button"
-                  className="secondary-btn"
+                  className={`secondary-btn ${styles["extracted-style-7"]}`}
                   aria-label={`Supprimer ${vod.title} de la liste`}
-                  style={{
-                    position: "absolute",
-                    top: "8px",
-                    right: "8px",
-                    width: "28px",
-                    height: "28px",
-                    padding: 0,
-                    borderRadius: "50%",
-                    background: "rgba(0,0,0,0.5)",
-                    border: "none",
-                    zIndex: 5,
-                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     void removeFromWatchlist(vod.vodId);
@@ -110,20 +68,8 @@ const WatchlistPreview = React.memo(
                   <X size={14} />
                 </button>
               </div>
-              <div
-                className="vod-body"
-                style={{ padding: "10px", position: "relative", zIndex: 1 }}
-              >
-                <div
-                  style={{
-                    fontWeight: 600,
-                    fontSize: "0.85rem",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                  title={vod.title}
-                >
+              <div className={`vod-body ${styles["extracted-style-8"]}`}>
+                <div title={vod.title} className={styles["extracted-style-9"]}>
                   {vod.title}
                 </div>
               </div>

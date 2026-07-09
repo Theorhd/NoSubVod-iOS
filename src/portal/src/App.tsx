@@ -33,7 +33,7 @@ import { navigateBackInApp } from "./utils/navigation";
 import { isTauriRuntime, isIosTouchRuntime } from "./utils/capabilities";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { useAppResume } from "./hooks/useAppResume";
-import "./styles/App.css";
+import "./styles/App.scss";
 
 import OfflineHome from "./OfflineHome";
 import Home from "./Home";
