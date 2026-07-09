@@ -1215,8 +1215,12 @@ async fn handle_download_hls(
                 for s in segs {
                     let d = s.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0);
                     let b = s.get("bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let disc = s
+                        .get("discontinuity")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
                     if b > 0 {
-                        parsed_segs.push((d, b));
+                        parsed_segs.push((d, b, disc));
                     }
                 }
                 if !parsed_segs.is_empty() {
@@ -1243,9 +1247,12 @@ async fn handle_download_hls(
 
     if let Some(exact_segs) = exact_segments {
         let mut offset = 0;
-        for (dur, bytes) in exact_segs {
+        for (dur, bytes, disc) in exact_segs {
             if dur > max_chunk_duration {
                 max_chunk_duration = dur;
+            }
+            if disc {
+                segments_str.push_str("#EXT-X-DISCONTINUITY\n");
             }
             segments_str.push_str(&format!("#EXTINF:{:.3},\n", dur));
             segments_str.push_str(&format!("#EXT-X-BYTERANGE:{}@{}\n", bytes, offset));

@@ -276,7 +276,8 @@ impl DownloadManager {
                             }
                             segment_metadata.push(serde_json::json!({
                                 "duration": seg.duration,
-                                "bytes": data.len()
+                                "bytes": data.len(),
+                                "discontinuity": seg.discontinuity
                             }));
 
                             elapsed_secs += seg.duration;
@@ -372,6 +373,7 @@ impl DownloadManager {
 struct Segment {
     url: Arc<str>,
     duration: f64,
+    discontinuity: bool,
 }
 
 // ── M3U8 parsing ─────────────────────────────────────────────────────────────
@@ -415,9 +417,15 @@ fn parse_segments(playlist: &str, origin: &str, base_url: &str) -> Vec<Segment> 
     let mut segments = Vec::new();
     let mut pending_duration: Option<f64> = None;
     let mut skipping_ad = false;
+    let mut next_segment_is_discontinuity = false;
 
     for line in playlist.lines() {
         let l = line.trim();
+
+        if l == "#EXT-X-DISCONTINUITY" {
+            next_segment_is_discontinuity = true;
+            continue;
+        }
 
         // Detect Twitch ad blocks
         if l.starts_with("#EXT-X-TWITCH-AD")
@@ -433,6 +441,7 @@ fn parse_segments(playlist: &str, origin: &str, base_url: &str) -> Vec<Segment> 
                 || l.starts_with("#EXT-X-TWITCH-CONTENT-TYPE:video")
             {
                 skipping_ad = false;
+                next_segment_is_discontinuity = true;
             } else {
                 continue;
             }
@@ -447,7 +456,9 @@ fn parse_segments(playlist: &str, origin: &str, base_url: &str) -> Vec<Segment> 
             segments.push(Segment {
                 url: Arc::from(resolve_url(l, origin, base_url).as_ref()),
                 duration: dur,
+                discontinuity: next_segment_is_discontinuity,
             });
+            next_segment_is_discontinuity = false;
         }
     }
     segments
@@ -545,16 +556,19 @@ seg2.ts
     fn test_filter_segments_by_time() {
         let segs = vec![
             Segment {
-                url: Arc::from("s1"),
+                url: Arc::from("http://localhost/0.ts"),
                 duration: 10.0,
+                discontinuity: false,
             },
             Segment {
-                url: Arc::from("s2"),
+                url: Arc::from("http://localhost/1.ts"),
                 duration: 10.0,
+                discontinuity: false,
             },
             Segment {
-                url: Arc::from("s3"),
+                url: Arc::from("http://localhost/2.ts"),
                 duration: 10.0,
+                discontinuity: false,
             },
         ];
 
@@ -566,18 +580,18 @@ seg2.ts
         // Clip [5, 15] -> should keep s1 (ends at 10) and s2 (starts at 10)
         let filtered = filter_segments_by_time(&segs, Some(5.0), Some(15.0));
         assert_eq!(filtered.len(), 2);
-        assert_eq!(filtered[0].url.as_ref(), "s1");
-        assert_eq!(filtered[1].url.as_ref(), "s2");
+        assert_eq!(filtered[0].url.as_ref(), "http://localhost/0.ts");
+        assert_eq!(filtered[1].url.as_ref(), "http://localhost/1.ts");
 
         // Clip [15, 25] -> should keep s2 and s3
         let filtered = filter_segments_by_time(&segs, Some(15.0), Some(25.0));
         assert_eq!(filtered.len(), 2);
-        assert_eq!(filtered[0].url.as_ref(), "s2");
-        assert_eq!(filtered[1].url.as_ref(), "s3");
+        assert_eq!(filtered[0].url.as_ref(), "http://localhost/1.ts");
+        assert_eq!(filtered[1].url.as_ref(), "http://localhost/2.ts");
 
         // Clip [25, 35] -> should keep s3
         let filtered = filter_segments_by_time(&segs, Some(25.0), Some(35.0));
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].url.as_ref(), "s3");
+        assert_eq!(filtered[0].url.as_ref(), "http://localhost/2.ts");
     }
 }
