@@ -152,10 +152,11 @@ const NSVPlayer = React.memo(
     // standard Fullscreen API (document.fullscreenElement).
     useEffect(() => {
       const getVideoElement = (): HTMLVideoElement | null => {
-        const playerRoot = (playerRef.current?.el || playerRef.current) as
-          | HTMLElement
-          | undefined;
-        return playerRoot?.querySelector("video") ?? null;
+        const playerRoot = (playerRef.current?.el ?? playerRef.current) as any;
+        if (playerRoot && typeof playerRoot.querySelector === "function") {
+          return playerRoot.querySelector("video") ?? null;
+        }
+        return null;
       };
 
       let videoEl: HTMLVideoElement | null = null;
@@ -294,10 +295,11 @@ const NSVPlayer = React.memo(
         });
       }
 
-      const playerRoot = (playerRef.current?.el || playerRef.current) as
-        | HTMLElement
-        | undefined;
-      const activeVideo = playerRoot?.querySelector("video");
+      const playerRoot = (playerRef.current?.el ?? playerRef.current) as any;
+      const activeVideo =
+        playerRoot && typeof playerRoot.querySelector === "function"
+          ? playerRoot.querySelector("video")
+          : null;
       const webkitVideo = activeVideo as WebkitPresentationVideo | null;
 
       if (
@@ -398,10 +400,13 @@ const NSVPlayer = React.memo(
 
         let isNativeFullscreen = false;
         try {
-          const playerRoot = (playerRef.current?.el || playerRef.current) as
-            | HTMLElement
-            | undefined;
-          const activeVideo = playerRoot?.querySelector("video") as any;
+          const playerRoot = (playerRef.current?.el ??
+            playerRef.current) as any;
+          const activeVideo = (
+            playerRoot && typeof playerRoot.querySelector === "function"
+              ? playerRoot.querySelector("video")
+              : null
+          ) as any;
           isNativeFullscreen = Boolean(activeVideo?.webkitDisplayingFullscreen);
         } catch {
           // Ignore
@@ -487,11 +492,20 @@ const NSVPlayer = React.memo(
         // events, which is more reliable than polling webkitDisplayingFullscreen.
         if (nativeFullscreenActiveRef.current) return true;
         try {
-          const playerRoot = (playerRef.current?.el || playerRef.current) as
-            | HTMLElement
-            | undefined;
-          const activeVideo = playerRoot?.querySelector("video") as any;
-          return Boolean(activeVideo?.webkitDisplayingFullscreen);
+          const playerRoot = (playerRef.current?.el ??
+            playerRef.current) as any;
+          const activeVideo = (
+            playerRoot && typeof playerRoot.querySelector === "function"
+              ? playerRoot.querySelector("video")
+              : null
+          ) as any;
+          if (
+            activeVideo &&
+            typeof activeVideo.webkitSetPresentationMode === "function"
+          ) {
+            return Boolean(activeVideo.webkitDisplayingFullscreen);
+          }
+          return false;
         } catch {
           return false;
         }

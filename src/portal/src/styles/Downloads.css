@@ -39,6 +39,7 @@
 
 .download-queue-card {
   position: relative;
+  width: 100%;
   background: var(--vault-surface);
   border: 1px solid var(--vault-border);
   border-radius: 16px;
@@ -108,6 +109,8 @@
 }
 
 .download-title-row h3 {
+  flex: 1;
+  min-width: 0;
   font-size: 1rem;
   font-weight: 600;
   margin: 0;
@@ -126,6 +129,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .queue-cancel-btn {
