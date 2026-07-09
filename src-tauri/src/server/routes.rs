@@ -1224,7 +1224,7 @@ async fn handle_download_hls(
     );
 
     let playlist = format!(
-        "#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-TARGETDURATION:{}\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:{:.3},\n{}\n#EXT-X-ENDLIST\n",
+        "#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-TARGETDURATION:{}\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:{:.3},\n{}\n#EXT-X-ENDLIST\n",
         duration.ceil() as u64,
         duration,
         segment_url
