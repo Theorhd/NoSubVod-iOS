@@ -1198,6 +1198,7 @@ async fn handle_download_hls(
     // Build a virtual multi-segment HLS playlist using BYTERANGE.
     // We try to read the total duration from the accompanying .json metadata file.
     let mut duration = 0.0;
+    let mut exact_segments = None;
     let json_path = full_path.with_extension("json");
     if let Ok(json_str) = tokio::fs::read_to_string(&json_path).await {
         if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&json_str) {
@@ -1206,6 +1207,21 @@ async fn handle_download_hls(
             } else if let Some(d_str) = metadata.get("duration").and_then(|v| v.as_str()) {
                 // Twitch duration format e.g. "1h2m3s"
                 duration = parse_twitch_duration(d_str);
+            }
+
+            // Extract perfect segment mapping if available
+            if let Some(segs) = metadata.get("segments").and_then(|v| v.as_array()) {
+                let mut parsed_segs = Vec::new();
+                for s in segs {
+                    let d = s.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let b = s.get("bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+                    if b > 0 {
+                        parsed_segs.push((d, b));
+                    }
+                }
+                if !parsed_segs.is_empty() {
+                    exact_segments = Some(parsed_segs);
+                }
             }
         }
     }
@@ -1222,34 +1238,51 @@ async fn handle_download_hls(
         state.server_token
     );
 
-    let chunk_size: u64 = 5_242_756; // 188 * 27887 (~5MB chunks)
-    let duration_per_byte = duration / (file_len as f64).max(1.0);
-
-    let mut offset = 0;
     let mut max_chunk_duration = 0.0_f64;
     let mut segments_str = String::new();
 
-    while offset < file_len {
-        let remaining = file_len - offset;
-        let current_chunk_size = if remaining > chunk_size {
-            chunk_size
-        } else {
-            remaining
-        };
-
-        let chunk_duration = current_chunk_size as f64 * duration_per_byte;
-        if chunk_duration > max_chunk_duration {
-            max_chunk_duration = chunk_duration;
+    if let Some(exact_segs) = exact_segments {
+        let mut offset = 0;
+        for (dur, bytes) in exact_segs {
+            if dur > max_chunk_duration {
+                max_chunk_duration = dur;
+            }
+            segments_str.push_str(&format!("#EXTINF:{:.3},\n", dur));
+            segments_str.push_str(&format!("#EXT-X-BYTERANGE:{}@{}\n", bytes, offset));
+            segments_str.push_str(&format!("{}\n", segment_url));
+            offset += bytes;
         }
+    } else {
+        // Fallback for older downloads: Fake chunking with DISCONTINUITY
+        let chunk_size: u64 = 5_242_756; // 188 * 27887 (~5MB chunks)
+        let duration_per_byte = duration / (file_len as f64).max(1.0);
+        let mut offset = 0;
 
-        segments_str.push_str(&format!("#EXTINF:{:.3},\n", chunk_duration));
-        segments_str.push_str(&format!(
-            "#EXT-X-BYTERANGE:{}@{}\n",
-            current_chunk_size, offset
-        ));
-        segments_str.push_str(&format!("{}\n", segment_url));
+        while offset < file_len {
+            let remaining = file_len - offset;
+            let current_chunk_size = if remaining > chunk_size {
+                chunk_size
+            } else {
+                remaining
+            };
 
-        offset += current_chunk_size;
+            let chunk_duration = current_chunk_size as f64 * duration_per_byte;
+            if chunk_duration > max_chunk_duration {
+                max_chunk_duration = chunk_duration;
+            }
+
+            // We must add a discontinuity tag because arbitrary splitting
+            // breaks TS packet and I-frame boundaries.
+            segments_str.push_str("#EXT-X-DISCONTINUITY\n");
+            segments_str.push_str(&format!("#EXTINF:{:.3},\n", chunk_duration));
+            segments_str.push_str(&format!(
+                "#EXT-X-BYTERANGE:{}@{}\n",
+                current_chunk_size, offset
+            ));
+            segments_str.push_str(&format!("{}\n", segment_url));
+
+            offset += current_chunk_size;
+        }
     }
 
     let target_duration = max_chunk_duration.ceil() as u64;

@@ -221,6 +221,7 @@ impl DownloadManager {
             let mut last_reported_prog: f64 = 0.0;
 
             let mut seg_iter = segments.into_iter().peekable();
+            let mut segment_metadata = Vec::new();
 
             'outer: while seg_iter.peek().is_some() {
                 // Check for cancellation
@@ -273,6 +274,10 @@ impl DownloadManager {
                                 let _ = tokio::fs::remove_file(&output_path).await;
                                 break 'outer;
                             }
+                            segment_metadata.push(serde_json::json!({
+                                "duration": seg.duration,
+                                "bytes": data.len()
+                            }));
 
                             elapsed_secs += seg.duration;
                             segments_done += 1;
@@ -303,6 +308,23 @@ impl DownloadManager {
             // Only mark Finished if we actually completed all segments.
             if segments_done == total_segments {
                 let _ = file.flush().await;
+
+                // Update the metadata.json with the segments array
+                let json_path = std::path::PathBuf::from(&output_path).with_extension("json");
+                if let Ok(json_str) = tokio::fs::read_to_string(&json_path).await {
+                    if let Ok(mut metadata) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                        if let Some(obj) = metadata.as_object_mut() {
+                            obj.insert(
+                                "segments".to_string(),
+                                serde_json::Value::Array(segment_metadata),
+                            );
+                            if let Ok(updated_json) = serde_json::to_string_pretty(&metadata) {
+                                let _ = tokio::fs::write(&json_path, updated_json).await;
+                            }
+                        }
+                    }
+                }
+
                 let mut lock = progress_arc.write().await;
                 lock.status = DownloadStatus::Finished;
                 lock.progress = 100.0;
