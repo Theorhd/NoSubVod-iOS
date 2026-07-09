@@ -74,9 +74,9 @@ const DownloadPlayer = React.memo(
       if (file.name.toLowerCase().endsWith(".ts"))
         return {
           src: resolveUrl(
-            `/api/downloads/hls/${encodeURIComponent(file.name)}`,
+            `/api/shared-downloads/${encodeURIComponent(file.name)}`,
           ),
-          type: "application/x-mpegurl",
+          type: "video/mp4", // Trick AVPlayer into progressive streaming the TS file
         };
       const url = resolveUrl(file.url);
       const low = file.name.toLowerCase();

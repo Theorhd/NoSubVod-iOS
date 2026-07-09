@@ -1,8 +1,8 @@
 /* THE OBSIDIAN VAULT - Premium Offline Library Styling */
 
 .download-page {
-  --vault-bg: #0a0a0c;
-  --vault-surface: #18181c;
+  --vault-bg: var(--bg);
+  --vault-surface: var(--bg-card);
   --vault-border: rgba(255, 255, 255, 0.05);
   --vault-accent: #8b5cf6;
   --vault-accent-hover: #a78bfa;
