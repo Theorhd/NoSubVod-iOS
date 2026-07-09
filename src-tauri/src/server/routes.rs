@@ -1190,13 +1190,12 @@ async fn handle_download_hls(
     );
 
     let full_path = std::path::PathBuf::from(&base_path).join(&file_name);
-    let _ = match tokio::fs::metadata(&full_path).await {
+    let file_len = match tokio::fs::metadata(&full_path).await {
         Ok(m) if m.is_file() => m.len(),
         _ => return Err(AppError::NotFound("File not found".to_string())),
     };
 
-    // Build a single-segment HLS playlist.
-    // iOS AVPlayer will use HTTP Range requests automatically to buffer the file.
+    // Build a virtual multi-segment HLS playlist using BYTERANGE.
     // We try to read the total duration from the accompanying .json metadata file.
     let mut duration = 0.0;
     let json_path = full_path.with_extension("json");
@@ -1223,11 +1222,47 @@ async fn handle_download_hls(
         state.server_token
     );
 
+    let chunk_size: u64 = 5_242_756; // 188 * 27887 (~5MB chunks)
+    let duration_per_byte = duration / (file_len as f64).max(1.0);
+
+    let mut offset = 0;
+    let mut max_chunk_duration = 0.0_f64;
+    let mut segments_str = String::new();
+
+    while offset < file_len {
+        let remaining = file_len - offset;
+        let current_chunk_size = if remaining > chunk_size {
+            chunk_size
+        } else {
+            remaining
+        };
+
+        let chunk_duration = current_chunk_size as f64 * duration_per_byte;
+        if chunk_duration > max_chunk_duration {
+            max_chunk_duration = chunk_duration;
+        }
+
+        segments_str.push_str(&format!("#EXTINF:{:.3},\n", chunk_duration));
+        segments_str.push_str(&format!(
+            "#EXT-X-BYTERANGE:{}@{}\n",
+            current_chunk_size, offset
+        ));
+        segments_str.push_str(&format!("{}\n", segment_url));
+
+        offset += current_chunk_size;
+    }
+
+    let target_duration = max_chunk_duration.ceil() as u64;
+    let target_duration = if target_duration == 0 {
+        1
+    } else {
+        target_duration
+    };
+
     let playlist = format!(
-        "#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-TARGETDURATION:{}\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:{:.3},\n{}\n#EXT-X-ENDLIST\n",
-        duration.ceil() as u64,
-        duration,
-        segment_url
+        "#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-TARGETDURATION:{}\n#EXT-X-MEDIA-SEQUENCE:0\n{}\n#EXT-X-ENDLIST\n",
+        target_duration,
+        segments_str
     );
 
     Ok(m3u8_response(playlist))
