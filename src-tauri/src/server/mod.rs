@@ -120,7 +120,7 @@ impl AppState {
                     value.body.len().min(u32::MAX as usize) as u32
                 },
             )
-            .max_capacity(32 * 1024 * 1024)
+            .max_capacity(8 * 1024 * 1024)
             .build();
 
         let api_state = ApiState {

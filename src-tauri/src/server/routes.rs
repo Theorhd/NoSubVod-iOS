@@ -1190,7 +1190,7 @@ async fn handle_download_hls(
     );
 
     let full_path = std::path::PathBuf::from(&base_path).join(&file_name);
-    let file_len = match tokio::fs::metadata(&full_path).await {
+    let _file_len = match tokio::fs::metadata(&full_path).await {
         Ok(m) if m.is_file() => m.len(),
         _ => return Err(AppError::NotFound("File not found".to_string())),
     };

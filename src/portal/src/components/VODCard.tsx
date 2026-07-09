@@ -26,6 +26,7 @@ export const VODCard = React.memo<VODCardProps>(
             src={vod.previewThumbnailURL}
             alt={vod.title}
             className="vod-thumb"
+            loading="lazy"
           />
           <div className={`vod-badge ${styles["extracted-style-1"]}`}>
             <Clock size={12} />

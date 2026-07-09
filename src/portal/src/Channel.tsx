@@ -1,4 +1,5 @@
 import React from "react";
+import { VirtuosoGrid } from "react-virtuoso";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { SubEntry, SubNotificationPreferences } from "../../shared/types";
 import { StreamCard } from "./components/StreamCard";
@@ -413,8 +414,11 @@ export default function Channel() {
                 {catLiveStreams.length > 1 ? "s" : ""}
               </span>
             </div>
-            <div className="vod-grid">
-              {catLiveStreams.map((stream) => (
+            <VirtuosoGrid
+              useWindowScroll
+              data={catLiveStreams}
+              listClassName="vod-grid"
+              itemContent={(index, stream) => (
                 <StreamCard
                   key={stream.id}
                   stream={stream}
@@ -424,8 +428,8 @@ export default function Channel() {
                     })
                   }
                 />
-              ))}
-            </div>
+              )}
+            />
             {catLiveHasMore && (
               <div className="load-more-row">
                 <button
@@ -455,8 +459,11 @@ export default function Channel() {
                 {vods.length} VOD{vods.length > 1 ? "s" : ""}
               </span>
             </div>
-            <div className="vod-grid">
-              {vods.map((vod) => {
+            <VirtuosoGrid
+              useWindowScroll
+              data={vods}
+              listClassName="vod-grid"
+              itemContent={(index, vod) => {
                 const hist = history[vod.id];
                 return (
                   <VODCard
@@ -474,8 +481,8 @@ export default function Channel() {
                     }}
                   />
                 );
-              })}
-            </div>
+              }}
+            />
             {catVodHasMore && (
               <div className="load-more-row">
                 <button
@@ -500,8 +507,11 @@ export default function Channel() {
                 {clips.length} Clip{clips.length > 1 ? "s" : ""}
               </span>
             </div>
-            <div className="vod-grid">
-              {clips.map((clip) => {
+            <VirtuosoGrid
+              useWindowScroll
+              data={clips}
+              listClassName="vod-grid"
+              itemContent={(index, clip) => {
                 const hist = history[clip.id];
                 return (
                   <VODCard
@@ -519,8 +529,8 @@ export default function Channel() {
                     }}
                   />
                 );
-              })}
-            </div>
+              }}
+            />
           </div>
         )}
       </div>

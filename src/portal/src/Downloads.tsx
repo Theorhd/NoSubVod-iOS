@@ -126,7 +126,7 @@ const QueueItem = React.memo(
     cancelDownload: (id: string) => void;
   }) => {
     const statusInfo = getStatusDisplay(dl.status);
-    const statusName = typeof dl.status === "string" ? dl.status : "";
+
     const thumbnail =
       dl.progress > 0 ? knownFile?.metadata?.previewThumbnailURL || null : null;
 

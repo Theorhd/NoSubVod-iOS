@@ -7,11 +7,11 @@ import React, {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { LiveStream, LiveStreamsPage, SubEntry } from "../../shared/types";
-import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
 import { StreamCard } from "./components/StreamCard";
 import { TopBar } from "./components/TopBar";
 import { useServer } from "./ServerContext";
 import { navigateToPlayer } from "./utils/navigation";
+import { VirtuosoGrid } from "react-virtuoso";
 import "./styles/Common.scss";
 
 const PAGE_SIZE = 24;
@@ -230,16 +230,6 @@ export default function Live() {
     setStreams((current) => rankStreams(current, subLogins));
   }, [subLogins]);
 
-  const { lastElementRef } = useInfiniteScroll({
-    isLoading: isFetchingRef.current || mode === "search",
-    hasMore,
-    onLoadMore: () => {
-      if (mode === "all") void fetchPage(nextCursor);
-      else if (mode === "category" && activeCategory)
-        void fetchPage(nextCursor, activeCategory);
-    },
-  });
-
   const switchToAll = useCallback(() => {
     setMode("all");
     setActiveCategory(null);
@@ -303,8 +293,18 @@ export default function Live() {
 
     return (
       <>
-        <div className="vod-grid">
-          {streams.map((stream) => (
+        <VirtuosoGrid
+          useWindowScroll
+          data={streams}
+          listClassName="vod-grid"
+          endReached={() => {
+            if (hasMore && !isFetchingRef.current && !isLoadingMore) {
+              if (mode === "all") void fetchPage(nextCursor);
+              else if (mode === "category" && activeCategory)
+                void fetchPage(nextCursor, activeCategory);
+            }
+          }}
+          itemContent={(index, stream) => (
             <StreamCard
               key={stream.id}
               stream={stream}
@@ -316,9 +316,8 @@ export default function Live() {
               onCategoryClick={switchToCategory}
               showBroadcaster
             />
-          ))}
-        </div>
-        <div ref={lastElementRef} className="sentinel" aria-hidden="true" />
+          )}
+        />
         {isLoadingMore && (
           <div className="status-line">Chargement de plus de streams...</div>
         )}

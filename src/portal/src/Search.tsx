@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { VirtuosoGrid } from "react-virtuoso";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { UserInfo } from "../../shared/types";
 import { formatViewers } from "../../shared/utils/formatters";
@@ -182,8 +183,11 @@ export default function Search() {
         {liveStreams.length > 0 && (
           <div className="block-section">
             <h2>Live Streams</h2>
-            <div className="vod-grid">
-              {liveStreams.map((user) => (
+            <VirtuosoGrid
+              useWindowScroll
+              data={liveStreams}
+              listClassName="vod-grid"
+              itemContent={(index, user) => (
                 <div key={user.id} className="vod-card live-card">
                   <div className="vod-thumb-wrap">
                     <img
@@ -193,6 +197,7 @@ export default function Search() {
                       }
                       alt={user.stream?.title}
                       className="vod-thumb"
+                      loading="lazy"
                     />
                     <div className="vod-chip live-chip">LIVE</div>
                   </div>
@@ -226,8 +231,8 @@ export default function Search() {
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            />
           </div>
         )}
 

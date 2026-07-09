@@ -169,22 +169,18 @@ impl ProxyManager {
             ));
         }
 
-        // Probe ALL candidates concurrently — no sequential bottleneck
+        // Probe candidates concurrently, but bounded to 15 concurrent requests to prevent iOS network exhaustion
         let candidates: Vec<_> = candidates.into_iter().take(150).collect();
-        let mut set = tokio::task::JoinSet::new();
-
-        for (url, country) in candidates {
-            set.spawn(async move {
+        let mut stream = stream::iter(candidates)
+            .map(|(url, country)| async move {
                 let ping = Self::probe_proxy(&url).await;
                 (url, country, ping)
-            });
-        }
+            })
+            .buffer_unordered(15);
 
         let mut working: Vec<ProxyInfo> = Vec::new();
-        while let Some(result) = set.join_next().await {
-            if let Ok((url, country, Some(ping))) = result {
-                working.push(ProxyInfo { url, country, ping });
-            }
+        while let Some((url, country, Some(ping))) = stream.next().await {
+            working.push(ProxyInfo { url, country, ping });
         }
 
         eprintln!(
@@ -381,39 +377,39 @@ impl TwitchService {
             proxy_manager: Arc::new(ProxyManager::new()),
             proxy_clients: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             user_cache: Cache::builder()
-                .max_capacity(500)
+                .max_capacity(100)
                 .time_to_live(Duration::from_secs(3600))
                 .build(),
             vod_cache: Cache::builder()
-                .max_capacity(200)
+                .max_capacity(50)
                 .time_to_live(Duration::from_secs(600))
                 .build(),
             clip_cache: Cache::builder()
-                .max_capacity(100)
+                .max_capacity(50)
                 .time_to_live(Duration::from_secs(300))
                 .build(),
             live_stream_cache: Cache::builder()
-                .max_capacity(500)
+                .max_capacity(100)
                 .time_to_live(Duration::from_secs(20))
                 .build(),
             live_page_cache: Cache::builder()
-                .max_capacity(100)
+                .max_capacity(50)
                 .time_to_live(Duration::from_secs(30))
                 .build(),
             related_channels_cache: Cache::builder()
-                .max_capacity(200)
+                .max_capacity(50)
                 .time_to_live(Duration::from_secs(86400))
                 .build(),
             generic_value_cache: Cache::builder()
-                .max_capacity(100)
+                .max_capacity(20)
                 .time_to_live(Duration::from_secs(120))
                 .build(),
             master_playlist_cache: Cache::builder()
-                .max_capacity(600)
+                .max_capacity(100)
                 .time_to_live(Duration::from_secs(120))
                 .build(),
             variant_cache: Cache::builder()
-                .max_capacity(8000)
+                .max_capacity(1000)
                 .time_to_live(Duration::from_secs(21600))
                 .build(),
         }
@@ -3189,4 +3185,24 @@ fn rand_u32() -> u32 {
     let id = Uuid::new_v4();
     let bytes = id.as_bytes();
     u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_urlencoding_simple() {
+        assert_eq!(urlencoding_simple("hello-world_.~"), "hello-world_.~");
+        assert_eq!(urlencoding_simple("space test"), "space%20test");
+        assert_eq!(urlencoding_simple("special!@#"), "special%21%40%23");
+    }
+
+    #[test]
+    fn test_create_simple_hash() {
+        let h1 = create_simple_hash("hello");
+        let h2 = create_simple_hash("hello");
+        assert_eq!(h1, h2);
+        assert_ne!(create_simple_hash("hello"), create_simple_hash("world"));
+    }
 }

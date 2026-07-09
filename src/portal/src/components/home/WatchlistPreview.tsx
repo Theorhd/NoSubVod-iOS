@@ -1,4 +1,5 @@
 import React from "react";
+import { VirtuosoGrid } from "react-virtuoso";
 import { useNavigate } from "react-router-dom";
 import { WatchlistEntry } from "../../../../shared/types";
 import { Bookmark, X, Play } from "lucide-react";
@@ -26,8 +27,11 @@ const WatchlistPreview = React.memo(
           </h2>
         </div>
 
-        <div className={`vod-grid ${styles["extracted-style-2"]}`}>
-          {watchlist.map((vod) => (
+        <VirtuosoGrid
+          useWindowScroll
+          data={watchlist}
+          listClassName={`vod-grid ${styles["extracted-style-2"]}`}
+          itemContent={(index, vod) => (
             <div
               key={vod.vodId}
               className={`vod-card glass-hover ${styles["extracted-style-3"]}`}
@@ -37,6 +41,7 @@ const WatchlistPreview = React.memo(
                   src={vod.previewThumbnailURL}
                   alt={vod.title}
                   className="vod-thumb"
+                  loading="lazy"
                 />
                 <div
                   className={`vod-play-overlay ${styles["extracted-style-4"]}`}
@@ -74,8 +79,8 @@ const WatchlistPreview = React.memo(
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+        />
       </div>
     );
   },
