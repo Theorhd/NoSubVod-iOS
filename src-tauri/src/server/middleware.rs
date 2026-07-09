@@ -49,9 +49,16 @@ pub async fn security_headers_middleware(req: axum::extract::Request, next: Next
         "permissions-policy",
         HeaderValue::from_static("camera=(), microphone=(), geolocation=(), interest-cohort=()"),
     );
-    headers.insert(
-        "cache-control",
-        HeaderValue::from_static("no-store, private"),
-    );
+    let is_media_route = path.starts_with("/api/shared-downloads/")
+        || path.starts_with("/api/downloads/hls/")
+        || path.starts_with("/api/stream/")
+        || path.starts_with("/api/live/");
+
+    if !is_media_route {
+        headers.insert(
+            "cache-control",
+            HeaderValue::from_static("no-store, private"),
+        );
+    }
     response
 }

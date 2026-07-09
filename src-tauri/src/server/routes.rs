@@ -1247,7 +1247,7 @@ async fn handle_download_hls(
 
     if let Some(exact_segs) = exact_segments {
         let mut offset = 0;
-        for (dur, bytes, disc) in exact_segs {
+        for (seq_id, (dur, bytes, disc)) in exact_segs.into_iter().enumerate() {
             if dur > max_chunk_duration {
                 max_chunk_duration = dur;
             }
@@ -1256,7 +1256,7 @@ async fn handle_download_hls(
             }
             segments_str.push_str(&format!("#EXTINF:{:.3},\n", dur));
             segments_str.push_str(&format!("#EXT-X-BYTERANGE:{}@{}\n", bytes, offset));
-            segments_str.push_str(&format!("{}\n", segment_url));
+            segments_str.push_str(&format!("{}&seq={}\n", segment_url, seq_id));
             offset += bytes;
         }
     } else {
@@ -1264,6 +1264,7 @@ async fn handle_download_hls(
         let chunk_size: u64 = 5_242_756; // 188 * 27887 (~5MB chunks)
         let duration_per_byte = duration / (file_len as f64).max(1.0);
         let mut offset = 0;
+        let mut chunk_index = 0;
 
         while offset < file_len {
             let remaining = file_len - offset;
@@ -1286,9 +1287,10 @@ async fn handle_download_hls(
                 "#EXT-X-BYTERANGE:{}@{}\n",
                 current_chunk_size, offset
             ));
-            segments_str.push_str(&format!("{}\n", segment_url));
+            segments_str.push_str(&format!("{}&seq={}\n", segment_url, chunk_index));
 
             offset += current_chunk_size;
+            chunk_index += 1;
         }
     }
 
