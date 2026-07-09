@@ -22,10 +22,10 @@ const formatDate = (value?: string) => {
   return Number.isNaN(d.getTime())
     ? "Date inconnue"
     : d.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
 };
 
 const getStatusDisplay = (status: any) => {
