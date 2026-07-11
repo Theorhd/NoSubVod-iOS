@@ -1,0 +1,20 @@
+name: NoSubVod
+options:
+  bundleIdPrefix: com.theorhd
+  deploymentTarget:
+    iOS: 17.0
+targets:
+  NoSubVod:
+    type: application
+    platform: iOS
+    sources: Sources
+    info:
+      path: Info.plist
+      properties:
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations: {}
+        UIBackgroundModes:
+          - audio
+          - fetch
