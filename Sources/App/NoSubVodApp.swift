@@ -17,7 +17,7 @@ struct NoSubVodApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [PersistentHistoryEntry.self, PersistentWatchlistEntry.self, PersistentSubscription.self])
+        .modelContainer(for: [PersistentHistoryEntry.self, PersistentWatchlistEntry.self, PersistentSubscription.self, VODDownload.self])
     }
 }
 

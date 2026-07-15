@@ -26,21 +26,40 @@ struct HomeView: View {
                                     ForEach(subscriptions, id: \.login) { sub in
                                         NavigationLink(destination: ChannelView(login: sub.login)) {
                                             VStack {
-                                                if let url = sub.profileImageURL {
-                                                    AsyncImage(url: url) { phase in
-                                                        if let image = phase.image {
-                                                            image.resizable().aspectRatio(contentMode: .fill)
-                                                        } else {
-                                                            Circle().fill(Color.gray.opacity(0.3))
+                                                ZStack(alignment: .bottom) {
+                                                    if let url = sub.profileImageURL {
+                                                        CachedAsyncImage(url: url) { phase in
+                                                            if let image = phase.image {
+                                                                image.resizable().aspectRatio(contentMode: .fill)
+                                                            } else {
+                                                                Circle().fill(Color.gray.opacity(0.3))
+                                                            }
                                                         }
-                                                    }
-                                                    .frame(width: 60, height: 60)
-                                                    .clipShape(Circle())
-                                                } else {
-                                                    Circle()
-                                                        .fill(Color.gray.opacity(0.3))
                                                         .frame(width: 60, height: 60)
+                                                        .clipShape(Circle())
+                                                    } else {
+                                                        Circle()
+                                                            .fill(Color.gray.opacity(0.3))
+                                                            .frame(width: 60, height: 60)
+                                                    }
+                                                    
+                                                    if viewModel.liveSubscriptions.contains(sub.login.lowercased()) {
+                                                        Text("LIVE")
+                                                            .font(.system(size: 10, weight: .bold))
+                                                            .foregroundColor(.white)
+                                                            .padding(.horizontal, 4)
+                                                            .padding(.vertical, 2)
+                                                            .background(Color.red)
+                                                            .cornerRadius(4)
+                                                            .offset(y: 8)
+                                                            .overlay(
+                                                                RoundedRectangle(cornerRadius: 4)
+                                                                    .stroke(Color(.systemBackground), lineWidth: 1.5)
+                                                                    .offset(y: 8)
+                                                            )
+                                                    }
                                                 }
+                                                .padding(.bottom, viewModel.liveSubscriptions.contains(sub.login.lowercased()) ? 8 : 0)
                                                 
                                                 Text(sub.displayName)
                                                     .font(.caption)
@@ -78,7 +97,7 @@ struct HomeView: View {
                                         )
                                     )) {
                                         VStack(alignment: .leading) {
-                                            AsyncImage(url: stream.previewImageURL) { phase in
+                                            CachedAsyncImage(url: stream.previewImageURL) { phase in
                                                 if let image = phase.image {
                                                     image.resizable().aspectRatio(contentMode: .fill)
                                                 } else if phase.error != nil {
@@ -128,7 +147,7 @@ struct HomeView: View {
                                     )
                                 )) {
                                     HStack {
-                                        AsyncImage(url: vod.previewThumbnailURL) { phase in
+                                        CachedAsyncImage(url: vod.previewThumbnailURL) { phase in
                                             if let image = phase.image {
                                                 image.resizable().aspectRatio(contentMode: .fill)
                                             } else if phase.error != nil {

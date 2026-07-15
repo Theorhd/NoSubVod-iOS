@@ -17,13 +17,23 @@ struct PlayerView: View {
     let metadata: VideoMetadata?
     
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("defaultVideoQuality") private var defaultVideoQuality = "auto"
     
-    init(videoID: String, isLive: Bool, clipThumbnailURL: URL? = nil, metadata: VideoMetadata? = nil) {
-        _viewModel = StateObject(wrappedValue: PlayerViewModel(videoID: videoID, isLive: isLive, clipThumbnailURL: clipThumbnailURL))
+    @State private var historyActor: HistoryManagerActor?
+    
+    init(videoID: String, isLive: Bool, clipThumbnailURL: URL? = nil, metadata: VideoMetadata? = nil, localPlaylistPath: String? = nil) {
+        _viewModel = StateObject(wrappedValue: PlayerViewModel(videoID: videoID, isLive: isLive, clipThumbnailURL: clipThumbnailURL, localPlaylistPath: localPlaylistPath))
         self.metadata = metadata
     }
     
     @State private var isFullScreen: Bool = false
+    @State private var isDownloadSheetPresented = false
+    @State private var isSegmentSelectionMode = false
+    @State private var startTimecode: Int?
+    @State private var endTimecode: Int?
+    @State private var showSegmentSuccess = false
+    @State private var selectedSegmentQuality: String = "chunked"
     
     var body: some View {
         VStack(spacing: 0) {
@@ -57,15 +67,53 @@ struct PlayerView: View {
                         }
                     }
                 } else if let player = viewModel.player {
-                    CustomVideoPlayer(player: player)
-                        .onAppear {
-                            player.play()
-                        }
-                        .onDisappear {
-                            if !isFullScreen {
-                                player.pause()
+                    VStack(spacing: 0) {
+                        CustomVideoPlayer(player: player)
+                            .overlay(alignment: .topTrailing) {
+                                if viewModel.localPlaylistPath == nil {
+                                    qualityMenu
+                                        .opacity(viewModel.showQualityMenu ? 1 : 0)
+                                        .animation(.easeInOut(duration: 0.3), value: viewModel.showQualityMenu)
+                                }
+                            }
+                            .simultaneousGesture(TapGesture().onEnded {
+                                viewModel.toggleQualityMenu()
+                            })
+                            .onAppear {
+                                player.play()
+                            }
+                            .onDisappear {
+                                if !isFullScreen {
+                                    player.pause()
+                                }
+                            }
+                        
+                        if isSegmentSelectionMode {
+                            HStack {
+                                Button(action: {
+                                    startTimecode = Int(player.currentTime().seconds)
+                                    checkSegmentSelection()
+                                }) {
+                                    Text(startTimecode == nil ? "Start" : "Start: \(formatTime(startTimecode!))")
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(Color.purple)
+                                        .foregroundColor(.white)
+                                }
+                                
+                                Button(action: {
+                                    endTimecode = Int(player.currentTime().seconds)
+                                    checkSegmentSelection()
+                                }) {
+                                    Text(endTimecode == nil ? "End" : "End: \(formatTime(endTimecode!))")
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(Color.purple)
+                                        .foregroundColor(.white)
+                                }
                             }
                         }
+                    }
                 } else {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -77,59 +125,68 @@ struct PlayerView: View {
             
             // Metadata Section
             if let meta = metadata {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(meta.title)
-                            .font(.title3)
-                            .bold()
-                            .lineLimit(2)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(meta.title)
+                        .font(.title3)
+                        .bold()
+                        .lineLimit(2)
+                    
+                    HStack(spacing: 12) {
+                        if let url = meta.streamerProfileURL {
+                            CachedAsyncImage(url: url) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Circle().fill(Color.gray)
+                            }
+                            .frame(width: 50, height: 50)
+                            .clipShape(Circle())
+                        }
                         
-                        HStack(spacing: 12) {
-                            if let url = meta.streamerProfileURL {
-                                AsyncImage(url: url) { image in
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Circle().fill(Color.gray)
-                                }
-                                .frame(width: 50, height: 50)
-                                .clipShape(Circle())
-                            }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(meta.streamerName)
+                                .font(.headline)
                             
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(meta.streamerName)
-                                    .font(.headline)
-                                
-                                if let game = meta.gameName {
-                                    Text(game)
-                                        .font(.subheadline)
-                                        .foregroundColor(.purple)
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing, spacing: 4) {
-                                if let viewers = meta.viewerCount {
-                                    HStack(spacing: 4) {
-                                        Circle().fill(Color.red).frame(width: 8, height: 8)
-                                        Text("\(viewers) viewers")
-                                            .font(.subheadline)
-                                            .foregroundColor(.red)
-                                    }
-                                } else if let views = meta.viewCount {
-                                    Text("\(views) views")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
+                            if let game = meta.gameName {
+                                Text(game)
+                                    .font(.subheadline)
+                                    .foregroundColor(.purple)
                             }
                         }
                         
-                        Divider()
+                        Spacer()
                         
-                        ChatView(messages: viewModel.chatMessages)
+                        VStack(alignment: .trailing, spacing: 4) {
+                            if let viewers = meta.viewerCount {
+                                HStack(spacing: 4) {
+                                    Circle().fill(Color.red).frame(width: 8, height: 8)
+                                    Text("\(viewers) viewers")
+                                        .font(.subheadline)
+                                        .foregroundColor(.red)
+                                }
+                            } else if let views = meta.viewCount {
+                                Text("\(views) views")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            if !viewModel.isLive && viewModel.localPlaylistPath == nil {
+                                Button(action: {
+                                    isDownloadSheetPresented = true
+                                }) {
+                                    Image(systemName: "arrow.down.circle")
+                                        .foregroundColor(.purple)
+                                        .font(.title2)
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
                     }
-                    .padding()
+                    
+                    Divider()
+                    
+                    ChatView(messages: viewModel.chatMessages)
                 }
+                .padding()
             } else {
                 Spacer()
             }
@@ -137,6 +194,10 @@ struct PlayerView: View {
         .background(Color(.systemBackground))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            if historyActor == nil {
+                historyActor = HistoryManagerActor(modelContainer: modelContext.container)
+            }
+            
             let vid = viewModel.videoID
             let descriptor = FetchDescriptor<PersistentHistoryEntry>(predicate: #Predicate { $0.vodId == vid })
             if let existing = try? modelContext.fetch(descriptor).first {
@@ -147,7 +208,12 @@ struct PlayerView: View {
                 updateHistory(timecode: timecode, duration: duration)
             }
             
+            if viewModel.selectedQuality == "auto" && defaultVideoQuality != "auto" {
+                viewModel.selectedQuality = defaultVideoQuality
+            }
+            
             viewModel.loadStream()
+            viewModel.resetQualityMenuTimer()
         }
         .fullScreenCover(isPresented: $isFullScreen) {
             ZStack {
@@ -155,6 +221,17 @@ struct PlayerView: View {
                 if let player = viewModel.player {
                     CustomVideoPlayer(player: player)
                         .ignoresSafeArea()
+                        .overlay(alignment: .topTrailing) {
+                            if viewModel.localPlaylistPath == nil {
+                                qualityMenu
+                                    .padding(.top, 40) // safe area padding
+                                    .opacity(viewModel.showQualityMenu ? 1 : 0)
+                                    .animation(.easeInOut(duration: 0.3), value: viewModel.showQualityMenu)
+                            }
+                        }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            viewModel.toggleQualityMenu()
+                        })
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
@@ -168,56 +245,143 @@ struct PlayerView: View {
                 isFullScreen = true
             }
         }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .background || newPhase == .inactive {
+                if let player = viewModel.player, !viewModel.isLive {
+                    let currentTime = Int(player.currentTime().seconds)
+                    if let duration = player.currentItem?.duration.seconds, duration.isFinite {
+                        updateHistory(timecode: currentTime, duration: Int(duration))
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            if let player = viewModel.player, !viewModel.isLive {
+                let currentTime = Int(player.currentTime().seconds)
+                if let duration = player.currentItem?.duration.seconds, duration.isFinite {
+                    updateHistory(timecode: currentTime, duration: Int(duration))
+                }
+            }
+        }
+        .sheet(isPresented: $isDownloadSheetPresented) {
+            DownloadBottomSheet(
+                isPresented: $isDownloadSheetPresented,
+                isSegmentSelectionMode: $isSegmentSelectionMode,
+                onDownloadFull: { quality in
+                    VODDownloadManager.shared.startDownload(
+                        vodId: viewModel.videoID,
+                        title: metadata?.title ?? "VOD",
+                        thumbnailURL: metadata?.previewThumbnailURL,
+                        isSegment: false,
+                        startTime: nil,
+                        endTime: nil,
+                        quality: quality,
+                        streamerName: metadata?.streamerName,
+                        streamerProfileURL: metadata?.streamerProfileURL,
+                        gameName: metadata?.gameName,
+                        viewCount: metadata?.viewCount,
+                        modelContext: modelContext
+                    )
+                },
+                onDownloadSegment: { quality in
+                    selectedSegmentQuality = quality
+                    isSegmentSelectionMode = true
+                    startTimecode = nil
+                    endTimecode = nil
+                },
+                isSuccessMode: showSegmentSuccess
+            )
+        }
+    }
+    
+    private var qualityMenu: some View {
+        Menu {
+            Picker("Quality", selection: Binding(
+                get: { viewModel.selectedQuality },
+                set: { newValue in
+                    viewModel.changeQuality(to: newValue)
+                }
+            )) {
+                Text("Auto").tag("auto")
+                Text("1080p").tag("1080p")
+                Text("720p").tag("720p")
+                Text("480p").tag("480p")
+                Text("360p").tag("360p")
+                Text("160p").tag("160p")
+                Text("Audio Only").tag("Audio Only")
+            }
+        } label: {
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: 20))
+                .foregroundColor(.white)
+                .padding(8)
+                .background(Color.black.opacity(0.5))
+                .clipShape(Circle())
+        }
+        .padding()
+    }
+    
+    private func checkSegmentSelection() {
+        if startTimecode != nil && endTimecode != nil {
+            isSegmentSelectionMode = false
+            showSegmentSuccess = true
+            isDownloadSheetPresented = true
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                isDownloadSheetPresented = false
+                showSegmentSuccess = false
+                
+                if let start = startTimecode, let end = endTimecode {
+                    let minTime = min(start, end)
+                    let maxTime = max(start, end)
+                    VODDownloadManager.shared.startDownload(
+                        vodId: viewModel.videoID,
+                        title: metadata?.title ?? "VOD Segment",
+                        thumbnailURL: metadata?.previewThumbnailURL,
+                        isSegment: true,
+                        startTime: minTime,
+                        endTime: maxTime,
+                        quality: selectedSegmentQuality,
+                        streamerName: metadata?.streamerName,
+                        streamerProfileURL: metadata?.streamerProfileURL,
+                        gameName: metadata?.gameName,
+                        viewCount: metadata?.viewCount,
+                        modelContext: modelContext
+                    )
+                }
+            }
+        }
+    }
+    
+    private func formatTime(_ seconds: Int) -> String {
+        let h = seconds / 3600
+        let m = (seconds % 3600) / 60
+        let s = seconds % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        } else {
+            return String(format: "%02d:%02d", m, s)
+        }
     }
     
     private func updateHistory(timecode: Int, duration: Int) {
+        guard let actor = historyActor else { return }
         let vid = viewModel.videoID
-        let descriptor = FetchDescriptor<PersistentHistoryEntry>(predicate: #Predicate { $0.vodId == vid })
-        if let existing = try? modelContext.fetch(descriptor).first {
-            existing.timecode = timecode
-            existing.duration = duration
-            existing.updatedAt = Date()
-            
-            if let meta = metadata {
-                existing.title = meta.title
-                existing.streamerName = meta.streamerName
-                existing.streamerProfileURL = meta.streamerProfileURL
-                existing.gameName = meta.gameName
-                existing.viewCount = meta.viewCount
-                if let thumb = meta.previewThumbnailURL {
-                    existing.previewThumbnailURL = thumb
-                }
-            }
-        } else {
-            let entry = PersistentHistoryEntry(
+        let meta = metadata
+        
+        Task {
+            await actor.updateHistory(
                 vodId: vid,
                 timecode: timecode,
                 duration: duration,
-                updatedAt: Date(),
-                title: metadata?.title,
-                streamerName: metadata?.streamerName,
-                streamerProfileURL: metadata?.streamerProfileURL,
-                gameName: metadata?.gameName,
-                viewCount: metadata?.viewCount,
-                previewThumbnailURL: metadata?.previewThumbnailURL
+                title: meta?.title,
+                streamerName: meta?.streamerName,
+                streamerProfileURL: meta?.streamerProfileURL,
+                gameName: meta?.gameName,
+                viewCount: meta?.viewCount,
+                previewThumbnailURL: meta?.previewThumbnailURL
             )
-            modelContext.insert(entry)
         }
-        try? modelContext.save()
     }
 }
 
-struct CustomVideoPlayer: UIViewControllerRepresentable {
-    let player: AVPlayer
-    
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let controller = AVPlayerViewController()
-        controller.player = player
-        controller.allowsPictureInPicturePlayback = true
-        return controller
-    }
-    
-    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {
-        uiViewController.player = player
-    }
-}

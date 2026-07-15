@@ -15,7 +15,7 @@ struct CategoryView: View {
                 // Header
                 HStack(spacing: 16) {
                     if let url = game.boxArtURL {
-                        AsyncImage(url: url) { image in
+                        CachedAsyncImage(url: url) { image in
                             image.resizable().aspectRatio(contentMode: .fit)
                         } placeholder: {
                             Color.gray.opacity(0.3)
@@ -148,7 +148,7 @@ struct LiveCard: View {
     let stream: LiveStream
     var body: some View {
         VStack(alignment: .leading) {
-            AsyncImage(url: stream.previewImageURL) { phase in
+            CachedAsyncImage(url: stream.previewImageURL) { phase in
                 if let image = phase.image {
                     image.resizable().aspectRatio(contentMode: .fill)
                 } else {
@@ -173,7 +173,7 @@ struct VODCard: View {
     let vod: VOD
     var body: some View {
         VStack(alignment: .leading) {
-            AsyncImage(url: vod.previewThumbnailURL) { phase in
+            CachedAsyncImage(url: vod.previewThumbnailURL) { phase in
                 if let image = phase.image {
                     image.resizable().aspectRatio(contentMode: .fill)
                 } else {

@@ -21,7 +21,7 @@ struct SearchView: View {
                                     ForEach(results.categories, id: \.id) { game in
                                         NavigationLink(destination: CategoryView(game: game)) {
                                             HStack(spacing: 12) {
-                                                AsyncImage(url: game.boxArtURL) { image in
+                                                CachedAsyncImage(url: game.boxArtURL) { image in
                                                     image.resizable().aspectRatio(contentMode: .fit)
                                                 } placeholder: {
                                                     Color.gray
@@ -55,7 +55,7 @@ struct SearchView: View {
                                             )
                                         )) {
                                             HStack(spacing: 12) {
-                                                AsyncImage(url: stream.previewImageURL) { image in
+                                                CachedAsyncImage(url: stream.previewImageURL) { image in
                                                     image.resizable().aspectRatio(contentMode: .fill)
                                                 } placeholder: {
                                                     Color.gray
@@ -86,7 +86,7 @@ struct SearchView: View {
                                     ForEach(results.channels, id: \.id) { channel in
                                         NavigationLink(destination: ChannelView(login: channel.login)) {
                                             HStack(spacing: 12) {
-                                                AsyncImage(url: channel.profileImageURL) { image in
+                                                CachedAsyncImage(url: channel.profileImageURL) { image in
                                                     image.resizable().aspectRatio(contentMode: .fill)
                                                 } placeholder: {
                                                     Color.gray

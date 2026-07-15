@@ -19,6 +19,11 @@ struct ContentView: View {
                 .tabItem {
                     Label("History", systemImage: "clock")
                 }
+            
+            DownloadsView()
+                .tabItem {
+                    Label("Downloads", systemImage: "arrow.down.circle")
+                }
         }
         .tint(.purple) // Twitch brand color
         .preferredColorScheme(.dark)

@@ -25,7 +25,7 @@ struct ChannelView: View {
         ScrollView {
             VStack {
                 if let url = viewModel.profileImageURL {
-                    AsyncImage(url: url) { image in
+                    CachedAsyncImage(url: url) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Circle().fill(Color.gray.opacity(0.3))
@@ -44,8 +44,67 @@ struct ChannelView: View {
                     .font(.title)
                     .bold()
                 
-                Divider()
-                    .padding(.vertical)
+                if let live = viewModel.liveStream {
+                    Text("Currently Live")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                    
+                    NavigationLink(destination: PlayerView(
+                        videoID: live.broadcaster.login,
+                        isLive: true,
+                        metadata: VideoMetadata(
+                            title: live.title,
+                            viewerCount: live.viewerCount,
+                            viewCount: nil,
+                            streamerName: live.broadcaster.displayName,
+                            streamerProfileURL: live.broadcaster.profileImageURL,
+                            gameName: live.game?.name,
+                            previewThumbnailURL: live.previewImageURL
+                        )
+                    )) {
+                        HStack(alignment: .top, spacing: 12) {
+                            ZStack(alignment: .topLeading) {
+                                CachedAsyncImage(url: live.previewImageURL) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Color.gray
+                                }
+                                .frame(width: 140, height: 78)
+                                .cornerRadius(8)
+                                
+                                Text("LIVE")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(Color.red)
+                                    .cornerRadius(4)
+                                    .padding(4)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(live.title)
+                                    .font(.headline)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                Text("\(live.viewerCount) viewers • \(live.game?.name ?? "")")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.horizontal)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.bottom)
+                    
+                    Divider()
+                        .padding(.bottom)
+                } else {
+                    Divider()
+                        .padding(.vertical)
+                }
                 
                 Text("Recent VODs")
                     .font(.headline)
@@ -72,7 +131,7 @@ struct ChannelView: View {
                                 )
                             )) {
                                 HStack(alignment: .top, spacing: 12) {
-                                    AsyncImage(url: vod.previewThumbnailURL) { image in
+                                    CachedAsyncImage(url: vod.previewThumbnailURL) { image in
                                         image.resizable().aspectRatio(contentMode: .fill)
                                     } placeholder: {
                                         Color.gray
@@ -130,6 +189,7 @@ struct ChannelView: View {
 @MainActor
 class ChannelViewModel: ObservableObject {
     @Published var vods: [VOD] = []
+    @Published var liveStream: LiveStream?
     @Published var isLoading = false
     @Published var displayName: String?
     @Published var profileImageURL: URL?

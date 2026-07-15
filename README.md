@@ -1,21 +1,19 @@
 # 🚀 NoSubVOD iOS
 
-NoSubVOD iOS est le client mobile de NoSubVOD, basé sur Tauri v2 avec un backend Rust embarqué pour lire des VODs et des lives Twitch depuis une interface React adaptée au mobile.
-NoSubVOD iOS est dérivé de NoSubVOD-Desktop. La version 0.5.0 de NSV iOS stabilise l'application pour l'utilisation en mobilité et sur le plein écran iOS natif.
+NoSubVOD iOS est le client mobile natif de NoSubVOD, écrit entièrement en Swift. Il permet de lire des VODs et des lives Twitch depuis une interface iOS optimisée et fluide.
+Initialement basé sur Tauri et Rust, le projet a été intégralement migré vers une architecture native iOS avec Swift 6 pour offrir les meilleures performances et la meilleure intégration possible avec l'écosystème Apple.
 
-## 🆕 v0.5.0 — Mode Hors Ligne, Clips, Audio-Only et Plein Écran iOS Natif
+## 🆕 Beta 1.0.0 — Migration vers Swift 6 et Architecture Native iOS
 
-La version 0.5.0 apporte des fonctionnalités majeures pour l'utilisation nomade de l'application et améliore grandement le confort et la stabilité visuelle sur iOS.
+La version Beta 1.0.0 marque une refonte totale de l'application, abandonnant l'ancienne stack web/Tauri au profit du natif.
 
-### Points clés v0.5.0
+### Points clés Beta 1.0.0
 
-- **Mode Hors Ligne & Clips** : Accès à l'application sans connexion Internet (Offline Home) avec gestion des fichiers locaux téléchargés et intégration des Clips Twitch.
-- **Plein Écran iOS Natif Fiabilisé** : Détection robuste de l'état de plein écran (événements `webkitbeginfullscreen`) pour empêcher les fausses coupures de flux et assurer la synchronisation continue de l'historique de lecture.
-- **Support Audio-Only & Deep Linking** : Possibilité d'écouter uniquement l'audio pour économiser la bande passante et intégration de schémas de liens personnalisés pour ouvrir l'application directement.
-- **UI Ergonomique Adaptée** : Intégration complète des Safe Areas d'iOS, sélecteurs de qualité simplifiés sous forme de boutons d'accès rapide, et menu de téléchargement en feuille de style animée (Bottom Sheet).
-- **Maintenance & Refactorisation** : Remplacement de styles spécifiques par une feuille commune (`Common.css`), suppression du code mort et mise à jour globale des dépendances Tauri v2 / npm.
-
-Voir la note complète : [releasenotes/0.5.0.md](releasenotes/0.5.0.md)
+- **Architecture Native iOS** : Refonte complète de l'interface en SwiftUI, offrant des animations fluides, des performances accrues et un respect des guidelines Apple.
+- **Performances Optimales** : Concurrency moderne avec Swift 6, tâches asynchrones, et gestion optimisée de la mémoire (Actors).
+- **Lecteur Vidéo Repensé** : Utilisation de `AVPlayer` pour une lecture VOD et Live robuste, prise en charge du Picture in Picture (PiP), et intégration native des contrôles de lecture.
+- **Base de Données Locale** : Migration vers SwiftData avec des opérations asynchrones (ModelActor) pour une persistance fluide sans bloquer l'interface utilisateur.
+- **Téléchargements Améliorés** : `DownloadManager` repensé avec `URLSession` en arrière-plan pour des téléchargements fiables de VOD, même avec l'application fermée.
 
 ---
 
@@ -23,53 +21,45 @@ Voir la note complète : [releasenotes/0.5.0.md](releasenotes/0.5.0.md)
 
 ### 🔓 VOD, Live, Clips & Mode Hors Ligne
 
-- Lecture des VODs via un proxy HLS du backend local.
-- Lecture des lives via des endpoints API locaux.
+- Lecture des VODs avec support des segments HLS.
+- Lecture des lives Twitch fluides.
 - **Clips Twitch** : Prise en charge de la lecture et navigation des clips.
-- **Mode Hors Ligne** : Interface d'accueil dédiée (`OfflineHome`) pour accéder aux fonctionnalités et visionner ses vidéos téléchargées localement sans connexion.
-- Navigation complète : Home, Live, Search, Trends, Channel, Player, Multi-View.
+- **Mode Hors Ligne** : Interface dédiée pour accéder et visionner vos vidéos téléchargées localement sans connexion Internet.
+- Navigation complète : Accueil, Live, Recherche, Tendances, Chaînes, Lecteur.
 
-### 🎬 Expérience player & Audio-Only
+### 🎬 Expérience Player & Audio-Only
 
-- Contrôles playback complets (play/pause, seek, volume, plein écran iOS natif robuste).
-- Gestion de la qualité vidéo (Auto, sélection manuelle par boutons d'accès rapide, et **Audio-Only** pour économiser la bande passante).
-- Support des **Safe Areas** d'iOS pour éviter les coupures de l'encoche de l'iPhone/iPad.
+- Lecteur basé sur `AVFoundation` avec contrôles natifs et personnalisés (play/pause, seek, volume).
+- Support du **Picture in Picture (PiP)** natif d'iOS.
+- Qualité adaptative (HLS) et possibilité de basculer en mode audio pour économiser les données.
+- Prise en charge parfaite des **Safe Areas** et de l'encoche/Dynamic Island de l'iPhone/iPad.
 
-### 💬 Chat, historique et données
+### 💬 Chat, Historique et Données
 
-- Replay chat pour VOD et gestion robuste du polling.
-- Historique de lecture avec reprise intelligente (même en plein écran natif).
-- Watchlist et données locales persistantes.
-
-### 🖥️ Fonctionnalités LAN, pairing & Deep Linking
-
-- Backend local iOS accessible en HTTP `23400` et HTTPS `23401`.
-- **Deep Linking** : Ouverture automatique de l'application depuis des liens ou partages externes.
-- Mode pairé avec Desktop : découverte via `23456` et routage ciblé de certaines APIs (screen share/downloads).
-
-### 🧩 Modules intégrés
-
-- Screen Share.
-- Downloads avec menu Bottom Sheet animé.
-- Auth Twitch.
+- Replay de chat synchronisé pour les VODs.
+- Historique de lecture intelligent pour reprendre vos vidéos là où vous vous étiez arrêté.
+- Suivi des chaînes et persistance des données via SwiftData asynchrone.
 
 ---
 
-## 🧱 Stack technique
+## 🧱 Stack Technique
 
-- **Shell mobile**: Tauri v2
-- **Backend local**: Rust (`src-tauri/src/server`)
-- **Frontend portal**: React + Vite + TypeScript (`src/portal`)
-- **Code partagé**: TypeScript (`src/shared`)
+- **Langage** : Swift 6
+- **Interface** : SwiftUI
+- **Base de données** : SwiftData
+- **Réseau** : Apollo GraphQL & API REST Twitch (`URLSession`)
+- **Média** : AVFoundation (`AVPlayer`, `AVPlayerViewController`)
+- **Architecture** : MVVM (Model-View-ViewModel)
+- **Déploiement** : iOS 17.0+
 
 ---
 
-## 📁 Architecture du repo
+## 📁 Architecture du Repo
 
-- `src/portal/` : interface web principale (mobile-first)
-- `src/shared/` : types, hooks et utilitaires partagés
-- `src-tauri/src/` : coeur Rust (serveur local, routes API, auth, history, download, screenshare)
-- `src-tauri/tauri.conf.json` : configuration app/build Tauri
+- `Sources/` : Code source de l'application (SwiftUI, Modèles, Managers, etc.)
+- `Info.plist` : Fichier de configuration de l'application
+- `project.yml` : Configuration XcodeGen pour la génération du projet Xcode
+- `build_ipa.sh` : Script de build CI/CD
 
 ---
 
@@ -77,82 +67,45 @@ Voir la note complète : [releasenotes/0.5.0.md](releasenotes/0.5.0.md)
 
 ### Prérequis
 
-- Node.js 20+
-- Rust stable
-- npm
-- Xcode (pour build iOS local)
+- **macOS** avec **Xcode** 16.0+ (pour le support complet de Swift 6)
+- **xcodegen** (installable via Homebrew : `brew install xcodegen`)
+- **Compte Développeur Apple** (optionnel, pour l'installation sur un appareil physique sans AltStore)
 
-### Installation
+### Installation et Compilation
 
-```bash
-npm ci
-```
+1. Générez le projet Xcode à l'aide de XcodeGen :
+   ```bash
+   xcodegen generate
+   ```
+2. Ouvrez le projet généré dans Xcode :
+   ```bash
+   open NoSubVod.xcodeproj
+   ```
+3. Sélectionnez le simulateur ou votre appareil physique.
+4. Cliquez sur le bouton "Run" (▶️) ou utilisez le raccourci `Cmd + R`.
 
-### Lancer en dev
+### Configuration OAuth Twitch
 
-```bash
-npm run dev
-```
-
-Le portail tourne en HTTPS sur `https://localhost:5173` en mode dev.
-
-### Configuration OAuth Twitch (iOS + fallback desktop)
-
-Dans la console Twitch (`Applications > Manage`), configure un Redirect URL loopback:
-
-- `http://localhost:23400/api/auth/twitch/callback`
-
-Note: selon ton compte/app, Twitch peut imposer des Redirect URLs en HTTPS.
-Si c'est ton cas, utilise une URL HTTPS supportée par ton app et configure-la via
-`TWITCH_REDIRECT_URI` / `TWITCH_REDIRECT_URI_IOS`.
-
-Puis configure `src-tauri/.env` (voir `src-tauri/.env.example`):
-
-```bash
-TWITCH_CLIENT_ID=...
-TWITCH_CLIENT_SECRET=...
-```
-
-Optionnel: surcharge des redirects si nécessaire (`TWITCH_REDIRECT_URI`, `TWITCH_REDIRECT_URI_IOS`).
-
-### Qualité du code
-
-```bash
-npm run lint
-npm run type-check
-```
-
-### Build iOS local
-
-```bash
-npm run build:portal
-npx tauri ios init
-npx tauri ios build --export-method debugging
-```
+Dans la console développeur Twitch, configurez votre application et récupérez les identifiants nécessaires pour permettre l'authentification des utilisateurs.
 
 ---
 
-## 🍎 IPA CI (unsigned)
+## 🍎 Build et Installation IPA
 
-Le workflow [.github/workflows/ios-ipa.yml](.github/workflows/ios-ipa.yml) produit une IPA non signée destinée à être re-signée via SideStore/AltStore.
+Le script `build_ipa.sh` permet de générer une archive `.ipa` non signée, destinée à être installée via des outils tiers (AltStore, SideStore, TrollStore).
 
-### Prérequis CI
+```bash
+./build_ipa.sh
+```
 
-- Secrets GitHub obligatoires: `TWITCH_CLIENT_ID` et `TWITCH_CLIENT_SECRET`.
-
-### Artefact
-
-- Artifact GitHub: `nosubvod-ios-<run>-<sha>`
-- Fichier principal: `NoSubVOD-iOS.ipa`
-
-Avec un compte Apple gratuit, la signature SideStore/AltStore doit être renouvelée périodiquement.
+L'artefact sera généré dans le répertoire `build/`.
 
 ---
 
 ## ⚠️ Notes
 
-- Certaines fonctionnalités dépendent des endpoints Twitch et de leurs limites API.
-- En mode pairé, garder le même réseau local entre l'app iOS et l'instance Desktop.
+- L'application communique avec l'API de Twitch et peut être sujette à des limites de taux de requêtes (rate limiting).
+- L'architecture `ModelActor` est utilisée pour déporter les tâches lourdes de la base de données hors du `MainActor`.
 
 ---
 

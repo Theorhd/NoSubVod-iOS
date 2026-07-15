@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer || echo "Using default Xcode"
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer || echo "Using default Xcode"
 
       - name: Install xcodegen
         run: brew install xcodegen

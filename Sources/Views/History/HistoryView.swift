@@ -30,7 +30,7 @@ struct HistoryView: View {
                                     )
                                 )) {
                                     HStack {
-                                        AsyncImage(url: entry.previewThumbnailURL) { phase in
+                                        CachedAsyncImage(url: entry.previewThumbnailURL) { phase in
                                             if let image = phase.image {
                                                 image.resizable().aspectRatio(contentMode: .fill)
                                             } else if phase.error != nil {
