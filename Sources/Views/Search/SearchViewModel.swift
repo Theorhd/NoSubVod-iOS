@@ -5,25 +5,37 @@ import Combine
 class SearchViewModel: ObservableObject {
     @Published var searchResults: GlobalSearchResult?
     @Published var isSearching = false
-    
+
+    private var searchTask: Task<Void, Never>?
+
     func performSearch(query: String) {
         guard !query.isEmpty else {
-            self.searchResults = nil
+            searchTask?.cancel()
+            searchResults = nil
             return
         }
-        
-        isSearching = true
-        
-        Task {
+
+        // Annuler la Task précédente pour éviter d'avoir plusieurs requêtes en vol simultanément.
+        searchTask?.cancel()
+
+        searchTask = Task {
+            isSearching = true
+
             do {
+                // Debounce de 500ms — évite une requête à chaque frappe clavier.
+                try await Task.sleep(nanoseconds: 500_000_000)
+                guard !Task.isCancelled else { return }
+
                 let results = try await TwitchAPIService.shared.globalSearch(query: query, limit: 20)
-                DispatchQueue.main.async {
+                if !Task.isCancelled {
                     self.searchResults = results
                     self.isSearching = false
                 }
             } catch {
-                print("Erreur de recherche: \(error)")
-                DispatchQueue.main.async {
+                if !(error is CancellationError) {
+                    print("Erreur de recherche: \(error)")
+                }
+                if !Task.isCancelled {
                     self.isSearching = false
                 }
             }

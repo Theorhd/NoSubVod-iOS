@@ -108,8 +108,8 @@ struct CategoryView: View {
         }
         .navigationTitle(game.name)
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            viewModel.loadData()
+        .task(id: game.id) {
+            await viewModel.loadData()
         }
     }
     

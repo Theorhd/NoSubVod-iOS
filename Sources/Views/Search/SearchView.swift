@@ -110,8 +110,8 @@ struct SearchView: View {
             .navigationTitle("Search")
         }
         .searchable(text: $searchText, prompt: "Channels, games, etc.")
-        .onChange(of: searchText) { oldValue, newValue in
-            viewModel.performSearch(query: newValue)
+        .task(id: searchText) {
+            viewModel.performSearch(query: searchText)
         }
     }
 }

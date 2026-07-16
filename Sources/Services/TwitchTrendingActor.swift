@@ -137,7 +137,7 @@ actor TwitchTrendingActor {
     func interleaveLocalizedFeed(candidates: [ScoredVOD], foreignRatio: Double, maxItems: Int) -> [VOD] {
         var french: [ScoredVOD] = []
         var foreign: [ScoredVOD] = []
-        
+
         for sv in candidates {
             if (sv.vod.language ?? "").lowercased() == "fr" {
                 french.append(sv)
@@ -145,37 +145,50 @@ actor TwitchTrendingActor {
                 foreign.append(sv)
             }
         }
-        
+
         french.sort(by: { $0.score > $1.score })
         foreign.sort(by: { $0.score > $1.score })
-        
+
         var feed: [ScoredVOD] = []
+        feed.reserveCapacity(maxItems)
         var fi = 0
         var foi = 0
         var foreignAdded = 0
-        
+
+        // Ring buffer de 4 éléments pour suivre les 4 derniers choix en O(1).
+        var lastFourLangs = [Bool](repeating: false, count: 4)  // true = fr
+        var ringIndex = 0
+
         while feed.count < maxItems && (fi < french.count || foi < foreign.count) {
-            let lastFour = feed.suffix(4).map { ($0.vod.language ?? "").lowercased() == "fr" }
-            let frenchStreak = lastFour.count == 4 && lastFour.allSatisfy { $0 }
-            let foreignStreak = !lastFour.isEmpty && lastFour.allSatisfy { !$0 }
-            
+            // Lire les 4 derniers depuis le ring buffer
+            let isFrenchStreak = feed.count >= 4 && lastFourLangs.allSatisfy { $0 }
+            let isForeignStreak = !lastFourLangs.isEmpty && feed.count >= 1 && lastFourLangs.allSatisfy { !$0 }
+
             let targetForeign = Int(floor(Double(feed.count + 1) * foreignRatio))
-            let shouldPickForeign = !foreignStreak && foi < foreign.count && (foreignAdded < targetForeign || fi >= french.count || frenchStreak)
-            
+            let shouldPickForeign = !isForeignStreak && foi < foreign.count
+                && (foreignAdded < targetForeign || fi >= french.count || isFrenchStreak)
+
+            let pickFr: Bool
             if shouldPickForeign {
                 feed.append(foreign[foi])
                 foi += 1
                 foreignAdded += 1
+                pickFr = false
             } else if fi < french.count {
                 feed.append(french[fi])
                 fi += 1
-            } else if foi < foreign.count {
+                pickFr = true
+            } else {
                 feed.append(foreign[foi])
                 foi += 1
                 foreignAdded += 1
+                pickFr = false
             }
+
+            lastFourLangs[ringIndex % 4] = pickFr
+            ringIndex += 1
         }
-        
+
         return feed.map { $0.vod }
     }
     
@@ -186,36 +199,32 @@ actor TwitchTrendingActor {
     ) -> [VOD] {
         var deduped: [String: VOD] = [:]
         for vod in allCandidates {
-            if deduped[vod.id] == nil {
-                deduped[vod.id] = vod
-            }
+            if deduped[vod.id] == nil { deduped[vod.id] = vod }
         }
-        
-        var scored: [ScoredVOD] = deduped.values.map { vod in
-            ScoredVOD(vod: vod, score: self.scoreCandidateVOD(vod, profile: profile, subsSet: subsSet))
-        }
-        scored.sort(by: { $0.score > $1.score })
-        scored = Array(scored.prefix(400))
-        
+
+        // Chain fonctionnelle : évite la var + re-affectation + Array(prefix) interop.
+        let scored = deduped.values
+            .map { ScoredVOD(vod: $0, score: scoreCandidateVOD($0, profile: profile, subsSet: subsSet)) }
+            .sorted { $0.score > $1.score }
+            .prefix(400)
+
         var channelCount: [String: Int] = [:]
-        scored.removeAll { sv in
+        let filtered = scored.filter { sv in
             let login = (sv.vod.owner?.login ?? "").lowercased()
             let isFavorite = subsSet.contains(login) || profile.channelScores[login] != nil
             let maxSlots = isFavorite ? 4 : 2
-            
             let count = channelCount[login] ?? 0
             if count < maxSlots {
                 channelCount[login] = count + 1
-                return false
-            } else {
                 return true
             }
+            return false
         }
-        
+
         let totalLangWeight = profile.languageScores.values.reduce(0.0, +)
         let foreignWeight = totalLangWeight - (profile.languageScores["fr"] ?? 0.0)
         let foreignRatio = totalLangWeight > 0.0 ? (foreignWeight / totalLangWeight) * 0.9 : 0.0
-        
-        return interleaveLocalizedFeed(candidates: scored, foreignRatio: foreignRatio, maxItems: 60)
+
+        return interleaveLocalizedFeed(candidates: Array(filtered), foreignRatio: foreignRatio, maxItems: 60)
     }
 }

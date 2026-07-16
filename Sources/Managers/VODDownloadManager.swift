@@ -110,7 +110,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     throw URLError(.badServerResponse)
                 }
 
-                let (chunks, targetDuration, version, firstMapFilename, initSegmentURLs) = parsePlaylist(
+                let (chunks, _, _, firstMapFilename, initSegmentURLs) = parsePlaylist(
                     playlist: playlistString,
                     baseURL: playlistURL,
                     isSegment: isSegment,
@@ -457,7 +457,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             let completed = self.completedChunksCount[vodId] ?? 0
             let expected = self.expectedChunksCount[vodId] ?? 1
             let isDone = completed == expected && (self.pendingChunks[vodId]?.isEmpty ?? true)
-            let progress = isDone ? 1.0 : Double(completed) / Double(expected)
+                let _ = isDone ? 1.0 : Double(completed) / Double(expected)
 
             AppLogger.shared.log("Chunk done [\(completed)/\(expected)] for VOD \(vodId)")
 
@@ -644,6 +644,18 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
     
     // MARK: - Remuxing (concaténation binaire directe, sans AVAssetExportSession)
 
+    /// Copie le contenu de `source` dans `handle` par blocs de `chunkSize` octets.
+    /// Évite de charger tout le fichier en mémoire d'un coup (crucial pour les chunks fMP4 ≥ 10 Mo).
+    private func streamCopy(from source: URL, to handle: FileHandle, chunkSize: Int = 4 * 1024 * 1024) throws {
+        let input = try FileHandle(forReadingFrom: source)
+        defer { try? input.close() }
+        while true {
+            let block = input.readData(ofLength: chunkSize)
+            if block.isEmpty { break }
+            try handle.write(contentsOf: block)
+        }
+    }
+
     private func remuxToMP4(vodId: String) {
         guard let chunks = orderedChunks[vodId], !chunks.isEmpty else {
             AppLogger.shared.log("❌ Remux aborted: no chunks recorded for VOD \(vodId)")
@@ -683,14 +695,14 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                             await setDownloadStateFailed(vodId: vodId)
                             return
                         }
-                        try handle.write(contentsOf: Data(contentsOf: mapURL))
+                        try streamCopy(from: mapURL, to: handle)
                     }
 
                     for chunk in chunks {
                         if let nextMap = chunk.nextMapFilename {
                             let mapURL = vodDirectory.appendingPathComponent(nextMap)
                             if FileManager.default.fileExists(atPath: mapURL.path) {
-                                try handle.write(contentsOf: Data(contentsOf: mapURL))
+                                try streamCopy(from: mapURL, to: handle)
                             } else {
                                 AppLogger.shared.log("⚠️ Mid-playlist init segment missing, skipping: \(nextMap)")
                             }
@@ -702,7 +714,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                             missingCount += 1
                             continue
                         }
-                        try handle.write(contentsOf: Data(contentsOf: chunkURL))
+                        try streamCopy(from: chunkURL, to: handle)
                     }
 
                     guard missingCount < chunks.count else {

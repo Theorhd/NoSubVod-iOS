@@ -167,8 +167,8 @@ struct ChannelView: View {
                 }
             }
         }
-        .onAppear {
-            viewModel.loadVODs()
+        .task(id: login) {
+            await viewModel.loadVODs()
         }
     }
     
@@ -200,26 +200,24 @@ class ChannelViewModel: ObservableObject {
         self.login = login
     }
     
-    func loadVODs() {
+    func loadVODs() async {
         guard vods.isEmpty else { return }
         isLoading = true
         
-        Task {
-            do {
-                let results = try await TwitchAPIService.shared.fetchChannelVODs(login: login)
-                DispatchQueue.main.async {
-                    self.vods = results
-                    if let owner = results.first?.owner {
-                        self.displayName = owner.displayName
-                        self.profileImageURL = owner.profileImageURL
-                    }
-                    self.isLoading = false
+        do {
+            let results = try await TwitchAPIService.shared.fetchChannelVODs(login: login)
+            if !Task.isCancelled {
+                self.vods = results
+                if let owner = results.first?.owner {
+                    self.displayName = owner.displayName
+                    self.profileImageURL = owner.profileImageURL
                 }
-            } catch {
-                print("Erreur de chargement des VODs pour \\(login): \\(error)")
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                }
+                self.isLoading = false
+            }
+        } catch {
+            print("Erreur de chargement des VODs pour \(login): \(error)")
+            if !Task.isCancelled {
+                self.isLoading = false
             }
         }
     }

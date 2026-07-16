@@ -16,7 +16,7 @@ struct ChatView: View {
                                     Text(message.commenter.displayName)
                                         .font(.subheadline)
                                         .bold()
-                                        .foregroundColor(colorForLogin(message.commenter.login))
+                                        .foregroundColor(colorForLogin(message.commenter))
                                     
                                     Text(message.message.fragments.first?.text ?? "")
                                         .font(.subheadline)
@@ -41,10 +41,30 @@ struct ChatView: View {
         }
     }
     
-    // Hash based color generation for usernames
-    private func colorForLogin(_ login: String) -> Color {
+    // Utilise la couleur native IRC si disponible, sinon génère une couleur déterministe par hash.
+    private func colorForLogin(_ commenter: ChatCommenter) -> Color {
+        if let hex = commenter.colorHex, !hex.isEmpty,
+           let color = Color(hex: hex) {
+            return color
+        }
         let colors: [Color] = [.red, .blue, .green, .orange, .purple, .pink, .teal, .indigo]
-        let hash = abs(login.hashValue)
+        let hash = abs(commenter.login.hashValue)
         return colors[hash % colors.count]
+    }
+}
+
+// MARK: - Color hex init
+
+private extension Color {
+    /// Parse une couleur HTML (#RGB ou #RRGGBB), retourne nil si invalide.
+    init?(hex: String) {
+        var h = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        if h.count == 3 { h = h.map { "\($0)\($0)" }.joined() }
+        guard h.count == 6, let val = UInt64(h, radix: 16) else { return nil }
+        self.init(
+            red:   Double((val >> 16) & 0xFF) / 255,
+            green: Double((val >>  8) & 0xFF) / 255,
+            blue:  Double( val        & 0xFF) / 255
+        )
     }
 }

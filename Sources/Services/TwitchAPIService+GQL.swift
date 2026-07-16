@@ -118,13 +118,22 @@ private struct GQLUserNode: Codable {
 
 extension TwitchAPIService {
     
-    private func parseDate(_ dateStr: String?) -> Date {
-        guard let d = dateStr else { return Date() }
+    private static let fractionalDateFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: d) { return date }
+        return formatter
+    }()
+    
+    private static let standardDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
-        if let date = formatter.date(from: d) { return date }
+        return formatter
+    }()
+    
+    private func parseDate(_ dateStr: String?) -> Date {
+        guard let d = dateStr else { return Date() }
+        if let date = Self.fractionalDateFormatter.date(from: d) { return date }
+        if let date = Self.standardDateFormatter.date(from: d) { return date }
         return Date()
     }
     

@@ -12,6 +12,8 @@ struct ChatCommenter: Codable, Hashable {
     let displayName: String
     let login: String
     let profileImageURL: URL?
+    /// Couleur native IRC du pseudo (ex: "#FF0000"), nil si non renseignée.
+    var colorHex: String? = nil
 }
 
 struct ChatMessageContent: Codable, Hashable {

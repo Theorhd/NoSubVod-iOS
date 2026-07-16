@@ -67,53 +67,25 @@ struct PlayerView: View {
                         }
                     }
                 } else if let player = viewModel.player {
-                    VStack(spacing: 0) {
-                        CustomVideoPlayer(player: player)
-                            .overlay(alignment: .topTrailing) {
-                                if viewModel.localPlaylistPath == nil {
-                                    qualityMenu
-                                        .opacity(viewModel.showQualityMenu ? 1 : 0)
-                                        .animation(.easeInOut(duration: 0.3), value: viewModel.showQualityMenu)
-                                }
-                            }
-                            .simultaneousGesture(TapGesture().onEnded {
-                                viewModel.toggleQualityMenu()
-                            })
-                            .onAppear {
-                                player.play()
-                            }
-                            .onDisappear {
-                                if !isFullScreen {
-                                    player.pause()
-                                }
-                            }
-                        
-                        if isSegmentSelectionMode {
-                            HStack {
-                                Button(action: {
-                                    startTimecode = Int(player.currentTime().seconds)
-                                    checkSegmentSelection()
-                                }) {
-                                    Text(startTimecode == nil ? "Start" : "Start: \(formatTime(startTimecode!))")
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                        .background(Color.purple)
-                                        .foregroundColor(.white)
-                                }
-                                
-                                Button(action: {
-                                    endTimecode = Int(player.currentTime().seconds)
-                                    checkSegmentSelection()
-                                }) {
-                                    Text(endTimecode == nil ? "End" : "End: \(formatTime(endTimecode!))")
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                        .background(Color.purple)
-                                        .foregroundColor(.white)
-                                }
+                    CustomVideoPlayer(player: player)
+                        .overlay(alignment: .topTrailing) {
+                            if viewModel.localPlaylistPath == nil {
+                                qualityMenu
+                                    .opacity(viewModel.showQualityMenu ? 1 : 0)
+                                    .animation(.easeInOut(duration: 0.3), value: viewModel.showQualityMenu)
                             }
                         }
-                    }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            viewModel.toggleQualityMenu()
+                        })
+                        .onAppear {
+                            player.play()
+                        }
+                        .onDisappear {
+                            if !isFullScreen {
+                                player.pause()
+                            }
+                        }
                 } else {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -122,6 +94,64 @@ struct PlayerView: View {
             }
             // Aspect ratio pour la vidéo (généralement 16:9)
             .aspectRatio(16/9, contentMode: .fit)
+            
+            if isSegmentSelectionMode, let player = viewModel.player {
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Sélectionnez le segment à télécharger")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                startTimecode = Int(player.currentTime().seconds)
+                                checkSegmentSelection()
+                            }
+                        }) {
+                            VStack(spacing: 4) {
+                                Image(systemName: startTimecode == nil ? "play.circle" : "checkmark.circle.fill")
+                                    .font(.title3)
+                                Text(startTimecode == nil ? "Début" : formatTime(startTimecode!))
+                                    .font(.footnote)
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(startTimecode == nil ? Color(.systemGray6) : Color.purple)
+                            .foregroundColor(startTimecode == nil ? .primary : .white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                endTimecode = Int(player.currentTime().seconds)
+                                checkSegmentSelection()
+                            }
+                        }) {
+                            VStack(spacing: 4) {
+                                Image(systemName: endTimecode == nil ? "stop.circle" : "checkmark.circle.fill")
+                                    .font(.title3)
+                                Text(endTimecode == nil ? "Fin" : formatTime(endTimecode!))
+                                    .font(.footnote)
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(endTimecode == nil ? Color(.systemGray6) : Color.purple)
+                            .foregroundColor(endTimecode == nil ? .primary : .white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.vertical, 12)
+                .background(Color(.systemBackground))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             
             // Metadata Section
             if let meta = metadata {

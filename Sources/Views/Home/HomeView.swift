@@ -193,8 +193,8 @@ struct HomeView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
-            .onAppear {
-                viewModel.loadData(history: history, subs: subscriptions)
+            .task(id: subscriptions) {
+                await viewModel.loadData(history: history, subs: subscriptions)
             }
         }
     }

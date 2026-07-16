@@ -2,18 +2,21 @@ import Foundation
 import AVFoundation
 import Combine
 
-final class PlayerViewModel: ObservableObject, @unchecked Sendable {
+@MainActor
+final class PlayerViewModel: ObservableObject {
     let videoID: String
     let isLive: Bool
     let clipThumbnailURL: URL?
 
     @Published var player: AVPlayer?
+    // Kept nonisolated for deinit cleanup (deinit is always nonisolated)
+    nonisolated(unsafe) private var _playerForDeinit: AVPlayer?
     @Published var isLoading: Bool = true
     @Published var errorMessage: String?
 
     @Published var selectedQuality: String = "auto"
     @Published var showQualityMenu: Bool = false
-    private var qualityMenuTimer: Timer?
+    private var qualityMenuTask: Task<Void, Never>?
 
     let localPlaylistPath: String?
 
@@ -24,7 +27,7 @@ final class PlayerViewModel: ObservableObject, @unchecked Sendable {
     @Published var chatMessages: [ChatMessage] = []
     private var cancellables = Set<AnyCancellable>()
     private var playerItemCancellables = Set<AnyCancellable>()
-    private var timeObserver: Any?
+    nonisolated(unsafe) var timeObserver: Any?
 
     var onTimeUpdate: ((Int, Int) -> Void)?
     var initialTimecode: Int = 0
@@ -52,8 +55,8 @@ final class PlayerViewModel: ObservableObject, @unchecked Sendable {
     }
 
     deinit {
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
+        if let observer = timeObserver, let p = _playerForDeinit {
+            p.removeTimeObserver(observer)
         }
         liveChatService?.disconnect()
     }
@@ -69,33 +72,30 @@ final class PlayerViewModel: ObservableObject, @unchecked Sendable {
                 let url = try await resolveStreamURL()
                 let playerItem = makePlayerItem(url: url)
 
-                await MainActor.run {
-                    if self.player == nil {
-                        self.player = AVPlayer(playerItem: playerItem)
-                        // L'observer de temps est créé une seule fois avec le player
-                        self.setupTimeObserver()
-                    } else {
-                        self.player?.replaceCurrentItem(with: playerItem)
-                    }
+                if self.player == nil {
+                    let newPlayer = AVPlayer(playerItem: playerItem)
+                    self.player = newPlayer
+                    self._playerForDeinit = newPlayer
+                    self.setupTimeObserver()
+                } else {
+                    self.player?.replaceCurrentItem(with: playerItem)
+                }
 
-                    self.setupPlayerItemObservers(playerItem)
+                self.setupPlayerItemObservers(playerItem)
 
-                    if self.initialTimecode > 0 {
-                        let time = CMTime(seconds: Double(self.initialTimecode), preferredTimescale: 1000)
-                        self.player?.seek(to: time) { _ in
-                            self.player?.play()
-                        }
-                    } else {
+                if self.initialTimecode > 0 {
+                    let time = CMTime(seconds: Double(self.initialTimecode), preferredTimescale: 1000)
+                    self.player?.seek(to: time) { _ in
                         self.player?.play()
                     }
-                    self.isLoading = false
+                } else {
+                    self.player?.play()
                 }
+                self.isLoading = false
             } catch {
                 print("Failed to load stream: \(error)")
-                await MainActor.run {
-                    self.errorMessage = error.localizedDescription
-                    self.isLoading = false
-                }
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
             }
         }
     }
@@ -247,26 +247,22 @@ final class PlayerViewModel: ObservableObject, @unchecked Sendable {
                 )
                 let playerItem = makePlayerItem(url: url)
 
-                await MainActor.run {
-                    self.setupPlayerItemObservers(playerItem)
-                    self.player?.replaceCurrentItem(with: playerItem)
+                self.setupPlayerItemObservers(playerItem)
+                self.player?.replaceCurrentItem(with: playerItem)
 
-                    if !self.isLive && self.initialTimecode > 0 {
-                        let time = CMTime(seconds: Double(self.initialTimecode), preferredTimescale: 1000)
-                        self.player?.seek(to: time) { _ in
-                            self.player?.play()
-                        }
-                    } else {
+                if !self.isLive && self.initialTimecode > 0 {
+                    let time = CMTime(seconds: Double(self.initialTimecode), preferredTimescale: 1000)
+                    self.player?.seek(to: time) { _ in
                         self.player?.play()
                     }
-                    self.isLoading = false
+                } else {
+                    self.player?.play()
                 }
+                self.isLoading = false
             } catch {
                 print("Failed to change quality: \(error)")
-                await MainActor.run {
-                    self.errorMessage = error.localizedDescription
-                    self.isLoading = false
-                }
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
             }
         }
     }
@@ -274,11 +270,12 @@ final class PlayerViewModel: ObservableObject, @unchecked Sendable {
     // MARK: - Quality Menu
 
     func resetQualityMenuTimer() {
-        qualityMenuTimer?.invalidate()
+        qualityMenuTask?.cancel()
         if showQualityMenu {
-            qualityMenuTimer = Timer.scheduledTimer(withTimeInterval: 3.5, repeats: false) { [weak self] _ in
-                DispatchQueue.main.async {
-                    self?.showQualityMenu = false
+            qualityMenuTask = Task {
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
+                if !Task.isCancelled {
+                    self.showQualityMenu = false
                 }
             }
         }

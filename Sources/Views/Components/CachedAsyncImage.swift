@@ -2,36 +2,38 @@ import SwiftUI
 
 class ImageCache {
     static let shared = ImageCache()
-    
+
     private let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
-        cache.countLimit = 100
-        cache.totalCostLimit = 1024 * 1024 * 100 // 100 MB
+        cache.countLimit = 150
+        cache.totalCostLimit = 50 * 1024 * 1024  // 50 Mo — plafond conservateur pour iOS
         return cache
     }()
-    
+
     func set(_ image: UIImage, forKey key: String) {
-        cache.setObject(image, forKey: key as NSString)
+        // Passer le coût réel (pixels × 4 bytes/px) pour que NSCache évicte les grandes images en premier.
+        let cost = Int(image.size.width * image.size.height * image.scale * image.scale) * 4
+        cache.setObject(image, forKey: key as NSString, cost: cost)
     }
-    
+
     func get(forKey key: String) -> UIImage? {
         return cache.object(forKey: key as NSString)
     }
 }
 
+@MainActor
 class CachedImageLoader: ObservableObject {
     @Published var phase: AsyncImagePhase = .empty
-    private let urlString: String
+    let url: URL?
     private var isLoading = false
     
     init(url: URL?) {
-        self.urlString = url?.absoluteString ?? ""
-        if let url = url {
-            loadImage(from: url)
-        }
+        self.url = url
     }
     
-    private func loadImage(from url: URL) {
+    func load() async {
+        guard let url = url else { return }
+        
         if let cachedImage = ImageCache.shared.get(forKey: url.absoluteString) {
             self.phase = .success(Image(uiImage: cachedImage))
             return
@@ -40,25 +42,20 @@ class CachedImageLoader: ObservableObject {
         guard !isLoading else { return }
         isLoading = true
         
-        Task {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                if let uiImage = UIImage(data: data) {
-                    ImageCache.shared.set(uiImage, forKey: url.absoluteString)
-                    await MainActor.run {
-                        self.phase = .success(Image(uiImage: uiImage))
-                        self.isLoading = false
-                    }
-                } else {
-                    throw URLError(.badServerResponse)
-                }
-            } catch {
-                await MainActor.run {
-                    self.phase = .failure(error)
-                    self.isLoading = false
-                }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let uiImage = UIImage(data: data) {
+                ImageCache.shared.set(uiImage, forKey: url.absoluteString)
+                self.phase = .success(Image(uiImage: uiImage))
+            } else {
+                throw URLError(.badServerResponse)
+            }
+        } catch {
+            if !(error is CancellationError) {
+                self.phase = .failure(error)
             }
         }
+        self.isLoading = false
     }
 }
 
@@ -76,6 +73,9 @@ public struct CachedAsyncImage<Content: View>: View {
     
     public var body: some View {
         content(loader.phase)
+            .task(id: loader.url) {
+                await loader.load()
+            }
     }
 }
 
