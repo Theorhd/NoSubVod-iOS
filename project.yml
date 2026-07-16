@@ -1,0 +1,30 @@
+name: NoSubVod
+options:
+  bundleIdPrefix: com.theorhd
+  deploymentTarget:
+    iOS: 17.0
+
+packages:
+  FFmpeg-Kit:
+    url: https://github.com/tylerjonesio/ffmpeg-kit-spm
+    branch: main
+
+targets:
+  NoSubVod:
+    type: application
+    platform: iOS
+    sources: Sources
+    dependencies:
+      - package: FFmpeg-Kit
+        product: FFmpeg-Kit
+        embed: true
+    info:
+      path: Info.plist
+      properties:
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations: {}
+        UIBackgroundModes:
+          - audio
+          - fetch
