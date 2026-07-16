@@ -158,7 +158,13 @@ class TwitchHLSManager {
             filename = "index-dvr.m3u8"
         }
         
-        let urlQuality = TwitchHLSManager.mapQualityToTwitch(quality ?? "auto")
+        var urlQuality = TwitchHLSManager.mapQualityToTwitch(quality ?? "auto")
+        if urlQuality == "auto" {
+            // Direct Cloudfront inference bypasses Usher, so the master playlist (auto) is unavailable.
+            // Fallback to highest quality.
+            urlQuality = "chunked"
+        }
+        
         let chunkedURL = "https://\(host)/\(specialID)/\(urlQuality)/\(filename)"
         
         guard let url = URL(string: chunkedURL) else {
