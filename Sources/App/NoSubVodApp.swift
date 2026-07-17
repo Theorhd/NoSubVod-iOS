@@ -4,6 +4,8 @@ import AVFoundation
 
 @main
 struct NoSubVodApp: App {
+    var sharedModelContainer: ModelContainer
+    
     init() {
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
@@ -11,13 +13,33 @@ struct NoSubVodApp: App {
         } catch {
             print("Failed to configure audio session: \(error)")
         }
+        
+        LiveContainerStorageManager.shared.setup()
+        
+        let schema = Schema([PersistentHistoryEntry.self, PersistentWatchlistEntry.self, PersistentSubscription.self, VODDownload.self])
+        let isLiveContainer = UserDefaults.standard.bool(forKey: "isLiveContainerStorageEnabled")
+        
+        var modelConfiguration: ModelConfiguration
+        if isLiveContainer {
+            let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+            let storeURL = paths[0].appendingPathComponent("NoSubVod_LiveContainer.sqlite")
+            modelConfiguration = ModelConfiguration(url: storeURL)
+        } else {
+            modelConfiguration = ModelConfiguration()
+        }
+        
+        do {
+            sharedModelContainer = try ModelContainer(for: schema, configurations: modelConfiguration)
+        } catch {
+            fatalError("Could not create ModelContainer: \(error)")
+        }
     }
     
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [PersistentHistoryEntry.self, PersistentWatchlistEntry.self, PersistentSubscription.self, VODDownload.self])
+        .modelContainer(sharedModelContainer)
     }
 }
 

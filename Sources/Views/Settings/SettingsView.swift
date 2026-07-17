@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @AppStorage("defaultVideoQuality") private var defaultVideoQuality = "auto"
     @AppStorage("isDebugModeEnabled") private var isDebugModeEnabled = false
+    @AppStorage("isLiveContainerStorageEnabled") private var isLiveContainerStorageEnabled = false
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -30,6 +31,16 @@ struct SettingsView: View {
                         Text("Developer")
                         Spacer()
                         Text("NoSubVod")
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Section(header: Text("LiveContainer")) {
+                    Toggle("Stockage Compatible", isOn: $isLiveContainerStorageEnabled)
+                    
+                    if isLiveContainerStorageEnabled {
+                        Text("Assure la persistance des données lors de l'utilisation via LiveContainer. Un redémarrage de l'application est nécessaire pour que les changements sur l'historique et la base de données prennent effet.")
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
