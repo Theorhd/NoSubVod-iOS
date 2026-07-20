@@ -167,6 +167,8 @@ struct HomeView: View {
                                             Text(vod.owner?.displayName ?? "")
                                                 .font(.subheadline)
                                                 .foregroundColor(.secondary)
+                                                
+                                            VODProgressView(vodId: vod.id)
                                         }
                                         Spacer()
                                     }

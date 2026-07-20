@@ -71,3 +71,21 @@ struct HistoryView: View {
         }
     }
 }
+
+struct VODProgressView: View {
+    let vodId: String
+    @Query private var historyEntries: [PersistentHistoryEntry]
+    
+    init(vodId: String) {
+        self.vodId = vodId
+        _historyEntries = Query(filter: #Predicate<PersistentHistoryEntry> { $0.vodId == vodId })
+    }
+    
+    var body: some View {
+        if let entry = historyEntries.first {
+            ProgressView(value: Double(entry.timecode), total: Double(max(entry.duration, 1)))
+                .progressViewStyle(LinearProgressViewStyle(tint: .accentColor))
+                .frame(height: 4)
+        }
+    }
+}

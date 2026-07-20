@@ -147,6 +147,8 @@ struct ChannelView: View {
                                         Text("\(vod.viewCount) views • \(vod.lengthSeconds / 3600)h \((vod.lengthSeconds % 3600) / 60)m")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
+                                            
+                                        VODProgressView(vodId: vod.id)
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 }

@@ -189,6 +189,8 @@ struct VODCard: View {
             Text(vod.owner?.displayName ?? "")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
+                
+            VODProgressView(vodId: vod.id)
         }
         .frame(width: 160)
     }

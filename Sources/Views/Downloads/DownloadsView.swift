@@ -185,6 +185,8 @@ struct DownloadCard: View {
                     
                     Spacer()
                     
+                    VODProgressView(vodId: download.vodId)
+                    
                     HStack {
                         if download.state == .downloading {
                             Text("\(Int(progress * 100))%")
