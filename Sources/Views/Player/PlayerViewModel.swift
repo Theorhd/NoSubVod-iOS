@@ -94,8 +94,24 @@ final class PlayerViewModel: ObservableObject {
                             self?.player?.play()
                         }
                     }
-                } else {
+                } else if playerItem.status == .readyToPlay {
                     self.player?.play()
+                } else {
+                    // AVPlayerItem isn't ready yet (common with local HTTP servers).
+                    // Wait for .readyToPlay, then start playback automatically.
+                    var observer: NSKeyValueObservation?
+                    observer = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+                        guard let self else { observer?.invalidate(); return }
+                        switch item.status {
+                        case .readyToPlay:
+                            Task { @MainActor [weak self] in self?.player?.play() }
+                            observer?.invalidate()
+                        case .failed:
+                            observer?.invalidate()
+                        default:
+                            break
+                        }
+                    }
                 }
                 self.isLoading = false
             } catch {
@@ -106,39 +122,19 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
-    /// Résout l'URL du flux selon le contexte (local, clip, live/VOD distant)
     private func resolveStreamURL() async throws -> URL {
         if let localPath = localPlaylistPath {
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let vodDirectory = documentsPath.appendingPathComponent(localPath).deletingLastPathComponent()
+
+            // Priority: index.m3u8 (fMP4) → video.ts (TS) → video.mp4 (legacy broken concat) → raw path
+            for filename in ["index.m3u8", "video.ts", "video.mp4"] {
+                let url = vodDirectory.appendingPathComponent(filename)
+                if FileManager.default.fileExists(atPath: url.path) { return url }
+            }
             let localURL = documentsPath.appendingPathComponent(localPath)
-            // Support seamlessly upgrading to the new MP4 remux format even if the
-            // local path in DB still points to index.m3u8.
-            let fallbackMP4URL = documentsPath.appendingPathComponent(localPath).deletingLastPathComponent().appendingPathComponent("video.mp4")
-            
-            if FileManager.default.fileExists(atPath: fallbackMP4URL.path) {
-                print("🎬 [PlayerViewModel] Found remuxed MP4 instead of m3u8, using MP4.")
-                return fallbackMP4URL
-            }
-            
-            let fallbackTSURL = documentsPath.appendingPathComponent(localPath).deletingLastPathComponent().appendingPathComponent("video.ts")
-            if FileManager.default.fileExists(atPath: fallbackTSURL.path) {
-                print("🎬 [PlayerViewModel] Found video.ts, using TSPlayerKit.")
-                return fallbackTSURL
-            }
-            
-            // AVPlayer cannot natively open local .ts files. If it's a TS remux, it will have an index.m3u8 wrapper.
-            let fallbackM3U8URL = documentsPath.appendingPathComponent(localPath).deletingLastPathComponent().appendingPathComponent("index.m3u8")
-            
-            if FileManager.default.fileExists(atPath: fallbackM3U8URL.path) {
-                print("🎬 [PlayerViewModel] Found index.m3u8 (likely wrapping TS), using M3U8.")
-                return fallbackM3U8URL
-            }
-            
-            let exists = FileManager.default.fileExists(atPath: localURL.path)
-            if !exists {
-                throw URLError(.fileDoesNotExist)
-            }
-            return localURL
+            if FileManager.default.fileExists(atPath: localURL.path) { return localURL }
+            throw URLError(.fileDoesNotExist)
         } else if let clipThumb = clipThumbnailURL {
             var urlString = clipThumb.absoluteString
             if let range = urlString.range(of: "-preview-") {
@@ -154,36 +150,42 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
-    /// Crée un AVPlayerItem depuis une URL.
-    /// Pour les fichiers locaux (file://), aucun header HTTP n'est appliqué —
-    /// AVURLAssetHTTPHeaderFieldsKey n'est valide que pour les URLs HTTP/HTTPS
-    /// et peut empêcher le chargement de l'asset local (écran noir).
     private func makePlayerItem(url: URL) -> AVPlayerItem {
-        if url.pathExtension == "ts" {
-            do {
-                print("🎬 [PlayerViewModel] Using TSPlayerKit for local .ts file")
-                let tsItem = try TSPlayerItem(tsFileURL: url)
-                currentTSPlayerItem = tsItem  // ⚠️ Must be retained — server stops on dealloc
+        // Local fMP4 directory → TSPlayerKit HTTP server (AVPlayer needs HTTP for HLS).
+        if url.isFileURL, url.pathExtension == "m3u8" {
+            if let tsItem = try? TSPlayerItem(fmp4Directory: url.deletingLastPathComponent()) {
+                currentTSPlayerItem = tsItem
                 return tsItem.playerItem
-            } catch {
-                print("🎬 [PlayerViewModel] Error creating TSPlayerItem: \(error)")
             }
         }
-        
-        let asset: AVURLAsset
-        if url.isFileURL {
-            asset = AVURLAsset(url: url)
-        } else {
-            let headers: [String: String] = [
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-            ]
-            asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+
+        // Local TS file → TSPlayerKit (multi-segment if segments.json exists, else legacy).
+        if url.pathExtension == "ts" {
+            let vodDirectory = url.deletingLastPathComponent()
+            // Try multi-segment first (better seeking, no size cap).
+            if let data = try? Data(contentsOf: vodDirectory.appendingPathComponent("video.segments.json")),
+               let segments = try? JSONDecoder().decode([SegmentInfo].self, from: data), !segments.isEmpty,
+               let tsItem = try? TSPlayerItem(tsFileURL: url, segments: segments) {
+                currentTSPlayerItem = tsItem
+                return tsItem.playerItem
+            }
+            // Legacy single-segment (uses chunked transfer, needs duration file).
+            let duration = (try? String(contentsOf: vodDirectory.appendingPathComponent("video.duration")))
+                .flatMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? 10_800.0
+            if let tsItem = try? TSPlayerItem(tsFileURL: url, totalDuration: duration) {
+                currentTSPlayerItem = tsItem
+                return tsItem.playerItem
+            }
         }
-        return AVPlayerItem(asset: asset)
+
+        // Remote or plain file → standard AVURLAsset.
+        if url.isFileURL {
+            return AVPlayerItem(asset: AVURLAsset(url: url))
+        }
+        let headers = ["User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"]
+        return AVPlayerItem(asset: AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers]))
     }
 
-    /// Configure les observers d'erreurs sur un AVPlayerItem.
-    /// Annule les observers du playerItem précédent avant d'en créer de nouveaux.
     private func setupPlayerItemObservers(_ playerItem: AVPlayerItem) {
         playerItemCancellables.removeAll()
 
@@ -192,45 +194,36 @@ final class PlayerViewModel: ObservableObject {
             .sink { [weak self] status in
                 switch status {
                 case .failed:
-                    let err = playerItem.error?.localizedDescription ?? "Unknown failure"
-                    var extendedLog = ""
-                    if let errorLog = playerItem.errorLog(), let event = errorLog.events.last {
-                        extendedLog = " - \(event.errorComment ?? "") (\(event.errorStatusCode))"
-                    }
-                    print("🎬 [PlayerViewModel] AVPlayerItem FAILED: \(err)\(extendedLog)")
-                    self?.errorMessage = err
+                    let detail = playerItem.errorLog()?.events.last
+                    let msg = "\(playerItem.error?.localizedDescription ?? "?"), \(detail?.errorComment ?? "") (\(detail?.errorStatusCode ?? 0))"
+                    print("🎬 AVPlayerItem FAILED: \(msg)")
+                    self?.errorMessage = playerItem.error?.localizedDescription
                 case .readyToPlay:
-                    print("🎬 [PlayerViewModel] AVPlayerItem READY TO PLAY. Duration: \(playerItem.duration.seconds)")
-                case .unknown:
-                    print("🎬 [PlayerViewModel] AVPlayerItem status UNKNOWN (loading...)")
-                @unknown default:
-                    break
+                    print("🎬 AVPlayerItem READY — duration: \(playerItem.duration.seconds)s")
+                case .unknown: break
+                @unknown default: break
                 }
             }
             .store(in: &playerItemCancellables)
 
-        NotificationCenter.default.publisher(for: .AVPlayerItemFailedToPlayToEndTime, object: playerItem)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                if let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error {
-                    print("🎬 [PlayerViewModel] FailedToPlayToEndTime: \(error.localizedDescription)")
+        for (name, handler) in [
+            (Notification.Name.AVPlayerItemFailedToPlayToEndTime, { (n: Notification) in
+                let err = n.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+                print("🎬 FailedToPlayToEndTime: \(err?.localizedDescription ?? "?")")
+            }),
+            (Notification.Name.AVPlayerItemNewErrorLogEntry, { n in
+                if let e = playerItem.errorLog()?.events.last {
+                    print("🎬 ErrorLog: \(e.errorComment ?? "") (\(e.errorStatusCode)) — \(e.uri ?? "")")
                 }
-                self?.errorMessage = "Failed to play stream"
-            }
-            .store(in: &playerItemCancellables)
-            
-        NotificationCenter.default.publisher(for: .AVPlayerItemNewErrorLogEntry, object: playerItem)
-            .receive(on: DispatchQueue.main)
-            .sink { _ in
-                if let errorLog = playerItem.errorLog(), let event = errorLog.events.last {
-                    print("🎬 [PlayerViewModel] ErrorLog Entry: \(event.errorComment ?? "No comment") (\(event.errorStatusCode)) - URI: \(event.uri ?? "")")
-                }
-            }
-            .store(in: &playerItemCancellables)
+            }),
+        ] {
+            NotificationCenter.default.publisher(for: name, object: playerItem)
+                .receive(on: DispatchQueue.main)
+                .sink { handler($0) }
+                .store(in: &playerItemCancellables)
+        }
     }
 
-    /// Configure l'observer de temps périodique pour le chat VOD et l'historique.
-    /// Doit être appelé une seule fois après la création de l'AVPlayer.
     private func setupTimeObserver() {
         guard !isLive, timeObserver == nil else { return }
         let interval = CMTime(seconds: 5, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
