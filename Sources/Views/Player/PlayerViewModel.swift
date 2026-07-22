@@ -89,8 +89,10 @@ final class PlayerViewModel: ObservableObject {
 
                 if self.initialTimecode > 0 {
                     let time = CMTime(seconds: Double(self.initialTimecode), preferredTimescale: 1000)
-                    self.player?.seek(to: time) { _ in
-                        self.player?.play()
+                    self.player?.seek(to: time) { [weak self] _ in
+                        Task { @MainActor in
+                            self?.player?.play()
+                        }
                     }
                 } else {
                     self.player?.play()
@@ -235,9 +237,11 @@ final class PlayerViewModel: ObservableObject {
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let seconds = time.seconds
             if seconds > 0 {
-                self?.vodChatService?.fetchChat(at: seconds)
-                if let duration = self?.player?.currentItem?.duration.seconds, duration.isFinite {
-                    self?.onTimeUpdate?(Int(seconds), Int(duration))
+                Task { @MainActor in
+                    self?.vodChatService?.fetchChat(at: seconds)
+                    if let duration = self?.player?.currentItem?.duration.seconds, duration.isFinite {
+                        self?.onTimeUpdate?(Int(seconds), Int(duration))
+                    }
                 }
             }
         }
@@ -273,8 +277,10 @@ final class PlayerViewModel: ObservableObject {
 
                 if !self.isLive && self.initialTimecode > 0 {
                     let time = CMTime(seconds: Double(self.initialTimecode), preferredTimescale: 1000)
-                    self.player?.seek(to: time) { _ in
-                        self.player?.play()
+                    self.player?.seek(to: time) { [weak self] _ in
+                        Task { @MainActor in
+                            self?.player?.play()
+                        }
                     }
                 } else {
                     self.player?.play()
