@@ -5,8 +5,8 @@ options:
     iOS: 17.0
 
 packages:
-  FFmpeg-Kit:
-    url: https://github.com/tylerjonesio/ffmpeg-kit-spm
+  TSPlayerKit:
+    url: https://github.com/Theorhd/TSPlayerKit
     branch: main
 
 targets:
@@ -15,9 +15,7 @@ targets:
     platform: iOS
     sources: Sources
     dependencies:
-      - package: FFmpeg-Kit
-        product: FFmpeg-Kit
-        embed: true
+      - package: TSPlayerKit
     info:
       path: Info.plist
       properties:
@@ -28,3 +26,5 @@ targets:
         UIBackgroundModes:
           - audio
           - fetch
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true

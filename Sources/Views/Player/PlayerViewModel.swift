@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import TSPlayerKit
 
 @MainActor
 final class PlayerViewModel: ObservableObject {
@@ -27,6 +28,9 @@ final class PlayerViewModel: ObservableObject {
     @Published var chatMessages: [ChatMessage] = []
     private var cancellables = Set<AnyCancellable>()
     private var playerItemCancellables = Set<AnyCancellable>()
+    // Retain TSPlayerItem (owns the local HTTP server) for the entire playback session.
+    // Without this, the server is deallocated as soon as makePlayerItem() returns, causing -1004.
+    private var currentTSPlayerItem: TSPlayerItem?
     nonisolated(unsafe) var timeObserver: Any?
 
     var onTimeUpdate: ((Int, Int) -> Void)?
@@ -114,6 +118,12 @@ final class PlayerViewModel: ObservableObject {
                 return fallbackMP4URL
             }
             
+            let fallbackTSURL = documentsPath.appendingPathComponent(localPath).deletingLastPathComponent().appendingPathComponent("video.ts")
+            if FileManager.default.fileExists(atPath: fallbackTSURL.path) {
+                print("🎬 [PlayerViewModel] Found video.ts, using TSPlayerKit.")
+                return fallbackTSURL
+            }
+            
             // AVPlayer cannot natively open local .ts files. If it's a TS remux, it will have an index.m3u8 wrapper.
             let fallbackM3U8URL = documentsPath.appendingPathComponent(localPath).deletingLastPathComponent().appendingPathComponent("index.m3u8")
             
@@ -147,6 +157,17 @@ final class PlayerViewModel: ObservableObject {
     /// AVURLAssetHTTPHeaderFieldsKey n'est valide que pour les URLs HTTP/HTTPS
     /// et peut empêcher le chargement de l'asset local (écran noir).
     private func makePlayerItem(url: URL) -> AVPlayerItem {
+        if url.pathExtension == "ts" {
+            do {
+                print("🎬 [PlayerViewModel] Using TSPlayerKit for local .ts file")
+                let tsItem = try TSPlayerItem(tsFileURL: url)
+                currentTSPlayerItem = tsItem  // ⚠️ Must be retained — server stops on dealloc
+                return tsItem.playerItem
+            } catch {
+                print("🎬 [PlayerViewModel] Error creating TSPlayerItem: \(error)")
+            }
+        }
+        
         let asset: AVURLAsset
         if url.isFileURL {
             asset = AVURLAsset(url: url)

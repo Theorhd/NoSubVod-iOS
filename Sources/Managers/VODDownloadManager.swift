@@ -4,7 +4,6 @@ import Combine
 import SwiftUI
 import AVFoundation
 import CoreMedia
-import ffmpegkit
 
 class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
     static let shared = VODDownloadManager()
@@ -744,63 +743,49 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
                     
                 } else {
-                    // DO NOT CONCATENATE TS BINARILY
-                    // Use FFmpegKit to cleanly remux the chunks into a single MP4 file.
-                    let targetDuration = Int(ceil(chunks.map { $0.duration }.max() ?? 10.0))
-                    var m3u8 = "#EXTM3U\n"
-                    m3u8 += "#EXT-X-VERSION:3\n"
-                    m3u8 += "#EXT-X-TARGETDURATION:\(targetDuration)\n"
-                    m3u8 += "#EXT-X-PLAYLIST-TYPE:VOD\n"
-                    
-                    for chunk in chunks {
-                        m3u8 += "#EXTINF:\(chunk.duration),\n"
-                        m3u8 += "\(chunk.filename)\n"
-                        for tag in chunk.trailingTags {
-                            m3u8 += "\(tag)\n"
-                        }
-                    }
-                    m3u8 += "#EXT-X-ENDLIST\n"
-                    
-                    let m3u8URL = vodDirectory.appendingPathComponent("index.m3u8")
-                    try m3u8.write(to: m3u8URL, atomically: true, encoding: .utf8)
-                    
-                    let outputURL = vodDirectory.appendingPathComponent("video.mp4")
+                    // CONCATENATE TS BINARILY
+                    let outputURL = vodDirectory.appendingPathComponent("video.ts")
+                    let playlistPath = "downloads/\(vodId)/video.ts"
+
                     if FileManager.default.fileExists(atPath: outputURL.path) {
                         try FileManager.default.removeItem(at: outputURL)
                     }
-                    
-                    AppLogger.shared.log("🎬 Starting FFmpeg remux for VOD \(vodId)...")
-                    let command = "-hide_banner -loglevel error -allowed_extensions ALL -i \"\(m3u8URL.path)\" -c copy \"\(outputURL.path)\""
-                    
-                    let success: Bool = await withCheckedContinuation { continuation in
-                        FFmpegKit.executeAsync(command) { session in
-                            guard let session = session, let returnCode = session.getReturnCode() else {
-                                continuation.resume(returning: false)
-                                return
-                            }
-                            continuation.resume(returning: returnCode.isValueSuccess())
+
+                    FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+                    let handle = try FileHandle(forWritingTo: outputURL)
+                    defer { try? handle.close() }
+
+                    var missingCount = 0
+
+                    for chunk in chunks {
+                        let chunkURL = vodDirectory.appendingPathComponent(chunk.filename)
+                        guard FileManager.default.fileExists(atPath: chunkURL.path) else {
+                            AppLogger.shared.log("⚠️ Missing chunk, skipping: \(chunk.filename)")
+                            missingCount += 1
+                            continue
                         }
+                        try streamCopy(from: chunkURL, to: handle)
                     }
-                    
-                    if success {
-                        AppLogger.shared.log("✅ FFmpeg TS -> MP4 Remux completed for VOD \(vodId)")
-                        
-                        // Cleanup original TS chunks and playlist
-                        for chunk in chunks {
-                            try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(chunk.filename))
-                        }
-                        try? FileManager.default.removeItem(at: m3u8URL)
-                        try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.ts"))
-                        
-                        let playlistPath = "downloads/\(vodId)/video.mp4"
-                        await MainActor.run { self.activeDownloads[vodId] = 1.0 }
-                        await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
-                    } else {
-                        AppLogger.shared.log("❌ FFmpeg Remux failed for VOD \(vodId)")
-                        try? FileManager.default.removeItem(at: m3u8URL)
+
+                    guard missingCount < chunks.count else {
+                        AppLogger.shared.log("❌ Remux aborted: no valid chunks on disk")
+                        try? handle.close()
+                        try? FileManager.default.removeItem(at: outputURL)
                         await setDownloadStateFailed(vodId: vodId)
                         return
                     }
+
+                    try handle.close()
+                    AppLogger.shared.log("✅ Remux (concat) completed for VOD \(vodId) — \(chunks.count - missingCount)/\(chunks.count) chunks, format: TS")
+
+                    // Cleanup sources
+                    for chunk in chunks {
+                        try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(chunk.filename))
+                    }
+                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("index.m3u8"))
+
+                    await MainActor.run { self.activeDownloads[vodId] = 1.0 }
+                    await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
                 }
 
                 await MainActor.run {
