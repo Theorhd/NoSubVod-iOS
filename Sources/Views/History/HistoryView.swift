@@ -3,6 +3,7 @@ import SwiftData
 
 struct HistoryView: View {
     @Query(sort: \PersistentHistoryEntry.updatedAt, order: .reverse) private var historyEntries: [PersistentHistoryEntry]
+    @Environment(\.modelContext) private var modelContext
     
     var body: some View {
         NavigationStack {
@@ -13,8 +14,7 @@ struct HistoryView: View {
                             .foregroundColor(.secondary)
                     }
                 } else {
-                    ScrollView {
-                        VStack(spacing: 16) {
+                    List {
                             ForEach(historyEntries, id: \.vodId) { entry in
                                 NavigationLink(destination: PlayerView(
                                     videoID: entry.vodId,
@@ -61,14 +61,35 @@ struct HistoryView: View {
                                     .padding(.horizontal)
                                 }
                                 .buttonStyle(PlainButtonStyle())
+                                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        deleteEntry(entry)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        deleteEntry(entry)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                             }
-                        }
-                        .padding(.vertical)
                     }
+                    .listStyle(.plain)
                 }
             }
             .navigationTitle("History")
         }
+    }
+    
+    private func deleteEntry(_ entry: PersistentHistoryEntry) {
+        modelContext.delete(entry)
+        try? modelContext.save()
     }
 }
 

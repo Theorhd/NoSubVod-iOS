@@ -12,6 +12,7 @@ struct DownloadBottomSheet: View {
     @State private var fullDownloadLoading = false
     @State private var fullDownloadSuccess = false
     
+    @AppStorage("defaultDownloadQuality") private var defaultDownloadQuality: String = "chunked"
     @State private var selectedQuality: String = "chunked"
     
     let qualities = [
@@ -118,5 +119,8 @@ struct DownloadBottomSheet: View {
         .padding()
         .presentationDetents([.height(250)])
         .presentationDragIndicator(.visible)
+        .onAppear {
+            selectedQuality = defaultDownloadQuality
+        }
     }
 }

@@ -30,6 +30,8 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
     // Track progress of individual tasks
     private var taskProgress: [Int: Double] = [:]
+    
+    private var cancellables = Set<AnyCancellable>()
 
     private lazy var urlSession: URLSession = {
         // Use .default (not .background) because Twitch Cloudfront URLs are signed
@@ -44,6 +46,15 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
     private override init() {
         super.init()
+        
+        NetworkMonitor.shared.$isCellular
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isCellular in
+                if isCellular {
+                    self?.cancelDownloadsIfOnCellularAndRestricted()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func startDownload(
@@ -79,6 +90,15 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                 gameName: gameName,
                 viewCount: viewCount
             )
+        }
+
+        let preference = UserDefaults.standard.string(forKey: "downloadNetworkPreference") ?? "all"
+        if NetworkMonitor.shared.isCellular && preference == "wifi" {
+            AppLogger.shared.log("Download \(vodId) paused immediately: Wi-Fi only preference active while on cellular data.")
+            Task {
+                await actor?.updateSwiftDataProgress(vodId: vodId, progress: 0.0, state: .paused)
+            }
+            return
         }
 
         activeDownloads[vodId] = 0.0
@@ -584,6 +604,45 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                 } catch {
                     AppLogger.shared.log("Failed to resume VOD download \(vodId): \(error)")
                 }
+            }
+        }
+    }
+
+    func pauseDownload(vodId: String) {
+        AppLogger.shared.log("Pausing download for \(vodId)")
+        
+        // Cancel active tasks if any.
+        activeChunkTasks[vodId]?.forEach { $0.cancel() }
+        
+        // Remove from memory tracking.
+        let progress = activeDownloads[vodId] ?? 0.0
+        activeDownloads.removeValue(forKey: vodId)
+        pendingChunks.removeValue(forKey: vodId)
+        activeChunkTasks.removeValue(forKey: vodId)
+        expectedChunksCount.removeValue(forKey: vodId)
+        completedChunksCount.removeValue(forKey: vodId)
+        lastProgressUpdate.removeValue(forKey: vodId)
+        lastProgressValue.removeValue(forKey: vodId)
+        
+        // Keep the database entry, but set to paused.
+        let actor = self.downloadActor
+        Task {
+            await actor?.updateSwiftDataProgress(vodId: vodId, progress: progress, state: .paused)
+        }
+        
+        if activeDownloads.isEmpty || activeDownloads.values.allSatisfy({ $0 >= 1.0 }) {
+            DispatchQueue.main.async {
+                UIApplication.shared.isIdleTimerDisabled = false
+            }
+        }
+    }
+    
+    private func cancelDownloadsIfOnCellularAndRestricted() {
+        let preference = UserDefaults.standard.string(forKey: "downloadNetworkPreference") ?? "all"
+        if preference == "wifi" {
+            AppLogger.shared.log("Switched to cellular data with Wi-Fi only restriction. Pausing active downloads.")
+            for vodId in activeDownloads.keys {
+                pauseDownload(vodId: vodId)
             }
         }
     }

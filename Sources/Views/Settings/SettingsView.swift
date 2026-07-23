@@ -2,6 +2,11 @@ import SwiftUI
 
 struct SettingsView: View {
     @AppStorage("defaultVideoQuality") private var defaultVideoQuality = "auto"
+    @AppStorage("defaultVideoQualityCellular") private var defaultVideoQualityCellular = "auto"
+    @AppStorage("defaultDownloadQuality") private var defaultDownloadQuality = "chunked"
+    @AppStorage("downloadNetworkPreference") private var downloadNetworkPreference = "all"
+    @AppStorage("appTheme") private var appTheme = "system"
+    @AppStorage("appLanguage") private var appLanguage = "en"
     @AppStorage("isDebugModeEnabled") private var isDebugModeEnabled = false
     @AppStorage("isLiveContainerStorageEnabled") private var isLiveContainerStorageEnabled = false
     @Environment(\.dismiss) private var dismiss
@@ -9,8 +14,30 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section(header: Text("App Preferences")) {
+                    Picker("Language", selection: $appLanguage) {
+                        Text("English").tag("en")
+                        Text("Français").tag("fr")
+                    }
+                    
+                    Picker("App Theme", selection: $appTheme) {
+                        Text("System").tag("system")
+                        Text("Dark").tag("dark")
+                        Text("Light").tag("light")
+                    }
+                }
+                
                 Section(header: Text("Video Player")) {
-                    Picker("Default Quality", selection: $defaultVideoQuality) {
+                    Picker("Default Quality (Wi-Fi)", selection: $defaultVideoQuality) {
+                        Text("Auto").tag("auto")
+                        Text("1080p").tag("1080p")
+                        Text("720p").tag("720p")
+                        Text("480p").tag("480p")
+                        Text("360p").tag("360p")
+                        Text("160p").tag("160p")
+                    }
+                    
+                    Picker("Default Quality (Cellular)", selection: $defaultVideoQualityCellular) {
                         Text("Auto").tag("auto")
                         Text("1080p").tag("1080p")
                         Text("720p").tag("720p")
@@ -20,18 +47,20 @@ struct SettingsView: View {
                     }
                 }
                 
-                Section(header: Text("About")) {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text("1.0.0")
-                            .foregroundColor(.secondary)
+                Section(header: Text("Downloads")) {
+                    Picker("Network Preference", selection: $downloadNetworkPreference) {
+                        Text("Wi-Fi + Cellular").tag("all")
+                        Text("Wi-Fi Only").tag("wifi")
                     }
-                    HStack {
-                        Text("Developer")
-                        Spacer()
-                        Text("NoSubVod")
-                            .foregroundColor(.secondary)
+                    
+                    Picker("Default Quality", selection: $defaultDownloadQuality) {
+                        Text("Source").tag("chunked")
+                        Text("1080p60").tag("1080p60")
+                        Text("720p60").tag("720p60")
+                        Text("480p30").tag("480p30")
+                        Text("360p30").tag("360p30")
+                        Text("160p30").tag("160p30")
+                        Text("Audio Only").tag("audio_only")
                     }
                 }
                 
@@ -52,6 +81,20 @@ struct SettingsView: View {
                         ShareLink(item: AppLogger.shared.getLogFileURL()) {
                             Text("Exporter les logs")
                         }
+                    }
+                }
+                Section(header: Text("About")) {
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text("1.0.0")
+                            .foregroundColor(.secondary)
+                    }
+                    HStack {
+                        Text("Developer")
+                        Spacer()
+                        Link("Theorhd", destination: URL(string: "https://github.com/Theorhd")!)
+                            .foregroundColor(.secondary)
                     }
                 }
             }

@@ -19,6 +19,7 @@ struct PlayerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("defaultVideoQuality") private var defaultVideoQuality = "auto"
+    @AppStorage("defaultVideoQualityCellular") private var defaultVideoQualityCellular = "auto"
     
     @State private var historyActor: HistoryManagerActor?
     
@@ -238,8 +239,9 @@ struct PlayerView: View {
                 updateHistory(timecode: timecode, duration: duration)
             }
             
-            if viewModel.selectedQuality == "auto" && defaultVideoQuality != "auto" {
-                viewModel.selectedQuality = defaultVideoQuality
+            let targetQuality = NetworkMonitor.shared.isCellular ? defaultVideoQualityCellular : defaultVideoQuality
+            if viewModel.selectedQuality == "auto" && targetQuality != "auto" {
+                viewModel.selectedQuality = targetQuality
             }
             
             viewModel.loadStream()
@@ -262,11 +264,6 @@ struct PlayerView: View {
                         .simultaneousGesture(TapGesture().onEnded {
                             viewModel.toggleQualityMenu()
                         })
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
-                if UIDevice.current.orientation.isPortrait {
-                    isFullScreen = false
                 }
             }
         }
