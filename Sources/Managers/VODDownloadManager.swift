@@ -177,9 +177,9 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     }
                 }
 
-                // Chunks will be processed in remuxToMP4 once all downloads complete:
+                // Chunks will be processed in finalizeDownload once all downloads complete:
                 // - fMP4 → local index.m3u8 (keeps all files)
-                // - TS  → binary concat into video.ts (writes segments.json + duration).
+                // - TS  → binary concat into video_NNN.ts files (max 3h each) + segments.json.
                 
                 await MainActor.run {
                     self.processNextChunks(for: vodId)
@@ -467,7 +467,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             AppLogger.shared.log("Chunk done [\(completed)/\(expected)] for VOD \(vodId)")
 
             if isDone {
-                self.remuxToMP4(vodId: vodId)
+                self.finalizeDownload(vodId: vodId)
             } else {
                 self.processNextChunks(for: vodId)
             }
@@ -582,11 +582,11 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     }
 
                     guard !remainingChunks.isEmpty else {
-                        // All chunks already on disk — run remux to create output files
-                        // (index.m3u8 for fMP4, video.ts + duration + segments.json for TS).
+                        // All chunks already on disk — run finalize to create output files
+                        // (index.m3u8 for fMP4, video_NNN.ts + segments.json for TS).
                         await MainActor.run {
                             self.completedChunksCount[vodId] = chunks.count
-                            self.remuxToMP4(vodId: vodId)
+                            self.finalizeDownload(vodId: vodId)
                         }
                         return
                     }
@@ -696,9 +696,9 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
         }
     }
 
-    private func remuxToMP4(vodId: String) {
+    private func finalizeDownload(vodId: String) {
         guard let chunks = orderedChunks[vodId], !chunks.isEmpty else {
-            AppLogger.shared.log("❌ Remux aborted: no chunks recorded for VOD \(vodId)")
+            AppLogger.shared.log("❌ Finalize aborted: no chunks recorded for VOD \(vodId)")
             Task { await setDownloadStateFailed(vodId: vodId) }
             return
         }
@@ -757,60 +757,93 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
 
                 } else {
-                    // TS: concatenate chunks into video.ts, write sidecar metadata.
-                    let outputURL = vodDirectory.appendingPathComponent("video.ts")
-                    let playlistPath = "downloads/\(vodId)/video.ts"
-                    try? FileManager.default.removeItem(at: outputURL)
+                    // TS: concatenate chunks into video_NNN.ts files (max 3h each).
+                    // Each file gets its own offset range in segments.json.
+                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.ts"))
+                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.mp4"))
+                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.duration"))
 
-                    FileManager.default.createFile(atPath: outputURL.path, contents: nil)
-                    let handle = try FileHandle(forWritingTo: outputURL)
-                    defer { try? handle.close() }
+                    let maxDurationPerFile: Double = 10_800 // 3 hours
 
+                    var fileIndex = 0
+                    var batchChunks: [ChunkInfo] = []
+                    var batchDuration: Double = 0
+                    var allSegmentMetadatas: [[String: Any]] = []
                     var missingCount = 0
-                    var currentOffset: UInt64 = 0
-                    var segmentMetadatas: [[String: Any]] = []
 
-                    for chunk in chunks {
-                        let chunkURL = vodDirectory.appendingPathComponent(chunk.filename)
-                        guard FileManager.default.fileExists(atPath: chunkURL.path) else {
-                            missingCount += 1; continue
+                    /// Finalizes the current batch: writes the TS file and records segment metadata.
+                    func flushBatch() throws {
+                        guard !batchChunks.isEmpty else { return }
+                        let filename = String(format: "video_%03d.ts", fileIndex)
+                        let outputURL = vodDirectory.appendingPathComponent(filename)
+                        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+                        let handle = try FileHandle(forWritingTo: outputURL)
+                        defer { try? handle.close() }
+
+                        var currentOffset: UInt64 = 0
+                        for chunk in batchChunks {
+                            let chunkURL = vodDirectory.appendingPathComponent(chunk.filename)
+                            guard FileManager.default.fileExists(atPath: chunkURL.path),
+                                  let attrs = try? FileManager.default.attributesOfItem(atPath: chunkURL.path),
+                                  let chunkSize = (attrs[.size] as? NSNumber)?.uint64Value else {
+                                missingCount += 1; continue
+                            }
+                            try streamCopy(from: chunkURL, to: handle)
+                            allSegmentMetadatas.append([
+                                "file": filename,
+                                "offset": currentOffset,
+                                "duration": chunk.duration,
+                                "length": chunkSize,
+                            ])
+                            currentOffset += chunkSize
                         }
-                        guard let attrs = try? FileManager.default.attributesOfItem(atPath: chunkURL.path),
-                              let chunkSize = (attrs[.size] as? NSNumber)?.uint64Value else {
-                            missingCount += 1; continue
-                        }
-                        try streamCopy(from: chunkURL, to: handle)
-                        segmentMetadatas.append(["offset": currentOffset, "duration": chunk.duration, "length": chunkSize])
-                        currentOffset += chunkSize
+
+                        AppLogger.shared.log("📦 Wrote \(filename): \(batchChunks.count) chunks, \(String(format: "%.1f", batchDuration))s")
+                        batchChunks = []
+                        batchDuration = 0
+                        fileIndex += 1
                     }
 
+                    for chunk in chunks {
+                        // If adding this chunk would exceed the limit AND we already have chunks,
+                        // flush the current batch first.
+                        if !batchChunks.isEmpty, batchDuration + chunk.duration > maxDurationPerFile {
+                            try flushBatch()
+                        }
+                        batchChunks.append(chunk)
+                        batchDuration += chunk.duration
+                    }
+                    // Flush the last batch.
+                    try flushBatch()
+
                     guard missingCount < chunks.count else {
-                        AppLogger.shared.log("❌ TS remux aborted: no valid chunks for VOD \(vodId)")
-                        try? handle.close(); try? FileManager.default.removeItem(at: outputURL)
+                        AppLogger.shared.log("❌ TS finalize aborted: no valid chunks for VOD \(vodId)")
+                        // Clean up any partial output files.
+                        for i in 0..<fileIndex {
+                            try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(
+                                String(format: "video_%03d.ts", i)))
+                        }
                         await setDownloadStateFailed(vodId: vodId); return
                     }
 
-                    try handle.close()
-                    AppLogger.shared.log("✅ TS remux: \(chunks.count - missingCount)/\(chunks.count) chunks for VOD \(vodId)")
-
-                    // Duration file (legacy fallback for single-segment manifest).
                     let totalDuration = chunks.reduce(0.0) { $0 + $1.duration }
-                    try? String(totalDuration).write(to: vodDirectory.appendingPathComponent("video.duration"),
-                                                      atomically: true, encoding: .utf8)
+                    AppLogger.shared.log("✅ TS finalize: \(chunks.count - missingCount)/\(chunks.count) chunks → \(fileIndex) file(s), \(totalDuration)s total, VOD \(vodId)")
 
-                    // Segment metadata (preferred multi-segment path).
-                    if !segmentMetadatas.isEmpty,
-                       let jsonData = try? JSONSerialization.data(withJSONObject: segmentMetadatas) {
+                    // Segment metadata (multi-file path).
+                    if !allSegmentMetadatas.isEmpty,
+                       let jsonData = try? JSONSerialization.data(withJSONObject: allSegmentMetadatas) {
                         try? jsonData.write(to: vodDirectory.appendingPathComponent("video.segments.json"))
-                        AppLogger.shared.log("📝 video.segments.json: \(segmentMetadatas.count) segments, \(totalDuration)s")
+                        AppLogger.shared.log("📝 video.segments.json: \(allSegmentMetadatas.count) segments across \(fileIndex) file(s)")
                     }
 
-                    // Cleanup individual chunks (concatenated into video.ts).
+                    // Cleanup individual chunks (concatenated into video_NNN.ts files).
                     for chunk in chunks {
                         try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(chunk.filename))
                     }
                     try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("index.m3u8"))
 
+                    // Primary playlist path points to the first TS file.
+                    let playlistPath = "downloads/\(vodId)/video_000.ts"
                     await MainActor.run { self.activeDownloads[vodId] = 1.0 }
                     await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
                 }
@@ -822,7 +855,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                 }
 
             } catch {
-                AppLogger.shared.log("❌ Remux error: \(error.localizedDescription)")
+                AppLogger.shared.log("❌ Finalize error: \(error.localizedDescription)")
                 await setDownloadStateFailed(vodId: vodId)
             }
         }

@@ -127,8 +127,8 @@ final class PlayerViewModel: ObservableObject {
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let vodDirectory = documentsPath.appendingPathComponent(localPath).deletingLastPathComponent()
 
-            // Priority: index.m3u8 (fMP4) → video.ts (TS) → video.mp4 (legacy broken concat) → raw path
-            for filename in ["index.m3u8", "video.ts", "video.mp4"] {
+            // Priority: index.m3u8 (fMP4) → video_000.ts (multi-file TS) → video.ts (legacy TS) → video.mp4 → raw path
+            for filename in ["index.m3u8", "video_000.ts", "video.ts", "video.mp4"] {
                 let url = vodDirectory.appendingPathComponent(filename)
                 if FileManager.default.fileExists(atPath: url.path) { return url }
             }
@@ -159,15 +159,22 @@ final class PlayerViewModel: ObservableObject {
             }
         }
 
-        // Local TS file → TSPlayerKit (multi-segment if segments.json exists, else legacy).
+        // Local TS file → TSPlayerKit (multi-file if segments have `file` field, else multi-segment or legacy).
         if url.pathExtension == "ts" {
             let vodDirectory = url.deletingLastPathComponent()
-            // Try multi-segment first (better seeking, no size cap).
+            // Try multi-file first (new format: segments with `file` fields, multiple video_NNN.ts files).
             if let data = try? Data(contentsOf: vodDirectory.appendingPathComponent("video.segments.json")),
-               let segments = try? JSONDecoder().decode([SegmentInfo].self, from: data), !segments.isEmpty,
-               let tsItem = try? TSPlayerItem(tsFileURL: url, segments: segments) {
-                currentTSPlayerItem = tsItem
-                return tsItem.playerItem
+               let segments = try? JSONDecoder().decode([SegmentInfo].self, from: data), !segments.isEmpty {
+                if segments.contains(where: { $0.file != nil }),
+                   let tsItem = try? TSPlayerItem(tsFilesDirectory: vodDirectory, segments: segments) {
+                    currentTSPlayerItem = tsItem
+                    return tsItem.playerItem
+                }
+                // Old multi-segment (single video.ts with offset-based segments.json).
+                if let tsItem = try? TSPlayerItem(tsFileURL: url, segments: segments) {
+                    currentTSPlayerItem = tsItem
+                    return tsItem.playerItem
+                }
             }
             // Legacy single-segment (uses chunked transfer, needs duration file).
             let duration = (try? String(contentsOf: vodDirectory.appendingPathComponent("video.duration")))
