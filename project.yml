@@ -28,3 +28,16 @@ targets:
           - fetch
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+
+  NoSubVodTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/NoSubVodTests
+      - path: Tests/Fixtures
+        type: folder
+    dependencies:
+      - target: NoSubVod
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.theorhd.NoSubVodTests
+      INFOPLIST_FILE: Tests/NoSubVodTests/Info.plist

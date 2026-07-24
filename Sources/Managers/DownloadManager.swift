@@ -4,7 +4,7 @@ import Combine
 class DownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
     static let shared = DownloadManager()
     
-    @Published var activeDownloads: [String: Double] = [:] // url string to progress (0-1)
+    @Published var activeDownloads: [String: Double] = [:]
     
     private lazy var urlSession: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: "com.theorhd.NoSubVod.BackgroundSession")
@@ -26,7 +26,6 @@ class DownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
         }
     }
     
-    // MARK: - URLSessionDownloadDelegate
     
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let sourceURL = downloadTask.originalRequest?.url else { return }

@@ -21,7 +21,6 @@ final class PlayerViewModel: ObservableObject {
 
     let localPlaylistPath: String?
 
-    // Chat Services
     var liveChatService: TwitchChatService?
     var vodChatService: VODChatService?
 
@@ -64,8 +63,6 @@ final class PlayerViewModel: ObservableObject {
         }
         liveChatService?.disconnect()
     }
-
-    // MARK: - Stream Loading
 
     func loadStream() {
         isLoading = true
@@ -247,15 +244,12 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Quality
-
     /// Change la qualité sans recréer l'AVPlayer.
     /// Seul l'AVPlayerItem est remplacé, évitant tout scintillement ou duplication de flux.
     func changeQuality(to newQuality: String) {
         guard newQuality != selectedQuality else { return }
         guard localPlaylistPath == nil, clipThumbnailURL == nil else { return }
 
-        // Sauvegarder la position courante pour les VOD
         if !isLive, let currentTime = player?.currentTime().seconds, currentTime > 0 {
             self.initialTimecode = Int(currentTime)
         }
@@ -293,8 +287,6 @@ final class PlayerViewModel: ObservableObject {
             }
         }
     }
-
-    // MARK: - Quality Menu
 
     func resetQualityMenuTimer() {
         qualityMenuTask?.cancel()

@@ -17,7 +17,6 @@ class TwitchAPIService {
     var accessToken: String?
     var clientId: String = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 
-    // MARK: - GQL Cache
 
     private struct CacheEntry {
         let data: Data
@@ -32,9 +31,11 @@ class TwitchAPIService {
     private var lastLiveStatusFetch: Date = .distantPast
     private let liveStatusThrottle: TimeInterval = 30
 
+    /// Injected URLSession for testability. Defaults to .shared.
+    var urlSession: URLSession = .shared
+
     private init() {}
 
-    // MARK: - Helix API
 
     func fetchUser(login: String) async throws -> TwitchUser {
         guard let url = URL(string: "\(helixBaseURL)/users?login=\(login)") else {
@@ -48,7 +49,7 @@ class TwitchAPIService {
         }
         request.addValue(clientId, forHTTPHeaderField: "Client-Id")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw TwitchAPIError.invalidResponse
@@ -70,10 +71,8 @@ class TwitchAPIService {
         }
     }
 
-    // MARK: - GQL API
 
     func executeGQLQuery(query: String, variables: [String: Any]) async throws -> Data {
-        // Cache lookup : on ne cache que les requêtes sans variables dynamiques sensibles
         let cacheKey = query.hashValue &+ variables.description.hashValue
         if let entry = gqlCache[cacheKey], entry.expiry > Date() {
             return entry.data
@@ -99,7 +98,7 @@ class TwitchAPIService {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             print("GQL ERROR: Not HTTPURLResponse")
@@ -111,7 +110,6 @@ class TwitchAPIService {
             throw TwitchAPIError.invalidResponse
         }
 
-        // Stocker en cache
         gqlCache[cacheKey] = CacheEntry(data: data, expiry: Date().addingTimeInterval(gqlCacheTTL))
 
         return data
@@ -122,7 +120,6 @@ class TwitchAPIService {
         gqlCache.removeAll()
     }
 
-    // MARK: - Live Status throttle
 
     /// Retourne true si le throttle n'est pas encore expiré (appel trop récent).
     func shouldSkipLiveStatusFetch() -> Bool {

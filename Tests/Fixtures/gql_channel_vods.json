@@ -1,0 +1,54 @@
+{
+  "data": {
+    "user": {
+      "videos": {
+        "edges": [
+          {
+            "node": {
+              "id": "2170531517",
+              "title": "BEST OF SUBATHON 2024 - Highlights",
+              "lengthSeconds": 12360,
+              "previewThumbnailURL": "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/kaicenat/2170531517/thumb-320x180.jpg",
+              "createdAt": "2024-06-10T08:30:00.000Z",
+              "viewCount": 1542000,
+              "broadcastType": "HIGHLIGHT",
+              "game": {
+                "id": "509658",
+                "name": "Just Chatting",
+                "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-138x190.jpg"
+              },
+              "owner": {
+                "id": "123456",
+                "login": "kaicenat",
+                "displayName": "KaiCenat",
+                "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/kaicenat-profile_image-70x70.png"
+              }
+            }
+          },
+          {
+            "node": {
+              "id": "2170531518",
+              "title": "Morning Stream - Chill vibes",
+              "lengthSeconds": 8400,
+              "previewThumbnailURL": "https://static-cdn.jtvnw.net/cf_vods/dgeft87wbj63p/kaicenat/2170531518/thumb-320x180.jpg",
+              "createdAt": "2024-06-09T14:00:00Z",
+              "viewCount": 892000,
+              "broadcastType": "ARCHIVE",
+              "game": {
+                "id": "509658",
+                "name": "Just Chatting",
+                "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-138x190.jpg"
+              },
+              "owner": {
+                "id": "123456",
+                "login": "kaicenat",
+                "displayName": "KaiCenat",
+                "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/kaicenat-profile_image-70x70.png"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -85,7 +85,7 @@ class VODChatService: ObservableObject {
                             commenter: chatCommenter,
                             message: chatContent,
                             contentOffsetSeconds: contentOffsetSeconds,
-                            createdAt: Date() // Can parse if needed, but not strictly required
+                            createdAt: Date()
                         )
                         newMessages.append(chatMessage)
                     }
@@ -93,14 +93,14 @@ class VODChatService: ObservableObject {
                     let capturedMessages = newMessages
                     
                     await MainActor.run {
-                        // Append and keep unique
+
                         let existingIds = Set(self.messages.map { $0.id })
                         let uniqueNew = capturedMessages.filter { !existingIds.contains($0.id) }
                         
                         self.messages.append(contentsOf: uniqueNew)
                         self.messages.sort(by: { $0.contentOffsetSeconds < $1.contentOffsetSeconds })
                         
-                        // Keep only the latest 100 messages
+
                         if self.messages.count > 100 {
                             self.messages.removeFirst(self.messages.count - 100)
                         }

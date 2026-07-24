@@ -10,12 +10,16 @@ struct LiveContainerPrefs: Codable {
 
 class LiveContainerStorageManager {
     static let shared = LiveContainerStorageManager()
-    
+
     private let prefsURL: URL
     private var observer: AnyCancellable?
-    
+
+    /// Injectable dependencies for testability.
+    var defaults: UserDefaults = .standard
+    var fileManager: FileManager = .default
+
     private init() {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let paths = self.fileManager.urls(for: .documentDirectory, in: .userDomainMask)
         prefsURL = paths[0].appendingPathComponent("LiveContainerPrefs.json")
     }
     
@@ -32,11 +36,11 @@ class LiveContainerStorageManager {
     }
     
     var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "isLiveContainerStorageEnabled")
+        self.defaults.bool(forKey: "isLiveContainerStorageEnabled")
     }
     
     private func restoreIfNeeded() {
-        guard FileManager.default.fileExists(atPath: prefsURL.path) else { return }
+        guard self.fileManager.fileExists(atPath: prefsURL.path) else { return }
         
         do {
             let data = try Data(contentsOf: prefsURL)
@@ -44,15 +48,15 @@ class LiveContainerStorageManager {
             
             if prefs.isLiveContainerStorageEnabled == true {
                 if let quality = prefs.defaultVideoQuality {
-                    UserDefaults.standard.set(quality, forKey: "defaultVideoQuality")
+                    self.defaults.set(quality, forKey: "defaultVideoQuality")
                 }
                 if let debug = prefs.isDebugModeEnabled {
-                    UserDefaults.standard.set(debug, forKey: "isDebugModeEnabled")
+                    self.defaults.set(debug, forKey: "isDebugModeEnabled")
                 }
                 if let token = prefs.twitch_access_token {
-                    UserDefaults.standard.set(token, forKey: "twitch_access_token")
+                    self.defaults.set(token, forKey: "twitch_access_token")
                 }
-                UserDefaults.standard.set(true, forKey: "isLiveContainerStorageEnabled")
+                self.defaults.set(true, forKey: "isLiveContainerStorageEnabled")
                 print("Restored UserDefaults from LiveContainerPrefs.json")
             }
         } catch {
@@ -62,8 +66,8 @@ class LiveContainerStorageManager {
     
     private func saveIfNeeded() {
         guard isEnabled else {
-            if FileManager.default.fileExists(atPath: prefsURL.path) {
-                try? FileManager.default.removeItem(at: prefsURL)
+            if self.fileManager.fileExists(atPath: prefsURL.path) {
+                try? self.fileManager.removeItem(at: prefsURL)
             }
             return
         }
@@ -71,13 +75,13 @@ class LiveContainerStorageManager {
         var prefs = LiveContainerPrefs()
         prefs.isLiveContainerStorageEnabled = true
         
-        if let quality = UserDefaults.standard.string(forKey: "defaultVideoQuality") {
+        if let quality = self.defaults.string(forKey: "defaultVideoQuality") {
             prefs.defaultVideoQuality = quality
         }
         
-        prefs.isDebugModeEnabled = UserDefaults.standard.bool(forKey: "isDebugModeEnabled")
+        prefs.isDebugModeEnabled = self.defaults.bool(forKey: "isDebugModeEnabled")
         
-        if let token = UserDefaults.standard.string(forKey: "twitch_access_token") {
+        if let token = self.defaults.string(forKey: "twitch_access_token") {
             prefs.twitch_access_token = token
         }
         

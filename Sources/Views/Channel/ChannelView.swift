@@ -12,7 +12,6 @@ struct ChannelView: View {
         self.login = login
         _viewModel = StateObject(wrappedValue: ChannelViewModel(login: login))
         
-        // Filter subscriptions for this login
         let predicateLogin = login
         _subscriptions = Query(filter: #Predicate<PersistentSubscription> { $0.login == predicateLogin })
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - GQL Decodable Models
+
 
 private struct GQLResponse: Codable {
     let data: GQLData?
@@ -47,7 +47,7 @@ private struct GQLBroadcasterNode: Codable {
     let profileImageURL: String?
 }
 
-// Search specific
+
 private struct GQLGameSearch: Codable {
     let id: String?
     let name: String?
@@ -73,7 +73,7 @@ private struct GQLSearchItem: Codable {
     let stream: GQLLiveNode?
 }
 
-// Clips specific
+
 private struct GQLClips: Codable {
     let edges: [GQLClipEdge]?
 }
@@ -91,7 +91,7 @@ private struct GQLClipNode: Codable {
     let game: GQLGameNode?
 }
 
-// VOD specific
+
 private struct GQLVideos: Codable {
     let edges: [GQLVideoEdge]?
 }
@@ -114,7 +114,6 @@ private struct GQLUserNode: Codable {
     let videos: GQLVideos?
 }
 
-// MARK: - Service Extension
 
 extension TwitchAPIService {
     
@@ -130,7 +129,9 @@ extension TwitchAPIService {
         return formatter
     }()
     
-    private func parseDate(_ dateStr: String?) -> Date {
+    /// Parse ISO8601 date strings (with or without fractional seconds).
+    /// Made internal for testability.
+    func parseDate(_ dateStr: String?) -> Date {
         guard let d = dateStr else { return Date() }
         if let date = Self.fractionalDateFormatter.date(from: d) { return date }
         if let date = Self.standardDateFormatter.date(from: d) { return date }
@@ -252,7 +253,6 @@ extension TwitchAPIService {
         var seenChannelIds = Set<String>()
         var seenCategoryIds = Set<String>()
         
-        // 1. Catégorie exacte (game)
         if let gameNode = response.data?.game {
             let game = Game(
                 id: gameNode.id ?? "0",
@@ -274,12 +274,10 @@ extension TwitchAPIService {
             }
         }
         
-        // 2. Chaînes & Leurs Lives
         if let searchEdges = response.data?.searchFor?.channels?.edges {
             for result in searchEdges {
                 guard let item = result.item, let id = item.id else { continue }
                 
-                // Extraire le channel
                 if !seenChannelIds.contains(id) {
                     seenChannelIds.insert(id)
                     let broadcaster = LiveStreamBroadcaster(
@@ -290,7 +288,6 @@ extension TwitchAPIService {
                     )
                     channels.append(broadcaster)
                     
-                    // Extraire le live si existant
                     if let stream = item.stream, !seenLiveIds.contains(stream.id) {
                         seenLiveIds.insert(stream.id)
                         let game = Game(
@@ -542,7 +539,6 @@ extension TwitchAPIService {
         var clips: [VOD] = []
         
         if let game = response.data?.game {
-            // Map streams
             if let streamEdges = game.streams?.edges {
                 lives = streamEdges.compactMap { edge -> LiveStream? in
                     guard let node = edge.node, let broadcaster = node.broadcaster else { return nil }
@@ -567,14 +563,12 @@ extension TwitchAPIService {
                     )
                 }
             }
-            // Map VODs
             if let videoEdges = game.videos?.edges {
                 vods = videoEdges.compactMap { edge -> VOD? in
                     guard let node = edge.node else { return nil }
                     return mapVideoNode(node)
                 }
             }
-            // Map Clips
             if let clipEdges = game.clips?.edges {
                 clips = clipEdges.compactMap { edge -> VOD? in
                     guard let node = edge.node else { return nil }

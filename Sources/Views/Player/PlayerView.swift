@@ -93,7 +93,6 @@ struct PlayerView: View {
                         .scaleEffect(2.0)
                 }
             }
-            // Aspect ratio pour la vidéo (généralement 16:9)
             .aspectRatio(16/9, contentMode: .fit)
             
             if isSegmentSelectionMode, let player = viewModel.player {
@@ -154,7 +153,6 @@ struct PlayerView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
-            // Metadata Section
             if let meta = metadata {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(meta.title)

@@ -32,7 +32,6 @@ struct DownloadsView: View {
             .navigationTitle("Downloads")
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
         }
-        // Keep screen awake while downloads are in progress
         .onAppear {
             let hasActiveDownloads = downloads.contains { $0.state == .downloading }
             if hasActiveDownloads {
@@ -40,13 +39,11 @@ struct DownloadsView: View {
             }
         }
         .onDisappear {
-            // Only re-enable idle timer if no downloads are currently in progress
             let hasActive = downloadManager.activeDownloads.values.contains { $0 > 0 && $0 < 1.0 }
             if !hasActive {
                 UIApplication.shared.isIdleTimerDisabled = false
             }
         }
-        // Auto-resume downloads when app returns to foreground
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 downloadManager.resumeActiveDownloads(modelContext: modelContext)
@@ -138,10 +135,8 @@ struct DownloadCard: View {
     @ViewBuilder
     private func cardContent(progress: Double) -> some View {
         ZStack(alignment: .leading) {
-            // Base background
             Color.black
             
-            // Progress background
             GeometryReader { geo in
                 Color.gray.opacity(0.4)
                     .frame(width: geo.size.width * progress)
@@ -149,7 +144,6 @@ struct DownloadCard: View {
             }
             
             HStack(spacing: 12) {
-                // Thumbnail
                 if let url = download.thumbnailURL {
                     CachedAsyncImage(url: url) { image in
                         image.resizable()
@@ -243,8 +237,6 @@ struct DownloadCard: View {
                 .stroke(Color.white.opacity(0.1), lineWidth: 1)
         )
     }
-
-    // MARK: - Helpers
 
     private func speedFormatted(_ mbPerSec: Double) -> String {
         String(format: "%.1f MB/s", mbPerSec)

@@ -53,7 +53,6 @@ struct ChatView: View {
     }
 }
 
-// MARK: - Color hex init
 
 private extension Color {
     /// Parse une couleur HTML (#RGB ou #RRGGBB), retourne nil si invalide.

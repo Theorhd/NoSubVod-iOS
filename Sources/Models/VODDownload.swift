@@ -17,11 +17,10 @@ class VODDownload {
     var gameName: String?
     var viewCount: Int?
     
-    // progress is 0.0 to 1.0
     var progress: Double
-    var stateRaw: String // "downloading", "paused", "completed", "failed"
-    var localPlaylistPath: String? // relative to documents directory
-    var durationSeconds: Double?   // total VOD duration in seconds (set on completion)
+    var stateRaw: String
+    var localPlaylistPath: String?
+    var durationSeconds: Double?
     
     var addedAt: Date
     
