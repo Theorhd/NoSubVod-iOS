@@ -187,17 +187,41 @@ struct DownloadCard: View {
                     
                     VODProgressView(vodId: download.vodId)
                     
-                    HStack {
+                    HStack(spacing: 4) {
                         if download.state == .downloading {
                             Text("\(Int(progress * 100))%")
                                 .font(.caption)
                                 .foregroundColor(.gray)
+                            if let speed = downloadManager.downloadSpeeds[download.vodId], speed > 0 {
+                                Text("•")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text(speedFormatted(speed))
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
                         } else if download.state == .completed {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(.green)
                             Text("Downloaded")
                                 .font(.caption)
                                 .foregroundColor(.gray)
+                            if let duration = download.durationSeconds {
+                                Text("•")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text(formatDuration(duration))
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            if let size = folderSize(for: download.vodId) {
+                                Text("•")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text(formatDiskSize(size))
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
                         } else if download.state == .failed {
                             Image(systemName: "exclamationmark.circle.fill")
                                 .foregroundColor(.red)
@@ -218,5 +242,43 @@ struct DownloadCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(0.1), lineWidth: 1)
         )
+    }
+
+    // MARK: - Helpers
+
+    private func speedFormatted(_ mbPerSec: Double) -> String {
+        String(format: "%.1f MB/s", mbPerSec)
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        if h > 0 { return "\(h)h \(m)m" }
+        return "\(m) min"
+    }
+
+    private func formatDiskSize(_ bytes: UInt64) -> String {
+        let mb = Double(bytes) / 1_048_576.0
+        if mb >= 1000 { return String(format: "%.1f GB", mb / 1024.0) }
+        return String(format: "%.0f MB", mb)
+    }
+
+    private func folderSize(for vodId: String) -> UInt64? {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let vodDirectory = documentsPath
+            .appendingPathComponent("downloads")
+            .appendingPathComponent(vodId)
+        guard let enumerator = FileManager.default.enumerator(
+            at: vodDirectory,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return nil }
+        var total: UInt64 = 0
+        for case let fileURL as URL in enumerator {
+            guard let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey]),
+                  let size = values.fileSize else { continue }
+            total += UInt64(size)
+        }
+        return total > 0 ? total : nil
     }
 }

@@ -54,12 +54,13 @@ actor DownloadModelActor {
     /// Atomically marks a download as completed with its local playlist path.
     /// Both `localPlaylistPath` and `state = .completed` are written in a single save,
     /// so `@Query` observers never see `.completed` with a nil path.
-    func completeDownload(vodId: String, playlistPath: String) {
+    func completeDownload(vodId: String, playlistPath: String, durationSeconds: Double? = nil) {
         let descriptor = FetchDescriptor<VODDownload>(predicate: #Predicate { $0.vodId == vodId })
         if let model = try? modelContext.fetch(descriptor).first {
             model.localPlaylistPath = playlistPath
             model.progress = 1.0
             model.state = .completed
+            model.durationSeconds = durationSeconds
             try? modelContext.save()
         }
     }

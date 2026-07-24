@@ -9,10 +9,12 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
     static let shared = VODDownloadManager()
 
     @Published var activeDownloads: [String: Double] = [:]
+    @Published var downloadSpeeds: [String: Double] = [:] // MB/s
 
     // For throttling UI updates and DB writes
     private var lastProgressUpdate: [String: Date] = [:]
     private var lastProgressValue: [String: Double] = [:]
+    private var lastSpeedSample: [String: (bytes: Int64, time: Date)] = [:]
     private var downloadActor: DownloadModelActor?
 
     private var downloadTasks: [Int: String] = [:]
@@ -375,6 +377,20 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             }
 
+            // --- Download speed (MB/s) ---
+            let now = Date()
+            if let last = self.lastSpeedSample[vodId] {
+                let elapsed = now.timeIntervalSince(last.time)
+                if elapsed >= 1.0 { // update every second
+                    let bytesDelta = totalBytesWritten - last.bytes
+                    let mbPerSec = Double(bytesDelta) / elapsed / 1_048_576.0
+                    self.downloadSpeeds[vodId] = max(0, mbPerSec)
+                    self.lastSpeedSample[vodId] = (bytes: totalBytesWritten, time: now)
+                }
+            } else {
+                self.lastSpeedSample[vodId] = (bytes: totalBytesWritten, time: now)
+            }
+
             var activeProgressSum: Double = 0
             if let activeTasks = self.activeChunkTasks[vodId] {
                 for task in activeTasks {
@@ -386,17 +402,16 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             let total = Double(self.expectedChunksCount[vodId] ?? 1)
 
             let progress = min((completed + activeProgressSum) / total, 0.99)
-            
-            let now = Date()
+
             let lastUpdate = self.lastProgressUpdate[vodId] ?? .distantPast
             let lastValue = self.lastProgressValue[vodId] ?? 0.0
-            
+
             // Throttle: Update only if 0.5s passed OR progress increased by 1%
             if now.timeIntervalSince(lastUpdate) >= 0.5 || (progress - lastValue) >= 0.01 {
                 self.activeDownloads[vodId] = progress
                 self.lastProgressUpdate[vodId] = now
                 self.lastProgressValue[vodId] = progress
-                
+
                 let actor = self.downloadActor
                 Task {
                     await actor?.updateSwiftDataProgress(vodId: vodId, progress: progress, state: .downloading)
@@ -496,6 +511,8 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             // Stop all pending chunks and mark as failed.
             self.pendingChunks[vodId] = []
             self.activeDownloads.removeValue(forKey: vodId)
+            self.downloadSpeeds.removeValue(forKey: vodId)
+            self.lastSpeedSample.removeValue(forKey: vodId)
 
             if self.activeDownloads.isEmpty || self.activeDownloads.values.allSatisfy({ $0 >= 1.0 }) {
                 UIApplication.shared.isIdleTimerDisabled = false
@@ -610,13 +627,15 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
     func pauseDownload(vodId: String) {
         AppLogger.shared.log("Pausing download for \(vodId)")
-        
+
         // Cancel active tasks if any.
         activeChunkTasks[vodId]?.forEach { $0.cancel() }
-        
+
         // Remove from memory tracking.
         let progress = activeDownloads[vodId] ?? 0.0
         activeDownloads.removeValue(forKey: vodId)
+        downloadSpeeds.removeValue(forKey: vodId)
+        lastSpeedSample.removeValue(forKey: vodId)
         pendingChunks.removeValue(forKey: vodId)
         activeChunkTasks.removeValue(forKey: vodId)
         expectedChunksCount.removeValue(forKey: vodId)
@@ -653,6 +672,8 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
         // Remove from memory tracking.
         activeDownloads.removeValue(forKey: vodId)
+        downloadSpeeds.removeValue(forKey: vodId)
+        lastSpeedSample.removeValue(forKey: vodId)
         pendingChunks.removeValue(forKey: vodId)
         activeChunkTasks.removeValue(forKey: vodId)
         expectedChunksCount.removeValue(forKey: vodId)
@@ -753,8 +774,9 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
                     // Keep all chunk files — they are referenced by the m3u8.
 
+                    let totalDuration = chunks.reduce(0.0) { $0 + $1.duration }
                     await MainActor.run { self.activeDownloads[vodId] = 1.0 }
-                    await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
+                    await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath, durationSeconds: totalDuration)
 
                 } else {
                     // TS: concatenate chunks into video_NNN.ts files (max 3h each).
@@ -845,10 +867,12 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     // Primary playlist path points to the first TS file.
                     let playlistPath = "downloads/\(vodId)/video_000.ts"
                     await MainActor.run { self.activeDownloads[vodId] = 1.0 }
-                    await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
+                    await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath, durationSeconds: totalDuration)
                 }
 
                 await MainActor.run {
+                    self.downloadSpeeds.removeValue(forKey: vodId)
+                    self.lastSpeedSample.removeValue(forKey: vodId)
                     if self.activeDownloads.values.allSatisfy({ $0 >= 1.0 }) {
                         UIApplication.shared.isIdleTimerDisabled = false
                     }
@@ -856,6 +880,10 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
             } catch {
                 AppLogger.shared.log("❌ Finalize error: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.downloadSpeeds.removeValue(forKey: vodId)
+                    self.lastSpeedSample.removeValue(forKey: vodId)
+                }
                 await setDownloadStateFailed(vodId: vodId)
             }
         }
