@@ -8,14 +8,14 @@ enum TwitchAPIError: Error {
     case unauthorized
 }
 
-class TwitchAPIService {
+final class TwitchAPIService {
     static let shared = TwitchAPIService()
 
     private let helixBaseURL = "https://api.twitch.tv/helix"
     private let gqlBaseURL   = "https://gql.twitch.tv/gql"
 
     var accessToken: String?
-    var clientId: String = "kimne78kx3ncx6brgo4mv6wki5h1ko"
+    let clientId: String = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 
 
     private struct CacheEntry {
@@ -31,7 +31,6 @@ class TwitchAPIService {
     private var lastLiveStatusFetch: Date = .distantPast
     private let liveStatusThrottle: TimeInterval = 30
 
-    /// Injected URLSession for testability. Defaults to .shared.
     var urlSession: URLSession = .shared
 
     private init() {}
@@ -88,7 +87,7 @@ class TwitchAPIService {
         if let token = accessToken {
             request.addValue("OAuth \(token)", forHTTPHeaderField: "Authorization")
         }
-        request.addValue("kimne78kx3ncx6brgo4mv6wki5h1ko", forHTTPHeaderField: "Client-Id")
+        request.addValue(clientId, forHTTPHeaderField: "Client-Id")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [
