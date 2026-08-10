@@ -2,11 +2,11 @@ import Foundation
 
 
 
-private struct GQLResponse: Codable {
+struct GQLResponse: Codable {
     let data: GQLData?
 }
 
-private struct GQLData: Codable {
+struct GQLData: Codable {
     let streams: GQLStreams?
     let game: GQLGameSearch?
     let searchFor: GQLSearchFor?
@@ -15,15 +15,15 @@ private struct GQLData: Codable {
     let video: GQLVideoNode?
 }
 
-private struct GQLStreams: Codable {
+struct GQLStreams: Codable {
     let edges: [GQLEdge]?
 }
 
-private struct GQLEdge: Codable {
+struct GQLEdge: Codable {
     let node: GQLLiveNode?
 }
 
-private struct GQLLiveNode: Codable {
+struct GQLLiveNode: Codable {
     let id: String
     let title: String?
     let viewersCount: Int?
@@ -34,13 +34,13 @@ private struct GQLLiveNode: Codable {
     let broadcaster: GQLBroadcasterNode?
 }
 
-private struct GQLGameNode: Codable {
+struct GQLGameNode: Codable {
     let id: String
     let name: String
     let boxArtURL: String?
 }
 
-private struct GQLBroadcasterNode: Codable {
+struct GQLBroadcasterNode: Codable {
     let id: String
     let login: String
     let displayName: String
@@ -48,7 +48,7 @@ private struct GQLBroadcasterNode: Codable {
 }
 
 
-private struct GQLGameSearch: Codable {
+struct GQLGameSearch: Codable {
     let id: String?
     let name: String?
     let boxArtURL: String?
@@ -56,16 +56,16 @@ private struct GQLGameSearch: Codable {
     let videos: GQLVideos?
     let clips: GQLClips?
 }
-private struct GQLSearchFor: Codable {
+struct GQLSearchFor: Codable {
     let channels: GQLSearchChannels?
 }
-private struct GQLSearchChannels: Codable {
+struct GQLSearchChannels: Codable {
     let edges: [GQLSearchResult]?
 }
-private struct GQLSearchResult: Codable {
+struct GQLSearchResult: Codable {
     let item: GQLSearchItem?
 }
-private struct GQLSearchItem: Codable {
+struct GQLSearchItem: Codable {
     let id: String?
     let login: String?
     let displayName: String?
@@ -74,13 +74,13 @@ private struct GQLSearchItem: Codable {
 }
 
 
-private struct GQLClips: Codable {
+struct GQLClips: Codable {
     let edges: [GQLClipEdge]?
 }
-private struct GQLClipEdge: Codable {
+struct GQLClipEdge: Codable {
     let node: GQLClipNode?
 }
-private struct GQLClipNode: Codable {
+struct GQLClipNode: Codable {
     let id: String
     let title: String?
     let durationSeconds: Int?
@@ -92,13 +92,13 @@ private struct GQLClipNode: Codable {
 }
 
 
-private struct GQLVideos: Codable {
+struct GQLVideos: Codable {
     let edges: [GQLVideoEdge]?
 }
-private struct GQLVideoEdge: Codable {
+struct GQLVideoEdge: Codable {
     let node: GQLVideoNode?
 }
-private struct GQLVideoNode: Codable {
+struct GQLVideoNode: Codable {
     let id: String
     let title: String?
     let lengthSeconds: Int?
@@ -110,7 +110,7 @@ private struct GQLVideoNode: Codable {
     let owner: GQLBroadcasterNode?
 }
 
-private struct GQLUserNode: Codable {
+struct GQLUserNode: Codable {
     let videos: GQLVideos?
 }
 
@@ -340,8 +340,6 @@ extension TwitchAPIService {
             return mapVideoNode(node)
         } ?? []
     }
-    
-    // Algorithme "light" pour les Trending VODs a été déplacé dans TwitchTrendingActor
 
     func fetchGameVODs(gameName: String, limit: Int = 15) async throws -> [VOD] {
         let safeName = gameName.replacingOccurrences(of: "\"", with: "\\\"")
