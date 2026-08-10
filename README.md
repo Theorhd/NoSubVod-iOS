@@ -3,17 +3,16 @@
 NoSubVOD iOS est le client mobile natif de NoSubVOD, écrit entièrement en Swift. Il permet de lire des VODs et des lives Twitch depuis une interface iOS optimisée et fluide.
 Initialement basé sur Tauri et Rust, le projet a été intégralement migré vers une architecture native iOS avec Swift 6 pour offrir les meilleures performances et la meilleure intégration possible avec l'écosystème Apple.
 
-## 🆕 Beta 1.0.0 — Migration vers Swift 6 et Architecture Native iOS
+## 🆕 Version 1.1.1 — Bloqueur de pubs Twitch
 
-La version Beta 1.0.0 marque une refonte totale de l'application, abandonnant l'ancienne stack web/Tauri au profit du natif.
+La version 1.1.1 introduit un système hybride de blocage des publicités sur les streams live.
 
-### Points clés Beta 1.0.0
+### Points clés 1.1.1
 
-- **Architecture Native iOS** : Refonte complète de l'interface en SwiftUI, offrant des animations fluides, des performances accrues et un respect des guidelines Apple.
-- **Performances Optimales** : Concurrency moderne avec Swift 6, tâches asynchrones, et gestion optimisée de la mémoire (Actors).
-- **Lecteur Vidéo Repensé** : Utilisation de `AVPlayer` pour une lecture VOD et Live robuste, prise en charge du Picture in Picture (PiP), et intégration native des contrôles de lecture.
-- **Base de Données Locale** : Migration vers SwiftData avec des opérations asynchrones (ModelActor) pour une persistance fluide sans bloquer l'interface utilisateur.
-- **Téléchargements Améliorés** : `DownloadManager` repensé avec `URLSession` en arrière-plan pour des téléchargements fiables de VOD, même avec l'application fermée.
+- **Proxy HLS local (mode par défaut)** : Serveur HTTP local intégré qui intercepte le flux HLS, détecte et retire les segments publicitaires avant AVPlayer. Zéro dépendance externe.
+- **Proxy TTV externe (mode optionnel)** : Délégation à un serveur proxy communautaire type ttv.lol. URL configurable.
+- **Détection multi-stratégies** : Tags SCTE35/CUE, patterns d'URL de CDN pub, heuristiques de durée — conservatrice, zéro faux positif.
+- **Interface de paramètres** : Nouvelle section Ad Blocking avec sélecteur de mode et champ URL proxy.
 
 ---
 
@@ -42,6 +41,13 @@ La version 1.1.0 est une release de consolidation centrée sur la qualité inter
 - **Mode Hors Ligne** : Interface dédiée pour accéder et visionner vos vidéos téléchargées localement sans connexion Internet.
 - Navigation complète : Accueil, Live, Recherche, Tendances, Chaînes, Lecteur.
 
+### 🛡️ Anti-Pub Twitch
+
+- **Proxy local intégré** : Blocage des pubs pre-roll et mid-roll sans dépendance externe.
+- **Mode proxy TTV** : Alternative via un serveur proxy communautaire (ex: ttv.lol).
+- **Détection intelligente** : Tags SCTE35/CUE, patterns d'URL, heuristiques de durée.
+- **Paramètres accessibles** : Choix du mode et URL du proxy dans les réglages.
+
 ### 🎬 Expérience Player & Audio-Only
 
 - Lecteur basé sur `AVFoundation` avec contrôles natifs et personnalisés (play/pause, seek, volume).
@@ -63,7 +69,8 @@ La version 1.1.0 est une release de consolidation centrée sur la qualité inter
 - **Interface** : SwiftUI
 - **Base de données** : SwiftData
 - **Réseau** : Apollo GraphQL & API REST Twitch (`URLSession`)
-- **Média** : AVFoundation (`AVPlayer`, `AVPlayerViewController`)
+- **Média** : AVFoundation (`AVPlayer`, `AVPlayerViewController`) + TSPlayerKit (proxy HLS local)
+- **Anti-pub** : `AdStrippingProxy` (TSPlayerKit ≥ 1.1.0)
 - **Architecture** : MVVM (Model-View-ViewModel)
 - **Déploiement** : iOS 17.0+
 

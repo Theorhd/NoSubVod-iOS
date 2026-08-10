@@ -76,6 +76,18 @@
 "Clear Cache" = "Vider le cache";
 "Cache Size" = "Taille du cache";
 
+/* Ad Blocking */
+"Ad Blocking" = "Blocage des pubs";
+"Ad Block Mode" = "Mode anti-pub";
+"Local (recommended)" = "Local (recommandé)";
+"TTV Proxy" = "Proxy TTV";
+"Disabled" = "Désactivé";
+"Proxy URL" = "URL du proxy";
+"Enter the URL of a TTV-compatible ad-blocking proxy." = "Entrez l'URL d'un proxy anti-pub compatible TTV.";
+"Built-in proxy that cleans the stream locally" = "Proxy intégré qui nettoie le flux en local";
+"Delegates cleaning to an external proxy server" = "Délègue le nettoyage à un serveur proxy externe";
+"No blocking — native Twitch behavior" = "Aucun blocage — comportement natif Twitch";
+
 /* Interpolated Strings */
 "%lld%%" = "%lld%%";
 "%lld viewers • %@" = "%lld spectateurs • %@";
