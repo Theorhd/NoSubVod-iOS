@@ -5,9 +5,9 @@ options:
     iOS: 17.0
 
 packages:
-  FFmpeg-Kit:
-    url: https://github.com/tylerjonesio/ffmpeg-kit-spm
-    branch: main
+  TSPlayerKit:
+    url: https://github.com/Theorhd/TSPlayerKit
+    from: 1.0.1
 
 targets:
   NoSubVod:
@@ -15,9 +15,7 @@ targets:
     platform: iOS
     sources: Sources
     dependencies:
-      - package: FFmpeg-Kit
-        product: FFmpeg-Kit
-        embed: true
+      - package: TSPlayerKit
     info:
       path: Info.plist
       properties:
@@ -28,3 +26,18 @@ targets:
         UIBackgroundModes:
           - audio
           - fetch
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+
+  NoSubVodTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/NoSubVodTests
+      - path: Tests/Fixtures
+        type: folder
+    dependencies:
+      - target: NoSubVod
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.theorhd.NoSubVodTests
+      INFOPLIST_FILE: Tests/NoSubVodTests/Info.plist

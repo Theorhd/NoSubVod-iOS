@@ -156,11 +156,11 @@ actor TwitchTrendingActor {
         var foreignAdded = 0
 
         // Ring buffer de 4 éléments pour suivre les 4 derniers choix en O(1).
-        var lastFourLangs = [Bool](repeating: false, count: 4)  // true = fr
+        var lastFourLangs = [Bool](repeating: false, count: 4)
         var ringIndex = 0
 
         while feed.count < maxItems && (fi < french.count || foi < foreign.count) {
-            // Lire les 4 derniers depuis le ring buffer
+
             let isFrenchStreak = feed.count >= 4 && lastFourLangs.allSatisfy { $0 }
             let isForeignStreak = !lastFourLangs.isEmpty && feed.count >= 1 && lastFourLangs.allSatisfy { !$0 }
 

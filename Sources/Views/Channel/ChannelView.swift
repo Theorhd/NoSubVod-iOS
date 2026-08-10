@@ -12,7 +12,6 @@ struct ChannelView: View {
         self.login = login
         _viewModel = StateObject(wrappedValue: ChannelViewModel(login: login))
         
-        // Filter subscriptions for this login
         let predicateLogin = login
         _subscriptions = Query(filter: #Predicate<PersistentSubscription> { $0.login == predicateLogin })
     }
@@ -147,6 +146,8 @@ struct ChannelView: View {
                                         Text("\(vod.viewCount) views • \(vod.lengthSeconds / 3600)h \((vod.lengthSeconds % 3600) / 60)m")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
+                                            
+                                        VODProgressView(vodId: vod.id)
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 }
@@ -187,7 +188,7 @@ struct ChannelView: View {
 }
 
 @MainActor
-class ChannelViewModel: ObservableObject {
+final class ChannelViewModel: ObservableObject {
     @Published var vods: [VOD] = []
     @Published var liveStream: LiveStream?
     @Published var isLoading = false

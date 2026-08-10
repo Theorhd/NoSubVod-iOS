@@ -1,0 +1,43 @@
+{
+  "data": {
+    "video": {
+      "comments": {
+        "edges": [
+          {
+            "node": {
+              "id": "comment-001",
+              "commenter": {
+                "login": "viewer1",
+                "displayName": "ViewerOne"
+              },
+              "message": {
+                "fragments": [
+                  { "text": "LOL that was amazing" }
+                ]
+              },
+              "contentOffsetSeconds": 120,
+              "createdAt": "2024-06-15T14:32:00.000Z"
+            }
+          },
+          {
+            "node": {
+              "id": "comment-002",
+              "commenter": {
+                "login": "viewer2",
+                "displayName": "ViewerTwo"
+              },
+              "message": {
+                "fragments": [
+                  { "text": "PogChamp " },
+                  { "text": "so good" }
+                ]
+              },
+              "contentOffsetSeconds": 125,
+              "createdAt": "2024-06-15T14:32:05.000Z"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

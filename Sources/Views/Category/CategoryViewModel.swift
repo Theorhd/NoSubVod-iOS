@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 @MainActor
-class CategoryViewModel: ObservableObject {
+final class CategoryViewModel: ObservableObject {
     @Published var lives: [LiveStream] = []
     @Published var vods: [VOD] = []
     @Published var clips: [VOD] = []

@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-class TwitchChatService: ObservableObject {
+final class TwitchChatService: ObservableObject {
     private var webSocketTask: URLSessionWebSocketTask?
     @Published var messages: [ChatMessage] = []
 
@@ -22,7 +22,6 @@ class TwitchChatService: ObservableObject {
         let token = TwitchAuthManager.shared.accessToken ?? "SCHMOOPIIE"
         let nick = TwitchAuthManager.shared.currentUser?.login ?? "justinfan12345"
 
-        // Demander les IRC capabilities pour obtenir les tags (couleur pseudo, badges)
         sendMessage("CAP REQ :twitch.tv/membership twitch.tv/tags twitch.tv/commands")
         sendMessage("PASS oauth:\(token)")
         sendMessage("NICK \(nick)")
@@ -65,7 +64,6 @@ class TwitchChatService: ObservableObject {
                     break
                 }
 
-                // Continuer à écouter seulement si toujours connecté
                 self.receiveMessage()
             }
         }

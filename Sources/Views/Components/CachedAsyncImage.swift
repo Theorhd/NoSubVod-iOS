@@ -1,6 +1,6 @@
 import SwiftUI
 
-class ImageCache {
+final class ImageCache {
     static let shared = ImageCache()
 
     private let cache: NSCache<NSString, UIImage> = {
@@ -19,10 +19,14 @@ class ImageCache {
     func get(forKey key: String) -> UIImage? {
         return cache.object(forKey: key as NSString)
     }
+    
+    func clearCache() {
+        cache.removeAllObjects()
+    }
 }
 
 @MainActor
-class CachedImageLoader: ObservableObject {
+final class CachedImageLoader: ObservableObject {
     @Published var phase: AsyncImagePhase = .empty
     let url: URL?
     private var isLoading = false

@@ -1,0 +1,102 @@
+/* Tabs */
+"Home" = "Accueil";
+"Search" = "Recherche";
+"Downloads" = "Téléchargements";
+"History" = "Historique";
+"Settings" = "Paramètres";
+
+/* SettingsView */
+"App Preferences" = "Préférences de l'application";
+"Language" = "Langue";
+"English" = "English";
+"Français" = "Français";
+"App Theme" = "Thème de l'application";
+"System" = "Système";
+"Dark" = "Sombre";
+"Light" = "Clair";
+"Network Preference" = "Préférence réseau";
+"Wi-Fi Only" = "Wi-Fi uniquement";
+"Wi-Fi + Cellular" = "Wi-Fi + Données cellulaires";
+"Default Quality" = "Qualité par défaut";
+"Video Player" = "Lecteur vidéo";
+"Default Quality (Wi-Fi)" = "Qualité par défaut (Wi-Fi)";
+"Default Quality (Cellular)" = "Qualité par défaut (Cellulaire)";
+"About" = "À propos";
+"Version" = "Version";
+"Developer" = "Développeur";
+"Delete" = "Supprimer";
+
+/* HistoryView */
+"History is empty" = "L'historique est vide";
+
+/* DownloadsView */
+"No downloads yet" = "Aucun téléchargement";
+"The local playlist file for this VOD is missing. You can delete it and re-download." = "Le fichier de playlist local pour cette VOD est manquant. Vous pouvez la supprimer et la retélécharger.";
+"Downloaded" = "Téléchargé";
+"Failed" = "Échec";
+"Paused" = "En pause";
+"Segment" = "Segment";
+
+/* ChannelView */
+"Currently Live" = "En direct";
+"LIVE" = "LIVE";
+"Recent VODs" = "VODs récentes";
+
+/* PlayerView / BottomSheet */
+"Recharger au début" = "Recharger au début";
+"Sélectionnez le segment à télécharger" = "Sélectionnez le segment à télécharger";
+"Début" = "Début";
+"Fin" = "Fin";
+
+"Segment selected successfully!" = "Segment sélectionné avec succès !";
+"Download Options" = "Options de téléchargement";
+"Quality" = "Qualité";
+"Download Full VOD" = "Télécharger la VOD complète";
+"Download Segment" = "Télécharger le segment";
+
+"Auto" = "Auto";
+"1080p" = "1080p";
+"720p" = "720p";
+"480p" = "480p";
+"360p" = "360p";
+"160p" = "160p";
+"Audio Only" = "Audio uniquement";
+"Source" = "Source";
+
+/* Debug / LiveContainer */
+"LiveContainer" = "LiveContainer";
+"Stockage Compatible" = "Stockage Compatible";
+"Assure la persistance des données lors de l'utilisation via LiveContainer. Un redémarrage de l'application est nécessaire pour que les changements sur l'historique et la base de données prennent effet." = "Assure la persistance des données lors de l'utilisation via LiveContainer. Un redémarrage de l'application est nécessaire pour que les changements sur l'historique et la base de données prennent effet.";
+"Debug" = "Debug";
+"Activer le mode debug" = "Activer le mode debug";
+"Exporter les logs" = "Exporter les logs";
+
+/* Cache */
+"Cache" = "Cache";
+"Clear Cache" = "Vider le cache";
+"Cache Size" = "Taille du cache";
+
+/* Interpolated Strings */
+"%lld%%" = "%lld%%";
+"%lld viewers • %@" = "%lld spectateurs • %@";
+"%lld views • %lldh %lldm" = "%lld vues • %lldh %lldm";
+"%lld viewers" = "%lld spectateurs";
+"%lld views" = "%lld vues";
+
+/* Home Page */
+"Your Subs" = "Vos Subs";
+"Live Streams" = "En Live";
+"Trending VODs" = "VODs Populaires";
+
+/* Search Page */
+"Search for channels or VODs" = "Rechercher des chaînes ou des VODs";
+"No results" = "Aucun résultat";
+"Try searching for something else" = "Essayez de chercher autre chose";
+"Channels" = "Chaînes";
+"Channels, games, etc." = "Chaînes, jeux, etc.";
+
+/* Misc */
+"Done" = "Terminé";
+"See all" = "Tout voir";
+"Cancel" = "Annuler";
+"File unavailable" = "Fichier indisponible";

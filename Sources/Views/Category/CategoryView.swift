@@ -12,7 +12,6 @@ struct CategoryView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Header
                 HStack(spacing: 16) {
                     if let url = game.boxArtURL {
                         CachedAsyncImage(url: url) { image in
@@ -36,7 +35,6 @@ struct CategoryView: View {
                     ProgressView()
                         .padding(.top, 40)
                 } else {
-                    // Lives Section
                     if !viewModel.lives.isEmpty {
                         categorySection(title: "Live Streams", items: viewModel.lives) { stream in
                             NavigationLink(destination: PlayerView(
@@ -58,7 +56,6 @@ struct CategoryView: View {
                         }
                     }
                     
-                    // VODs Section
                     if !viewModel.vods.isEmpty {
                         categorySection(title: "Recent VODs", items: viewModel.vods) { vod in
                             NavigationLink(destination: PlayerView(
@@ -80,7 +77,6 @@ struct CategoryView: View {
                         }
                     }
                     
-                    // Clips Section
                     if !viewModel.clips.isEmpty {
                         categorySection(title: "Popular Clips", items: viewModel.clips) { clip in
                             NavigationLink(destination: PlayerView(
@@ -125,7 +121,6 @@ struct CategoryView: View {
                     .bold()
                 Spacer()
                 Button("See all") {
-                    // TODO: Navigation vers CategoryAllView
                 }
                 .font(.subheadline)
             }
@@ -143,7 +138,6 @@ struct CategoryView: View {
     }
 }
 
-// Reusable UI Components
 struct LiveCard: View {
     let stream: LiveStream
     var body: some View {
@@ -189,6 +183,8 @@ struct VODCard: View {
             Text(vod.owner?.displayName ?? "")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
+                
+            VODProgressView(vodId: vod.id)
         }
         .frame(width: 160)
     }
