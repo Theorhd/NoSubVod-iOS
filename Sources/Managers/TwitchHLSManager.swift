@@ -12,15 +12,15 @@ final class TwitchHLSManager {
     
     private init() {}
     
-    func fetchPlaylistURL(videoID: String, isLive: Bool, quality: String? = nil) async throws -> URL {
+    func fetchPlaylistURL(videoID: String, isLive: Bool, quality: String? = nil, ttvProxyURL: String? = nil) async throws -> URL {
         if isLive {
-            return try await fetchLivePlaylistURL(videoID: videoID, quality: quality)
+            return try await fetchLivePlaylistURL(videoID: videoID, quality: quality, ttvProxyURL: ttvProxyURL)
         } else {
             return try await fetchVODPlaylistURL(videoID: videoID, quality: quality)
         }
     }
-    
-    private func fetchLivePlaylistURL(videoID: String, quality: String? = nil) async throws -> URL {
+
+    private func fetchLivePlaylistURL(videoID: String, quality: String? = nil, ttvProxyURL: String? = nil) async throws -> URL {
         let query = """
         query PlaybackAccessToken_Template($login: String!) {
           streamPlaybackAccessToken(channelName: $login, params: {platform: "web", playerBackend: "mediaplayer", playerType: "site"}) {
@@ -64,7 +64,8 @@ final class TwitchHLSManager {
         }
         
         let p = Int.random(in: 1...999999)
-        let masterUrlStr = "https://usher.ttvnw.net/api/channel/hls/\(videoID).m3u8?client_id=\(TwitchAPIService.shared.clientId)&token=\(safeToken)&sig=\(safeSig)&allow_source=true&allow_audio_only=true&fast_bread=true&player_backend=mediaplayer&playlist_include_framerate=true&player=twitchweb&p=\(p)"
+        let usherHost = ttvProxyURL.flatMap { URL(string: $0)?.host } ?? "usher.ttvnw.net"
+        let masterUrlStr = "https://\(usherHost)/api/channel/hls/\(videoID).m3u8?client_id=\(TwitchAPIService.shared.clientId)&token=\(safeToken)&sig=\(safeSig)&allow_source=true&allow_audio_only=true&fast_bread=true&player_backend=mediaplayer&playlist_include_framerate=true&player=twitchweb&p=\(p)"
         
         guard let masterUrl = URL(string: masterUrlStr) else {
             throw TwitchHLSError.invalidPlaylistURL

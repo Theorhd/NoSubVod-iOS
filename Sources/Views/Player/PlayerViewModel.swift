@@ -31,6 +31,8 @@ final class PlayerViewModel: ObservableObject {
     // Retain TSPlayerItem (owns the local HTTP server) for the entire playback session.
     // Without this, the server is deallocated as soon as makePlayerItem() returns, causing -1004.
     private var currentTSPlayerItem: TSPlayerItem?
+    // Retain AdStrippingProxy for the playback session (same reason as above).
+    private var currentProxy: AdStrippingProxy?
     nonisolated(unsafe) var timeObserver: Any?
 
     var onTimeUpdate: ((Int, Int) -> Void)?
@@ -138,10 +140,18 @@ final class PlayerViewModel: ObservableObject {
             }
             return URL(string: urlString) ?? clipThumb
         } else {
+            let ttvURL: String?
+            let mode = AdBlockMode(rawValue: UserDefaults.standard.string(forKey: "adBlockMode") ?? AdBlockMode.local.rawValue) ?? .local
+            if mode == .ttv {
+                ttvURL = UserDefaults.standard.string(forKey: "ttvProxyURL") ?? "https://api.ttv.lol"
+            } else {
+                ttvURL = nil
+            }
             return try await TwitchHLSManager.shared.fetchPlaylistURL(
                 videoID: videoID,
                 isLive: isLive,
-                quality: selectedQuality
+                quality: selectedQuality,
+                ttvProxyURL: ttvURL
             )
         }
     }
@@ -179,6 +189,22 @@ final class PlayerViewModel: ObservableObject {
         if url.isFileURL {
             return AVPlayerItem(asset: AVURLAsset(url: url))
         }
+
+        // Ad-blocking proxy for remote HLS streams
+        let mode = AdBlockMode(rawValue: UserDefaults.standard.string(forKey: "adBlockMode") ?? AdBlockMode.local.rawValue) ?? .local
+        if mode == .local, !url.isFileURL {
+            let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+            let fetcher = RemotePlaylistFetcher(
+                userAgent: ua,
+                extraHeaders: ["Client-Id": TwitchAPIService.shared.clientId]
+            )
+            if let proxy = try? AdStrippingProxy(remoteURL: url, fetcher: fetcher) {
+                currentProxy?.stop()
+                currentProxy = proxy
+                return AVPlayerItem(asset: AVURLAsset(url: proxy.localURL))
+            }
+        }
+
         let headers = ["User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"]
         return AVPlayerItem(asset: AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers]))
     }
