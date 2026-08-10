@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 @MainActor
-class SearchViewModel: ObservableObject {
+final class SearchViewModel: ObservableObject {
     @Published var searchResults: GlobalSearchResult?
     @Published var isSearching = false
 

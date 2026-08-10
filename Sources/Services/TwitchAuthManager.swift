@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-class TwitchAuthManager: ObservableObject {
+final class TwitchAuthManager: ObservableObject {
     static let shared = TwitchAuthManager()
     
     @Published var isAuthenticated: Bool = false

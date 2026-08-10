@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-class DownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
+final class DownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
     static let shared = DownloadManager()
     
     @Published var activeDownloads: [String: Double] = [:]

@@ -7,7 +7,7 @@ enum TwitchHLSError: Error {
     case missingSeekPreviewsURL
 }
 
-class TwitchHLSManager {
+final class TwitchHLSManager {
     static let shared = TwitchHLSManager()
     
     private init() {}

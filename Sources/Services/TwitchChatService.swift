@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-class TwitchChatService: ObservableObject {
+final class TwitchChatService: ObservableObject {
     private var webSocketTask: URLSessionWebSocketTask?
     @Published var messages: [ChatMessage] = []
 

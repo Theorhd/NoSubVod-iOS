@@ -188,7 +188,7 @@ struct ChannelView: View {
 }
 
 @MainActor
-class ChannelViewModel: ObservableObject {
+final class ChannelViewModel: ObservableObject {
     @Published var vods: [VOD] = []
     @Published var liveStream: LiveStream?
     @Published var isLoading = false

@@ -8,13 +8,12 @@ struct LiveContainerPrefs: Codable {
     var twitch_access_token: String?
 }
 
-class LiveContainerStorageManager {
+final class LiveContainerStorageManager {
     static let shared = LiveContainerStorageManager()
 
     private let prefsURL: URL
     private var observer: AnyCancellable?
 
-    /// Injectable dependencies for testability.
     var defaults: UserDefaults = .standard
     var fileManager: FileManager = .default
 

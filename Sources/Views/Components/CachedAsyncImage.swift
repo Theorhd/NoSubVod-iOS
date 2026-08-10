@@ -1,6 +1,6 @@
 import SwiftUI
 
-class ImageCache {
+final class ImageCache {
     static let shared = ImageCache()
 
     private let cache: NSCache<NSString, UIImage> = {
@@ -26,7 +26,7 @@ class ImageCache {
 }
 
 @MainActor
-class CachedImageLoader: ObservableObject {
+final class CachedImageLoader: ObservableObject {
     @Published var phase: AsyncImagePhase = .empty
     let url: URL?
     private var isLoading = false

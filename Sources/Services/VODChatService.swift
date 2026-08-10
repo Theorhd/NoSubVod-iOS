@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-class VODChatService: ObservableObject {
+final class VODChatService: ObservableObject {
     @Published var messages: [ChatMessage] = []
     
     private let videoID: String

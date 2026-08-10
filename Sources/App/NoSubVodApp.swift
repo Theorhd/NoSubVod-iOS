@@ -43,7 +43,7 @@ struct NoSubVodApp: App {
     }
 }
 
-class AppLogger {
+final class AppLogger {
     static let shared = AppLogger()
     
     private let logFileURL: URL
