@@ -28,6 +28,13 @@ La version 1.1.0 est une release de consolidation centrée sur la qualité inter
 - **Mode Hors Ligne** : Interface dédiée pour accéder et visionner vos vidéos téléchargées localement sans connexion Internet.
 - Navigation complète : Accueil, Live, Recherche, Tendances, Chaînes, Lecteur.
 
+### 🛡️ Anti-Pub Twitch
+
+- **Proxy local intégré** : Blocage des pubs pre-roll et mid-roll sans dépendance externe.
+- **Mode proxy TTV** : Alternative via un serveur proxy communautaire (ex: ttv.lol).
+- **Détection intelligente** : Tags SCTE35/CUE, patterns d'URL, heuristiques de durée.
+- **Paramètres accessibles** : Choix du mode et URL du proxy dans les réglages.
+
 ### 🎬 Expérience Player & Audio-Only
 
 - Lecteur basé sur `AVFoundation` avec contrôles natifs et personnalisés (play/pause, seek, volume).
@@ -49,7 +56,8 @@ La version 1.1.0 est une release de consolidation centrée sur la qualité inter
 - **Interface** : SwiftUI
 - **Base de données** : SwiftData
 - **Réseau** : Apollo GraphQL & API REST Twitch (`URLSession`)
-- **Média** : AVFoundation (`AVPlayer`, `AVPlayerViewController`)
+- **Média** : AVFoundation (`AVPlayer`, `AVPlayerViewController`) + TSPlayerKit (proxy HLS local)
+- **Anti-pub** : `AdStrippingProxy` (TSPlayerKit ≥ 1.1.0)
 - **Architecture** : MVVM (Model-View-ViewModel)
 - **Déploiement** : iOS 17.0+
 

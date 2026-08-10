@@ -9,6 +9,8 @@ struct SettingsView: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
     @AppStorage("isDebugModeEnabled") private var isDebugModeEnabled = false
     @AppStorage("isLiveContainerStorageEnabled") private var isLiveContainerStorageEnabled = false
+    @AppStorage("adBlockMode") private var adBlockMode = AdBlockMode.local.rawValue
+    @AppStorage("ttvProxyURL") private var ttvProxyURL = "https://api.ttv.lol"
     @Environment(\.dismiss) private var dismiss
     @State private var cacheSize: String = ""
     
@@ -48,6 +50,31 @@ struct SettingsView: View {
                     }
                 }
                 
+                Section(header: Text("Ad Blocking")) {
+                    Picker("Ad Block Mode", selection: $adBlockMode) {
+                        ForEach(AdBlockMode.allCases, id: \.rawValue) { mode in
+                            Text(mode.displayName).tag(mode.rawValue)
+                        }
+                    }
+
+                    if adBlockMode == AdBlockMode.ttv.rawValue {
+                        TextField("Proxy URL", text: $ttvProxyURL)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .keyboardType(.URL)
+
+                        Text("Enter the URL of a TTV-compatible ad-blocking proxy.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    if let mode = AdBlockMode(rawValue: adBlockMode) {
+                        Text(mode.shortDescription)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 Section(header: Text("Downloads")) {
                     Picker("Network Preference", selection: $downloadNetworkPreference) {
                         Text("Wi-Fi + Cellular").tag("all")
@@ -109,7 +136,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.1.0")
+                        Text("1.1.1")
                             .foregroundColor(.secondary)
                     }
                     HStack {

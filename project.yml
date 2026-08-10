@@ -7,7 +7,7 @@ options:
 packages:
   TSPlayerKit:
     url: https://github.com/Theorhd/TSPlayerKit
-    from: 1.0.1
+    from: 1.1.0
 
 targets:
   NoSubVod:
@@ -19,6 +19,8 @@ targets:
     info:
       path: Info.plist
       properties:
+        CFBundleShortVersionString: "1.1.1"
+        CFBundleVersion: "2"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
