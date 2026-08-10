@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import SwiftUI
 import TSPlayerKit
 
 @MainActor
@@ -94,8 +95,6 @@ final class PlayerViewModel: ObservableObject {
                 } else if playerItem.status == .readyToPlay {
                     self.player?.play()
                 } else {
-                    // AVPlayerItem isn't ready yet (common with local HTTP servers).
-                    // Wait for .readyToPlay, then start playback automatically.
                     var observer: NSKeyValueObservation?
                     observer = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
                         guard let self else { observer?.invalidate(); return }
@@ -148,7 +147,6 @@ final class PlayerViewModel: ObservableObject {
     }
 
     private func makePlayerItem(url: URL) -> AVPlayerItem {
-        // Local fMP4 directory → TSPlayerKit HTTP server (AVPlayer needs HTTP for HLS).
         if url.isFileURL, url.pathExtension == "m3u8" {
             if let tsItem = try? TSPlayerItem(fmp4Directory: url.deletingLastPathComponent()) {
                 currentTSPlayerItem = tsItem
@@ -156,10 +154,8 @@ final class PlayerViewModel: ObservableObject {
             }
         }
 
-        // Local TS file → TSPlayerKit (multi-file if segments have `file` field, else multi-segment or legacy).
         if url.pathExtension == "ts" {
             let vodDirectory = url.deletingLastPathComponent()
-            // Try multi-file first (new format: segments with `file` fields, multiple video_NNN.ts files).
             if let data = try? Data(contentsOf: vodDirectory.appendingPathComponent("video.segments.json")),
                let segments = try? JSONDecoder().decode([SegmentInfo].self, from: data), !segments.isEmpty {
                 if segments.contains(where: { $0.file != nil }),
@@ -167,13 +163,11 @@ final class PlayerViewModel: ObservableObject {
                     currentTSPlayerItem = tsItem
                     return tsItem.playerItem
                 }
-                // Old multi-segment (single video.ts with offset-based segments.json).
                 if let tsItem = try? TSPlayerItem(tsFileURL: url, segments: segments) {
                     currentTSPlayerItem = tsItem
                     return tsItem.playerItem
                 }
             }
-            // Legacy single-segment (uses chunked transfer, needs duration file).
             let duration = (try? String(contentsOf: vodDirectory.appendingPathComponent("video.duration")))
                 .flatMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? 10_800.0
             if let tsItem = try? TSPlayerItem(tsFileURL: url, totalDuration: duration) {
@@ -182,7 +176,6 @@ final class PlayerViewModel: ObservableObject {
             }
         }
 
-        // Remote or plain file → standard AVURLAsset.
         if url.isFileURL {
             return AVPlayerItem(asset: AVURLAsset(url: url))
         }
@@ -244,8 +237,6 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
-    /// Change la qualité sans recréer l'AVPlayer.
-    /// Seul l'AVPlayerItem est remplacé, évitant tout scintillement ou duplication de flux.
     func changeQuality(to newQuality: String) {
         guard newQuality != selectedQuality else { return }
         guard localPlaylistPath == nil, clipThumbnailURL == nil else { return }
@@ -304,4 +295,51 @@ final class PlayerViewModel: ObservableObject {
         showQualityMenu.toggle()
         resetQualityMenuTimer()
     }
+
+    // MARK: - Segment Selection & Download
+
+    @Published var isSegmentSelectionMode = false
+    @Published var startTimecode: Int?
+    @Published var endTimecode: Int?
+    @Published var showSegmentSuccess = false
+    @Published var isDownloadSheetPresented = false
+    @Published var selectedSegmentQuality = "chunked"
+
+    var currentTimeSeconds: Int {
+        guard let player else { return 0 }
+        return Int(player.currentTime().seconds)
+    }
+
+    func setStartTimecode() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            startTimecode = currentTimeSeconds
+            checkSegmentSelection()
+        }
+    }
+
+    func setEndTimecode() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            endTimecode = currentTimeSeconds
+            checkSegmentSelection()
+        }
+    }
+
+    private func checkSegmentSelection() {
+        guard let start = startTimecode, let end = endTimecode else { return }
+        isSegmentSelectionMode = false
+        showSegmentSuccess = true
+        isDownloadSheetPresented = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard let self else { return }
+            self.isDownloadSheetPresented = false
+            self.showSegmentSuccess = false
+
+            let minTime = min(start, end)
+            let maxTime = max(start, end)
+            self.onSegmentDownloadRequested?(minTime, maxTime, self.selectedSegmentQuality)
+        }
+    }
+
+    var onSegmentDownloadRequested: ((_ start: Int, _ end: Int, _ quality: String) -> Void)?
 }

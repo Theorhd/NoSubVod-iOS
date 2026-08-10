@@ -4,8 +4,8 @@ import SwiftData
 
 struct VideoMetadata {
     let title: String
-    let viewerCount: Int? // nil for VODs
-    let viewCount: Int? // nil for Lives
+    let viewerCount: Int?
+    let viewCount: Int?
     let streamerName: String
     let streamerProfileURL: URL?
     let gameName: String?
@@ -29,12 +29,6 @@ struct PlayerView: View {
     }
     
     @State private var isFullScreen: Bool = false
-    @State private var isDownloadSheetPresented = false
-    @State private var isSegmentSelectionMode = false
-    @State private var startTimecode: Int?
-    @State private var endTimecode: Int?
-    @State private var showSegmentSuccess = false
-    @State private var selectedSegmentQuality: String = "chunked"
     
     var body: some View {
         VStack(spacing: 0) {
@@ -95,7 +89,7 @@ struct PlayerView: View {
             }
             .aspectRatio(16/9, contentMode: .fit)
             
-            if isSegmentSelectionMode, let player = viewModel.player {
+            if viewModel.isSegmentSelectionMode, let player = viewModel.player {
                 VStack(spacing: 8) {
                     HStack {
                         Text("Sélectionnez le segment à télécharger")
@@ -106,43 +100,33 @@ struct PlayerView: View {
                     .padding(.horizontal, 16)
                     
                     HStack(spacing: 12) {
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                startTimecode = Int(player.currentTime().seconds)
-                                checkSegmentSelection()
-                            }
-                        }) {
+                        Button(action: { viewModel.setStartTimecode() }) {
                             VStack(spacing: 4) {
-                                Image(systemName: startTimecode == nil ? "play.circle" : "checkmark.circle.fill")
+                                Image(systemName: viewModel.startTimecode == nil ? "play.circle" : "checkmark.circle.fill")
                                     .font(.title3)
-                                Text(startTimecode == nil ? "Début" : formatTime(startTimecode!))
+                                Text(viewModel.startTimecode == nil ? "Début" : formatTime(viewModel.startTimecode!))
                                     .font(.footnote)
                                     .fontWeight(.semibold)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(startTimecode == nil ? Color(.systemGray6) : Color.purple)
-                            .foregroundColor(startTimecode == nil ? .primary : .white)
+                            .background(viewModel.startTimecode == nil ? Color(.systemGray6) : Color.purple)
+                            .foregroundColor(viewModel.startTimecode == nil ? .primary : .white)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                endTimecode = Int(player.currentTime().seconds)
-                                checkSegmentSelection()
-                            }
-                        }) {
+
+                        Button(action: { viewModel.setEndTimecode() }) {
                             VStack(spacing: 4) {
-                                Image(systemName: endTimecode == nil ? "stop.circle" : "checkmark.circle.fill")
+                                Image(systemName: viewModel.endTimecode == nil ? "stop.circle" : "checkmark.circle.fill")
                                     .font(.title3)
-                                Text(endTimecode == nil ? "Fin" : formatTime(endTimecode!))
+                                Text(viewModel.endTimecode == nil ? "Fin" : formatTime(viewModel.endTimecode!))
                                     .font(.footnote)
                                     .fontWeight(.semibold)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(endTimecode == nil ? Color(.systemGray6) : Color.purple)
-                            .foregroundColor(endTimecode == nil ? .primary : .white)
+                            .background(viewModel.endTimecode == nil ? Color(.systemGray6) : Color.purple)
+                            .foregroundColor(viewModel.endTimecode == nil ? .primary : .white)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                     }
@@ -200,7 +184,7 @@ struct PlayerView: View {
                             
                             if !viewModel.isLive && viewModel.localPlaylistPath == nil {
                                 Button(action: {
-                                    isDownloadSheetPresented = true
+                                    viewModel.isDownloadSheetPresented = true
                                 }) {
                                     Image(systemName: "arrow.down.circle")
                                         .foregroundColor(.purple)
@@ -242,6 +226,24 @@ struct PlayerView: View {
                 viewModel.selectedQuality = targetQuality
             }
             
+            viewModel.onSegmentDownloadRequested = { [weak viewModel] start, end, quality in
+                guard let viewModel else { return }
+                VODDownloadManager.shared.startDownload(
+                    vodId: viewModel.videoID,
+                    title: metadata?.title ?? "VOD Segment",
+                    thumbnailURL: metadata?.previewThumbnailURL,
+                    isSegment: true,
+                    startTime: start,
+                    endTime: end,
+                    quality: quality,
+                    streamerName: metadata?.streamerName,
+                    streamerProfileURL: metadata?.streamerProfileURL,
+                    gameName: metadata?.gameName,
+                    viewCount: metadata?.viewCount,
+                    modelContext: modelContext
+                )
+            }
+
             viewModel.loadStream()
             viewModel.resetQualityMenuTimer()
         }
@@ -254,7 +256,7 @@ struct PlayerView: View {
                         .overlay(alignment: .topTrailing) {
                             if viewModel.localPlaylistPath == nil {
                                 qualityMenu
-                                    .padding(.top, 40) // safe area padding
+                                    .padding(.top, 40)
                                     .opacity(viewModel.showQualityMenu ? 1 : 0)
                                     .animation(.easeInOut(duration: 0.3), value: viewModel.showQualityMenu)
                             }
@@ -288,10 +290,10 @@ struct PlayerView: View {
                 }
             }
         }
-        .sheet(isPresented: $isDownloadSheetPresented) {
+        .sheet(isPresented: $viewModel.isDownloadSheetPresented) {
             DownloadBottomSheet(
-                isPresented: $isDownloadSheetPresented,
-                isSegmentSelectionMode: $isSegmentSelectionMode,
+                isPresented: $viewModel.isDownloadSheetPresented,
+                isSegmentSelectionMode: $viewModel.isSegmentSelectionMode,
                 onDownloadFull: { quality in
                     VODDownloadManager.shared.startDownload(
                         vodId: viewModel.videoID,
@@ -309,12 +311,12 @@ struct PlayerView: View {
                     )
                 },
                 onDownloadSegment: { quality in
-                    selectedSegmentQuality = quality
-                    isSegmentSelectionMode = true
-                    startTimecode = nil
-                    endTimecode = nil
+                    viewModel.selectedSegmentQuality = quality
+                    viewModel.isSegmentSelectionMode = true
+                    viewModel.startTimecode = nil
+                    viewModel.endTimecode = nil
                 },
-                isSuccessMode: showSegmentSuccess
+                isSuccessMode: viewModel.showSegmentSuccess
             )
         }
     }
@@ -344,38 +346,6 @@ struct PlayerView: View {
                 .clipShape(Circle())
         }
         .padding()
-    }
-    
-    private func checkSegmentSelection() {
-        if startTimecode != nil && endTimecode != nil {
-            isSegmentSelectionMode = false
-            showSegmentSuccess = true
-            isDownloadSheetPresented = true
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                isDownloadSheetPresented = false
-                showSegmentSuccess = false
-                
-                if let start = startTimecode, let end = endTimecode {
-                    let minTime = min(start, end)
-                    let maxTime = max(start, end)
-                    VODDownloadManager.shared.startDownload(
-                        vodId: viewModel.videoID,
-                        title: metadata?.title ?? "VOD Segment",
-                        thumbnailURL: metadata?.previewThumbnailURL,
-                        isSegment: true,
-                        startTime: minTime,
-                        endTime: maxTime,
-                        quality: selectedSegmentQuality,
-                        streamerName: metadata?.streamerName,
-                        streamerProfileURL: metadata?.streamerProfileURL,
-                        gameName: metadata?.gameName,
-                        viewCount: metadata?.viewCount,
-                        modelContext: modelContext
-                    )
-                }
-            }
-        }
     }
     
     private func formatTime(_ seconds: Int) -> String {
