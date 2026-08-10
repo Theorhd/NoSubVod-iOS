@@ -3,20 +3,6 @@
 NoSubVOD iOS est le client mobile natif de NoSubVOD, écrit entièrement en Swift. Il permet de lire des VODs et des lives Twitch depuis une interface iOS optimisée et fluide.
 Initialement basé sur Tauri et Rust, le projet a été intégralement migré vers une architecture native iOS avec Swift 6 pour offrir les meilleures performances et la meilleure intégration possible avec l'écosystème Apple.
 
-## 🆕 Beta 1.0.0 — Migration vers Swift 6 et Architecture Native iOS
-
-La version Beta 1.0.0 marque une refonte totale de l'application, abandonnant l'ancienne stack web/Tauri au profit du natif.
-
-### Points clés Beta 1.0.0
-
-- **Architecture Native iOS** : Refonte complète de l'interface en SwiftUI, offrant des animations fluides, des performances accrues et un respect des guidelines Apple.
-- **Performances Optimales** : Concurrency moderne avec Swift 6, tâches asynchrones, et gestion optimisée de la mémoire (Actors).
-- **Lecteur Vidéo Repensé** : Utilisation de `AVPlayer` pour une lecture VOD et Live robuste, prise en charge du Picture in Picture (PiP), et intégration native des contrôles de lecture.
-- **Base de Données Locale** : Migration vers SwiftData avec des opérations asynchrones (ModelActor) pour une persistance fluide sans bloquer l'interface utilisateur.
-- **Téléchargements Améliorés** : `DownloadManager` repensé avec `URLSession` en arrière-plan pour des téléchargements fiables de VOD, même avec l'application fermée.
-
----
-
 ## 🆕 Version 1.1.0 — Qualité de code et maintenabilité
 
 La version 1.1.0 est une release de consolidation centrée sur la qualité interne du code.
