@@ -3,19 +3,6 @@
 NoSubVOD iOS est le client mobile natif de NoSubVOD, écrit entièrement en Swift. Il permet de lire des VODs et des lives Twitch depuis une interface iOS optimisée et fluide.
 Initialement basé sur Tauri et Rust, le projet a été intégralement migré vers une architecture native iOS avec Swift 6 pour offrir les meilleures performances et la meilleure intégration possible avec l'écosystème Apple.
 
-## 🆕 Version 1.1.1 — Bloqueur de pubs Twitch
-
-La version 1.1.1 introduit un système hybride de blocage des publicités sur les streams live.
-
-### Points clés 1.1.1
-
-- **Proxy HLS local (mode par défaut)** : Serveur HTTP local intégré qui intercepte le flux HLS, détecte et retire les segments publicitaires avant AVPlayer. Zéro dépendance externe.
-- **Proxy TTV externe (mode optionnel)** : Délégation à un serveur proxy communautaire type ttv.lol. URL configurable.
-- **Détection multi-stratégies** : Tags SCTE35/CUE, patterns d'URL de CDN pub, heuristiques de durée — conservatrice, zéro faux positif.
-- **Interface de paramètres** : Nouvelle section Ad Blocking avec sélecteur de mode et champ URL proxy.
-
----
-
 ## 🆕 Version 1.1.0 — Qualité de code et maintenabilité
 
 La version 1.1.0 est une release de consolidation centrée sur la qualité interne du code.
