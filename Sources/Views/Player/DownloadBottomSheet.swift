@@ -5,8 +5,6 @@ struct DownloadBottomSheet: View {
     @Binding var isSegmentSelectionMode: Bool
     let onDownloadFull: (String) -> Void
     let onDownloadSegment: (String) -> Void
-    
-    // For success state
     var isSuccessMode: Bool = false
     
     @State private var fullDownloadLoading = false
@@ -59,7 +57,6 @@ struct DownloadBottomSheet: View {
                     
                     Button(action: {
                         fullDownloadLoading = true
-                        // Simulate loading animation before action
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                             fullDownloadLoading = false
                             fullDownloadSuccess = true

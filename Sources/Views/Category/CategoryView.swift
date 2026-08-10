@@ -121,7 +121,6 @@ struct CategoryView: View {
                     .bold()
                 Spacer()
                 Button("See all") {
-                    // TODO: Navigation vers CategoryAllView
                 }
                 .font(.subheadline)
             }

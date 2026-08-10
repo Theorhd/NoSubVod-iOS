@@ -1,6 +1,5 @@
 import Foundation
 
-/// Parser dédié pour les playlists HLS Twitch.
 struct HLSPlaylistParser {
 
     struct ChunkInfo {

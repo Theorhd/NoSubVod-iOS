@@ -41,7 +41,6 @@ struct ChatView: View {
         }
     }
     
-    // Utilise la couleur native IRC si disponible, sinon génère une couleur déterministe par hash.
     private func colorForLogin(_ commenter: ChatCommenter) -> Color {
         if let hex = commenter.colorHex, !hex.isEmpty,
            let color = Color(hex: hex) {

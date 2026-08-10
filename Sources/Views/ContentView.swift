@@ -35,7 +35,7 @@ struct ContentView: View {
                     Label("Downloads", systemImage: "arrow.down.circle")
                 }
         }
-        .tint(.purple) // Twitch brand color
+        .tint(.purple)
         .preferredColorScheme(colorScheme)
         .environment(\.locale, Locale(identifier: appLanguage))
     }
