@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 @MainActor
-class SearchViewModel: ObservableObject {
+final class SearchViewModel: ObservableObject {
     @Published var searchResults: GlobalSearchResult?
     @Published var isSearching = false
 
@@ -15,14 +15,12 @@ class SearchViewModel: ObservableObject {
             return
         }
 
-        // Annuler la Task précédente pour éviter d'avoir plusieurs requêtes en vol simultanément.
         searchTask?.cancel()
 
         searchTask = Task {
             isSearching = true
 
             do {
-                // Debounce de 500ms — évite une requête à chaque frappe clavier.
                 try await Task.sleep(nanoseconds: 500_000_000)
                 guard !Task.isCancelled else { return }
 

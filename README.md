@@ -17,6 +17,21 @@ La version Beta 1.0.0 marque une refonte totale de l'application, abandonnant l'
 
 ---
 
+## 🆕 Version 1.1.0 — Qualité de code et maintenabilité
+
+La version 1.1.0 est une release de consolidation centrée sur la qualité interne du code.
+
+### Points clés 1.1.0
+
+- **Refactoring du DownloadManager** : Extraction de `DownloadFileMerger` et `DownloadPlaylistBuilder` depuis `VODDownloadManager` (778 → 670 lignes).
+- **Gestion d'erreurs renforcée** : Tous les `try?` silencieux de `DownloadModelActor` remplacés par une gestion d'erreur avec logs.
+- **Optimisation du dispatch** : 17 classes marquées `final` pour éviter la résolution dynamique inutile.
+- **Logique métier centralisée** : Déplacement de l'état de sélection des segments et des callbacks de download de `PlayerView` vers `PlayerViewModel`.
+- **Tests GQL fiabilisés** : Utilisation des vrais types de production dans `GQLResponseParsingTests` (suppression des structs inline).
+- **Nettoyage du code** : Suppression des commentaires redondants et du code mort.
+
+---
+
 ## ✨ Fonctionnalités
 
 ### 🔓 VOD, Live, Clips & Mode Hors Ligne

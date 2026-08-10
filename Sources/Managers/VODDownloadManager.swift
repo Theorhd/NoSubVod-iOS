@@ -4,41 +4,39 @@ import Combine
 import SwiftUI
 import AVFoundation
 import CoreMedia
-import ffmpegkit
 
-class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
+final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
     static let shared = VODDownloadManager()
 
     @Published var activeDownloads: [String: Double] = [:]
+    @Published var downloadSpeeds: [String: Double] = [:]
 
-    // For throttling UI updates and DB writes
+
     private var lastProgressUpdate: [String: Date] = [:]
     private var lastProgressValue: [String: Double] = [:]
+    private var lastSpeedSample: [String: (bytes: Int64, time: Date)] = [:]
+    private var taskLastBytes: [Int: Int64] = [:]
+    private var vodCumulativeBytes: [String: Int64] = [:]
     private var downloadActor: DownloadModelActor?
 
-    // MARK: - Internal state (accessed on DispatchQueue.main only)
-
-    // MARK: - Internal state (accessed on DispatchQueue.main only)
     private var downloadTasks: [Int: String] = [:]
 
-    // Instead of an active-tasks list, we maintain a queue of pending chunk URLs for each VOD.
-    private var pendingChunks: [String: [ChunkInfo]] = [:]
+
+    private var pendingChunks: [String: [HLSPlaylistParser.ChunkInfo]] = [:]
     private var activeChunkTasks: [String: [URLSessionDownloadTask]] = [:]
 
     private var expectedChunksCount: [String: Int] = [:]
     private var completedChunksCount: [String: Int] = [:]
-    private var orderedChunks: [String: [ChunkInfo]] = [:]
+    private var orderedChunks: [String: [HLSPlaylistParser.ChunkInfo]] = [:]
     private var firstMapFilenames: [String: String] = [:]
 
     private let maxConcurrentChunksPerVOD = 4
 
-    // Track progress of individual tasks
     private var taskProgress: [Int: Double] = [:]
+    
+    private var cancellables = Set<AnyCancellable>()
 
     private lazy var urlSession: URLSession = {
-        // Use .default (not .background) because Twitch Cloudfront URLs are signed
-        // and expire quickly. A background session can defer task start, causing
-        // all chunk URLs to expire before they are fetched → download stays at 0%.
         let config = URLSessionConfiguration.default
         config.httpMaximumConnectionsPerHost = 4
         config.timeoutIntervalForRequest = 30
@@ -48,9 +46,16 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
     private override init() {
         super.init()
+        
+        NetworkMonitor.shared.$isCellular
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isCellular in
+                if isCellular {
+                    self?.cancelDownloadsIfOnCellularAndRestricted()
+                }
+            }
+            .store(in: &cancellables)
     }
-
-    // MARK: - Public API
 
     func startDownload(
         vodId: String,
@@ -87,11 +92,19 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             )
         }
 
+        let preference = UserDefaults.standard.string(forKey: "downloadNetworkPreference") ?? "all"
+        if NetworkMonitor.shared.isCellular && preference == "wifi" {
+            AppLogger.shared.log("Download \(vodId) paused immediately: Wi-Fi only preference active while on cellular data.")
+            Task {
+                await actor?.updateSwiftDataProgress(vodId: vodId, progress: 0.0, state: .paused)
+            }
+            return
+        }
+
         activeDownloads[vodId] = 0.0
         lastProgressUpdate[vodId] = Date()
         lastProgressValue[vodId] = 0.0
 
-        // Keep screen awake during download.
         DispatchQueue.main.async {
             UIApplication.shared.isIdleTimerDisabled = true
         }
@@ -110,13 +123,16 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     throw URLError(.badServerResponse)
                 }
 
-                let (chunks, _, _, firstMapFilename, initSegmentURLs) = parsePlaylist(
+                let parseResult = HLSPlaylistParser().parse(
                     playlist: playlistString,
                     baseURL: playlistURL,
                     isSegment: isSegment,
                     startTime: startTime,
                     endTime: endTime
                 )
+                let chunks = parseResult.chunks
+                let firstMapFilename = parseResult.firstMapFilename
+                let initSegmentURLs = parseResult.initSegmentURLs
 
                 guard !chunks.isEmpty else {
                     AppLogger.shared.log("Error: No chunks parsed for VOD \(vodId)")
@@ -150,9 +166,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     )
                 }
 
-                // Download fMP4 init segments synchronously before chunks.
-                // These are referenced by #EXT-X-MAP tags in the playlist and MUST be present
-                // on disk for AVPlayer to decode the fMP4 chunks — missing them causes a black screen.
                 for initURL in initSegmentURLs {
                     let localFilename = initURL.lastPathComponent
                     let destURL = vodDirectory.appendingPathComponent(localFilename)
@@ -163,9 +176,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     }
                 }
 
-                // We no longer write an index.m3u8 file. The chunks will be remuxed into an MP4
-                // at the end of the download.
-                
+
                 await MainActor.run {
                     self.processNextChunks(for: vodId)
                 }
@@ -177,161 +188,12 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
         }
     }
 
-    // MARK: - SwiftData helpers
-
     private func setDownloadStateFailed(vodId: String) async {
         await downloadActor?.setDownloadStateFailed(vodId: vodId)
         AppLogger.shared.log("Marked VOD \(vodId) as failed")
     }
 
 
-    // MARK: - Chunk Info
-
-    struct ChunkInfo {
-        let remoteURL: URL
-        let duration: Double
-        let filename: String
-        /// Filename of the next #EXT-X-MAP init segment that follows this chunk (mid-playlist MAP change)
-        var nextMapFilename: String? = nil
-        /// Mid-playlist HLS tags (e.g. #EXT-X-DISCONTINUITY) that appear after this chunk
-        var trailingTags: [String] = []
-    }
-
-    // MARK: - Playlist Parsing
-
-    /// Parse la playlist HLS Twitch et extrait les chunks à télécharger.
-    /// Retourne uniquement les données nécessaires pour construire un header local propre —
-    /// on ne copie JAMAIS le header Twitch brut car il contient des URLs HTTPS (PREFETCH tags, etc.)
-    /// qu'AVPlayer tenterait de résoudre réseau au lieu d'utiliser les fichiers locaux.
-    private func parsePlaylist(
-        playlist: String,
-        baseURL: URL,
-        isSegment: Bool,
-        startTime: Int?,
-        endTime: Int?
-    ) -> (chunks: [ChunkInfo], targetDuration: Int, version: Int, firstMapFilename: String?, initSegmentURLs: [URL]) {
-        var chunks: [ChunkInfo] = []
-        let lines = playlist.components(separatedBy: .newlines)
-
-        var targetDuration: Int = 10
-        var version: Int = 3
-        var firstMapFilename: String? = nil
-        var initSegmentURLs: [URL] = []
-        // Tracks init URIs already seen to avoid duplicates
-        var seenInitURIs: Set<String> = []
-
-        var currentDuration: Double?
-        var totalTime: Double = 0
-
-        let start = Double(startTime ?? 0)
-        let end = Double(endTime ?? Int.max)
-
-        var inHeader = true
-        // The most recent init segment filename seen while parsing (used for mid-playlist MAP tags)
-        var pendingNextMapFilename: String? = nil
-
-        for line in lines {
-            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmedLine.isEmpty { continue }
-
-            if trimmedLine.hasPrefix("#EXT-X-ENDLIST") {
-                // #EXT-X-ENDLIST is hardcoded into the local playlist builder — skip here.
-                continue
-            }
-
-            // #EXT-X-MAP can appear in the header OR between segments (multiple init segments).
-            if trimmedLine.hasPrefix("#EXT-X-MAP:") {
-                if let uriRange = trimmedLine.range(of: "URI=\""),
-                   let endQuote = trimmedLine.range(of: "\"", range: uriRange.upperBound..<trimmedLine.endIndex) {
-                    let uriString = String(trimmedLine[uriRange.upperBound..<endQuote.lowerBound])
-                    if let resolvedURL = URL(string: uriString, relativeTo: baseURL)?.absoluteURL {
-                        let localFilename = resolvedURL.lastPathComponent
-                        if !seenInitURIs.contains(uriString) {
-                            seenInitURIs.insert(uriString)
-                            initSegmentURLs.append(resolvedURL)
-                        }
-                        if inHeader {
-                            // Record the first MAP filename for the local header
-                            if firstMapFilename == nil { firstMapFilename = localFilename }
-                        } else {
-                            // Mid-playlist MAP change — record it so it can be attached to the
-                            // last *included* chunk (not just the previous raw chunk, which may
-                            // have been filtered out by the segment time window).
-                            pendingNextMapFilename = localFilename
-                        }
-                    }
-                }
-                continue
-            }
-
-            if trimmedLine.hasPrefix("#EXTINF:") {
-                inHeader = false
-                let durationStr = trimmedLine
-                    .replacingOccurrences(of: "#EXTINF:", with: "")
-                    .replacingOccurrences(of: ",", with: "")
-                    .trimmingCharacters(in: .whitespaces)
-                currentDuration = Double(durationStr)
-                continue
-            }
-
-            if inHeader {
-                // Only extract #EXT-X-TARGETDURATION and #EXT-X-VERSION from the Twitch header.
-                // Skip all other Twitch-specific tags to avoid HTTPS CDN URLs leaking into
-                // the local m3u8 where AVPlayer would attempt network resolution.
-                if trimmedLine.hasPrefix("#EXT-X-TARGETDURATION:") {
-                    let val = trimmedLine.replacingOccurrences(of: "#EXT-X-TARGETDURATION:", with: "")
-                    targetDuration = Int(val.trimmingCharacters(in: .whitespaces)) ?? 10
-                } else if trimmedLine.hasPrefix("#EXT-X-VERSION:") {
-                    let val = trimmedLine.replacingOccurrences(of: "#EXT-X-VERSION:", with: "")
-                    version = Int(val.trimmingCharacters(in: .whitespaces)) ?? 3
-                }
-                continue
-            }
-
-            // Mid-playlist tags like #EXT-X-DISCONTINUITY — collect them as pending metadata.
-            if trimmedLine.hasPrefix("#") {
-                if !chunks.isEmpty {
-                    chunks[chunks.count - 1].trailingTags.append(trimmedLine)
-                }
-                continue
-            }
-
-            // Segment URL line
-            if let duration = currentDuration {
-                let chunkStart = totalTime
-                let chunkEnd = totalTime + duration
-
-                let isWithinSegment = !isSegment || (chunkEnd > start && chunkStart < end)
-
-                if isWithinSegment {
-                    if let chunkURL = URL(string: trimmedLine, relativeTo: baseURL)?.absoluteURL {
-                        let filename = chunkURL.lastPathComponent
-                        var chunk = ChunkInfo(remoteURL: chunkURL, duration: duration, filename: filename)
-
-                        // Attach any pending MAP change to this chunk (the first included chunk
-                        // after a mid-playlist MAP tag), not the raw previous chunk.
-                        if let pending = pendingNextMapFilename {
-                            chunk.nextMapFilename = pending
-                            pendingNextMapFilename = nil
-                        }
-
-                        chunks.append(chunk)
-                    }
-                }
-
-                totalTime += duration
-            }
-            currentDuration = nil
-        }
-
-        // fMP4/CMAF content uses #EXT-X-MAP which requires HLS version >= 5 (version 6 for CMAF).
-        // Enforce minimum version 6 when MAP is present so AVPlayer doesn't silently ignore the
-        // init segment — without it fMP4 chunks have no initialization data → black screen.
-        let effectiveVersion = (firstMapFilename != nil) ? max(version, 6) : version
-        return (chunks, targetDuration, effectiveVersion, firstMapFilename, initSegmentURLs)
-    }
-
-    // MARK: - Chunk Scheduling (must be called on DispatchQueue.main)
 
     private func processNextChunks(for vodId: String) {
         guard var pending = pendingChunks[vodId] else { return }
@@ -343,7 +205,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             // Store vodId in taskDescription — a read-only property accessible from any thread,
             // eliminating the need to read the downloadTasks dict off the main thread.
             task.taskDescription = vodId
-            downloadTasks[task.taskIdentifier] = vodId  // kept for progress tracking (main thread only)
+            downloadTasks[task.taskIdentifier] = vodId
             activeChunkTasks[vodId]?.append(task)
             task.resume()
             AppLogger.shared.log("Starting chunk download: \(nextChunk.filename) for VOD \(vodId)")
@@ -351,8 +213,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
         pendingChunks[vodId] = pending
     }
-
-    // MARK: - URLSessionDownloadDelegate
 
     func urlSession(
         _ session: URLSession,
@@ -370,6 +230,29 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             }
 
+            let taskDelta: Int64
+            if let previous = self.taskLastBytes[downloadTask.taskIdentifier] {
+                taskDelta = max(0, totalBytesWritten - previous)
+            } else {
+                taskDelta = totalBytesWritten
+            }
+            self.taskLastBytes[downloadTask.taskIdentifier] = totalBytesWritten
+            self.vodCumulativeBytes[vodId, default: 0] += taskDelta
+
+            let now = Date()
+            let vodTotal = self.vodCumulativeBytes[vodId] ?? 0
+            if let last = self.lastSpeedSample[vodId] {
+                let elapsed = now.timeIntervalSince(last.time)
+                if elapsed >= 1.0 {
+                    let bytesDelta = vodTotal - last.bytes
+                    let mbPerSec = Double(bytesDelta) / elapsed / 1_048_576.0
+                    self.downloadSpeeds[vodId] = max(0, mbPerSec)
+                    self.lastSpeedSample[vodId] = (bytes: vodTotal, time: now)
+                }
+            } else {
+                self.lastSpeedSample[vodId] = (bytes: vodTotal, time: now)
+            }
+
             var activeProgressSum: Double = 0
             if let activeTasks = self.activeChunkTasks[vodId] {
                 for task in activeTasks {
@@ -381,17 +264,16 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             let total = Double(self.expectedChunksCount[vodId] ?? 1)
 
             let progress = min((completed + activeProgressSum) / total, 0.99)
-            
-            let now = Date()
+
             let lastUpdate = self.lastProgressUpdate[vodId] ?? .distantPast
             let lastValue = self.lastProgressValue[vodId] ?? 0.0
-            
+
             // Throttle: Update only if 0.5s passed OR progress increased by 1%
             if now.timeIntervalSince(lastUpdate) >= 0.5 || (progress - lastValue) >= 0.01 {
                 self.activeDownloads[vodId] = progress
                 self.lastProgressUpdate[vodId] = now
                 self.lastProgressValue[vodId] = progress
-                
+
                 let actor = self.downloadActor
                 Task {
                     await actor?.updateSwiftDataProgress(vodId: vodId, progress: progress, state: .downloading)
@@ -405,10 +287,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        // ⚠️ Apple requirement: the file at `location` MUST be moved before this method returns.
-        // The system deletes it as soon as this delegate method exits.
-        // We use taskDescription (set at task creation, read-only & thread-safe) to get vodId
-        // without touching any shared mutable dictionary from a non-main thread.
         guard let vodId = downloadTask.taskDescription,
               let sourceURL = downloadTask.originalRequest?.url else { return }
 
@@ -419,21 +297,17 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             .appendingPathComponent(vodId)
             .appendingPathComponent(filename)
 
-        // Move the file synchronously on the URLSession delegate queue (before this method returns).
         do {
             if FileManager.default.fileExists(atPath: destinationURL.path) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.moveItem(at: location, to: destinationURL)
             
-            // SECURITY/DEBUG: Check if the file we just saved is actually an XML error page
-            // (e.g. Cloudfront 403 Access Denied) instead of a valid video chunk.
             let fileHandle = try FileHandle(forReadingFrom: destinationURL)
             let headerData = fileHandle.readData(ofLength: 5)
             fileHandle.closeFile()
             if let headerStr = String(data: headerData, encoding: .utf8), headerStr.hasPrefix("<?xml") {
                 AppLogger.shared.log("🚨 FATAL ERROR: Downloaded chunk \(filename) is an XML error page (AccessDenied?) - not a video file!")
-                // You can also read the full error to see why it was denied:
                 let fullError = try? String(contentsOf: destinationURL, encoding: .utf8)
                 AppLogger.shared.log("🚨 Cloudfront Error: \(fullError ?? "Unknown")")
             }
@@ -442,12 +316,12 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             return
         }
 
-        // All mutable state updates happen on the main thread.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
 
             self.downloadTasks.removeValue(forKey: downloadTask.taskIdentifier)
             self.taskProgress.removeValue(forKey: downloadTask.taskIdentifier)
+            self.taskLastBytes.removeValue(forKey: downloadTask.taskIdentifier)
 
             self.completedChunksCount[vodId, default: 0] += 1
             if let idx = self.activeChunkTasks[vodId]?.firstIndex(of: downloadTask) {
@@ -457,12 +331,11 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             let completed = self.completedChunksCount[vodId] ?? 0
             let expected = self.expectedChunksCount[vodId] ?? 1
             let isDone = completed == expected && (self.pendingChunks[vodId]?.isEmpty ?? true)
-                let _ = isDone ? 1.0 : Double(completed) / Double(expected)
 
             AppLogger.shared.log("Chunk done [\(completed)/\(expected)] for VOD \(vodId)")
 
             if isDone {
-                self.remuxToMP4(vodId: vodId)
+                self.finalizeDownload(vodId: vodId)
             } else {
                 self.processNextChunks(for: vodId)
             }
@@ -470,7 +343,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let error else { return } // success is handled in didFinishDownloadingTo
+        guard let error else { return }
 
         AppLogger.shared.log("Download task failed: \(error.localizedDescription)")
 
@@ -482,15 +355,18 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
             self.downloadTasks.removeValue(forKey: task.taskIdentifier)
             self.taskProgress.removeValue(forKey: task.taskIdentifier)
+            self.taskLastBytes.removeValue(forKey: task.taskIdentifier)
 
             if let downloadTask = task as? URLSessionDownloadTask,
                let idx = self.activeChunkTasks[vodId]?.firstIndex(of: downloadTask) {
                 self.activeChunkTasks[vodId]?.remove(at: idx)
             }
 
-            // Stop all pending chunks and mark as failed.
             self.pendingChunks[vodId] = []
             self.activeDownloads.removeValue(forKey: vodId)
+            self.downloadSpeeds.removeValue(forKey: vodId)
+            self.lastSpeedSample.removeValue(forKey: vodId)
+            self.vodCumulativeBytes.removeValue(forKey: vodId)
 
             if self.activeDownloads.isEmpty || self.activeDownloads.values.allSatisfy({ $0 >= 1.0 }) {
                 UIApplication.shared.isIdleTimerDisabled = false
@@ -502,8 +378,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             }
         }
     }
-
-    // MARK: - Resume interrupted downloads
 
     /// Called when the app returns to foreground — restarts any interrupted chunk downloads.
     @MainActor
@@ -521,7 +395,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
         for download in interruptedDownloads {
             let vodId = download.vodId
 
-            // Skip if already being handled in memory.
             if let existing = activeChunkTasks[vodId], !existing.isEmpty { continue }
             if let pending = pendingChunks[vodId], !pending.isEmpty { continue }
 
@@ -541,20 +414,22 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                         throw URLError(.badServerResponse)
                     }
 
-                    let (chunks, _, _, firstMapFilename, initSegmentURLs) = parsePlaylist(
+                    let parseResult = HLSPlaylistParser().parse(
                         playlist: playlistString,
                         baseURL: playlistURL,
                         isSegment: download.isSegment,
                         startTime: download.startTime,
                         endTime: download.endTime
                     )
+                    let chunks = parseResult.chunks
+                    let firstMapFilename = parseResult.firstMapFilename
+                    let initSegmentURLs = parseResult.initSegmentURLs
 
                     let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                     let vodDirectory = documentsPath
                         .appendingPathComponent("downloads")
                         .appendingPathComponent(vodId)
 
-                    // Re-download any missing init segments.
                     for initURL in initSegmentURLs {
                         let localFilename = initURL.lastPathComponent
                         let destURL = vodDirectory.appendingPathComponent(localFilename)
@@ -570,13 +445,18 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                         return !FileManager.default.fileExists(atPath: dest.path)
                     }
 
+                    await MainActor.run {
+                        self.orderedChunks[vodId] = chunks
+                        if let firstMap = firstMapFilename {
+                            self.firstMapFilenames[vodId] = firstMap
+                        }
+                        self.expectedChunksCount[vodId] = chunks.count
+                    }
+
                     guard !remainingChunks.isEmpty else {
-                        // All chunks already on disk — mark completed atomically with path.
-                        let actor = self.downloadActor
-                        let playlistPath = "downloads/\(vodId)/index.m3u8"
-                        await actor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
                         await MainActor.run {
-                            self.activeDownloads[vodId] = 1.0
+                            self.completedChunksCount[vodId] = chunks.count
+                            self.finalizeDownload(vodId: vodId)
                         }
                         return
                     }
@@ -585,11 +465,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
                     let alreadyDone = chunks.count - remainingChunks.count
                     await MainActor.run {
-                        self.orderedChunks[download.vodId] = chunks
-                        if let firstMap = firstMapFilename {
-                            self.firstMapFilenames[download.vodId] = firstMap
-                        }
-                        self.expectedChunksCount[vodId] = chunks.count
                         self.completedChunksCount[vodId] = alreadyDone
                         self.pendingChunks[vodId] = remainingChunks
                         self.activeChunkTasks[vodId] = []
@@ -603,14 +478,62 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
         }
     }
 
-    // MARK: - Delete
+    func pauseDownload(vodId: String) {
+        AppLogger.shared.log("Pausing download for \(vodId)")
 
-    func deleteDownload(vodId: String, modelContext: ModelContext) {
-        // Cancel active tasks if any.
+        if let tasks = activeChunkTasks[vodId] {
+            for task in tasks {
+                taskLastBytes.removeValue(forKey: task.taskIdentifier)
+            }
+        }
         activeChunkTasks[vodId]?.forEach { $0.cancel() }
 
-        // Remove from memory tracking.
+        let progress = activeDownloads[vodId] ?? 0.0
         activeDownloads.removeValue(forKey: vodId)
+        downloadSpeeds.removeValue(forKey: vodId)
+        lastSpeedSample.removeValue(forKey: vodId)
+        vodCumulativeBytes.removeValue(forKey: vodId)
+        pendingChunks.removeValue(forKey: vodId)
+        activeChunkTasks.removeValue(forKey: vodId)
+        expectedChunksCount.removeValue(forKey: vodId)
+        completedChunksCount.removeValue(forKey: vodId)
+        lastProgressUpdate.removeValue(forKey: vodId)
+        lastProgressValue.removeValue(forKey: vodId)
+        
+        let actor = self.downloadActor
+        Task {
+            await actor?.updateSwiftDataProgress(vodId: vodId, progress: progress, state: .paused)
+        }
+        
+        if activeDownloads.isEmpty || activeDownloads.values.allSatisfy({ $0 >= 1.0 }) {
+            DispatchQueue.main.async {
+                UIApplication.shared.isIdleTimerDisabled = false
+            }
+        }
+    }
+    
+    private func cancelDownloadsIfOnCellularAndRestricted() {
+        let preference = UserDefaults.standard.string(forKey: "downloadNetworkPreference") ?? "all"
+        if preference == "wifi" {
+            AppLogger.shared.log("Switched to cellular data with Wi-Fi only restriction. Pausing active downloads.")
+            for vodId in activeDownloads.keys {
+                pauseDownload(vodId: vodId)
+            }
+        }
+    }
+
+    func deleteDownload(vodId: String, modelContext: ModelContext) {
+        if let tasks = activeChunkTasks[vodId] {
+            for task in tasks {
+                taskLastBytes.removeValue(forKey: task.taskIdentifier)
+            }
+        }
+        activeChunkTasks[vodId]?.forEach { $0.cancel() }
+
+        activeDownloads.removeValue(forKey: vodId)
+        downloadSpeeds.removeValue(forKey: vodId)
+        lastSpeedSample.removeValue(forKey: vodId)
+        vodCumulativeBytes.removeValue(forKey: vodId)
         pendingChunks.removeValue(forKey: vodId)
         activeChunkTasks.removeValue(forKey: vodId)
         expectedChunksCount.removeValue(forKey: vodId)
@@ -618,7 +541,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
         lastProgressUpdate.removeValue(forKey: vodId)
         lastProgressValue.removeValue(forKey: vodId)
 
-        // Remove physical files.
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let vodDirectory = documentsPath
             .appendingPathComponent("downloads")
@@ -628,7 +550,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             try? FileManager.default.removeItem(at: vodDirectory)
         }
 
-        // Remove from SwiftData.
         if downloadActor == nil {
             downloadActor = DownloadModelActor(modelContainer: modelContext.container)
         }
@@ -641,24 +562,10 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             UIApplication.shared.isIdleTimerDisabled = false
         }
     }
-    
-    // MARK: - Remuxing (concaténation binaire directe, sans AVAssetExportSession)
 
-    /// Copie le contenu de `source` dans `handle` par blocs de `chunkSize` octets.
-    /// Évite de charger tout le fichier en mémoire d'un coup (crucial pour les chunks fMP4 ≥ 10 Mo).
-    private func streamCopy(from source: URL, to handle: FileHandle, chunkSize: Int = 4 * 1024 * 1024) throws {
-        let input = try FileHandle(forReadingFrom: source)
-        defer { try? input.close() }
-        while true {
-            let block = input.readData(ofLength: chunkSize)
-            if block.isEmpty { break }
-            try handle.write(contentsOf: block)
-        }
-    }
-
-    private func remuxToMP4(vodId: String) {
+    private func finalizeDownload(vodId: String) {
         guard let chunks = orderedChunks[vodId], !chunks.isEmpty else {
-            AppLogger.shared.log("❌ Remux aborted: no chunks recorded for VOD \(vodId)")
+            AppLogger.shared.log("❌ Finalize aborted: no chunks recorded for VOD \(vodId)")
             Task { await setDownloadStateFailed(vodId: vodId) }
             return
         }
@@ -672,145 +579,69 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                 let isFragmentedMP4 = (firstMap != nil)
 
                 if isFragmentedMP4 {
-                    // CONCATENATE fMP4
-                    let outputURL = vodDirectory.appendingPathComponent("video.mp4")
-                    let playlistPath = "downloads/\(vodId)/video.mp4"
+                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.mp4"))
 
-                    if FileManager.default.fileExists(atPath: outputURL.path) {
-                        try FileManager.default.removeItem(at: outputURL)
-                    }
+                    let (playlistPath, totalDuration) = try DownloadPlaylistBuilder.writeFMP4Playlist(
+                        chunks: chunks,
+                        firstMapFilename: firstMap,
+                        vodDirectory: vodDirectory,
+                        vodId: vodId
+                    )
+                    await MainActor.run { self.activeDownloads[vodId] = 1.0 }
+                    await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath, durationSeconds: totalDuration)
 
-                    FileManager.default.createFile(atPath: outputURL.path, contents: nil)
-                    let handle = try FileHandle(forWritingTo: outputURL)
-                    defer { try? handle.close() }
+                } else {
+                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.ts"))
+                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.mp4"))
+                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.duration"))
 
-                    var missingCount = 0
-
-                    if let mapFile = firstMap {
-                        let mapURL = vodDirectory.appendingPathComponent(mapFile)
-                        guard FileManager.default.fileExists(atPath: mapURL.path) else {
-                            AppLogger.shared.log("❌ Remux aborted: init segment missing (\(mapFile))")
-                            try? handle.close()
-                            try? FileManager.default.removeItem(at: outputURL)
-                            await setDownloadStateFailed(vodId: vodId)
-                            return
-                        }
-                        try streamCopy(from: mapURL, to: handle)
-                    }
-
-                    for chunk in chunks {
-                        if let nextMap = chunk.nextMapFilename {
-                            let mapURL = vodDirectory.appendingPathComponent(nextMap)
-                            if FileManager.default.fileExists(atPath: mapURL.path) {
-                                try streamCopy(from: mapURL, to: handle)
-                            } else {
-                                AppLogger.shared.log("⚠️ Mid-playlist init segment missing, skipping: \(nextMap)")
-                            }
-                        }
-
-                        let chunkURL = vodDirectory.appendingPathComponent(chunk.filename)
-                        guard FileManager.default.fileExists(atPath: chunkURL.path) else {
-                            AppLogger.shared.log("⚠️ Missing chunk, skipping: \(chunk.filename)")
-                            missingCount += 1
-                            continue
-                        }
-                        try streamCopy(from: chunkURL, to: handle)
-                    }
+                    let (allSegmentMetadatas, missingCount) = try DownloadFileMerger.mergeChunks(
+                        chunks: chunks,
+                        vodDirectory: vodDirectory
+                    )
 
                     guard missingCount < chunks.count else {
-                        AppLogger.shared.log("❌ Remux aborted: no valid chunks on disk")
-                        try? handle.close()
-                        try? FileManager.default.removeItem(at: outputURL)
-                        await setDownloadStateFailed(vodId: vodId)
-                        return
-                    }
-
-                    try handle.close()
-                    AppLogger.shared.log("✅ Remux (concat) completed for VOD \(vodId) — \(chunks.count - missingCount)/\(chunks.count) chunks, format: fMP4")
-
-                    // Cleanup sources
-                    for chunk in chunks {
-                        try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(chunk.filename))
-                        if let nextMap = chunk.nextMapFilename {
-                            try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(nextMap))
+                        AppLogger.shared.log("❌ TS finalize aborted: no valid chunks for VOD \(vodId)")
+                        let fileCount = (chunks.count / 10) + 1
+                        for i in 0..<fileCount {
+                            try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(
+                                String(format: "video_%03d.ts", i)))
                         }
+                        await setDownloadStateFailed(vodId: vodId); return
                     }
-                    if let firstMap = firstMap {
-                        try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(firstMap))
-                    }
-                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("index.m3u8"))
 
+                    let totalDuration = chunks.reduce(0.0) { $0 + $1.duration }
+                    let fileCount = Set(allSegmentMetadatas.compactMap { $0["file"] as? String }).count
+                    AppLogger.shared.log("✅ TS finalize: \(chunks.count - missingCount)/\(chunks.count) chunks → \(fileCount) file(s), \(totalDuration)s total, VOD \(vodId)")
+
+                    DownloadPlaylistBuilder.writeSegmentMetadata(
+                        segmentMetadatas: allSegmentMetadatas,
+                        vodDirectory: vodDirectory
+                    )
+
+                    DownloadPlaylistBuilder.cleanupChunkFiles(chunks: chunks, vodDirectory: vodDirectory)
+
+                    let playlistPath = "downloads/\(vodId)/video_000.ts"
                     await MainActor.run { self.activeDownloads[vodId] = 1.0 }
-                    await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
-                    
-                } else {
-                    // DO NOT CONCATENATE TS BINARILY
-                    // Use FFmpegKit to cleanly remux the chunks into a single MP4 file.
-                    let targetDuration = Int(ceil(chunks.map { $0.duration }.max() ?? 10.0))
-                    var m3u8 = "#EXTM3U\n"
-                    m3u8 += "#EXT-X-VERSION:3\n"
-                    m3u8 += "#EXT-X-TARGETDURATION:\(targetDuration)\n"
-                    m3u8 += "#EXT-X-PLAYLIST-TYPE:VOD\n"
-                    
-                    for chunk in chunks {
-                        m3u8 += "#EXTINF:\(chunk.duration),\n"
-                        m3u8 += "\(chunk.filename)\n"
-                        for tag in chunk.trailingTags {
-                            m3u8 += "\(tag)\n"
-                        }
-                    }
-                    m3u8 += "#EXT-X-ENDLIST\n"
-                    
-                    let m3u8URL = vodDirectory.appendingPathComponent("index.m3u8")
-                    try m3u8.write(to: m3u8URL, atomically: true, encoding: .utf8)
-                    
-                    let outputURL = vodDirectory.appendingPathComponent("video.mp4")
-                    if FileManager.default.fileExists(atPath: outputURL.path) {
-                        try FileManager.default.removeItem(at: outputURL)
-                    }
-                    
-                    AppLogger.shared.log("🎬 Starting FFmpeg remux for VOD \(vodId)...")
-                    let command = "-hide_banner -loglevel error -allowed_extensions ALL -i \"\(m3u8URL.path)\" -c copy \"\(outputURL.path)\""
-                    
-                    let success: Bool = await withCheckedContinuation { continuation in
-                        FFmpegKit.executeAsync(command) { session in
-                            guard let session = session, let returnCode = session.getReturnCode() else {
-                                continuation.resume(returning: false)
-                                return
-                            }
-                            continuation.resume(returning: returnCode.isValueSuccess())
-                        }
-                    }
-                    
-                    if success {
-                        AppLogger.shared.log("✅ FFmpeg TS -> MP4 Remux completed for VOD \(vodId)")
-                        
-                        // Cleanup original TS chunks and playlist
-                        for chunk in chunks {
-                            try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(chunk.filename))
-                        }
-                        try? FileManager.default.removeItem(at: m3u8URL)
-                        try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.ts"))
-                        
-                        let playlistPath = "downloads/\(vodId)/video.mp4"
-                        await MainActor.run { self.activeDownloads[vodId] = 1.0 }
-                        await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath)
-                    } else {
-                        AppLogger.shared.log("❌ FFmpeg Remux failed for VOD \(vodId)")
-                        try? FileManager.default.removeItem(at: m3u8URL)
-                        await setDownloadStateFailed(vodId: vodId)
-                        return
-                    }
+                    await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath, durationSeconds: totalDuration)
                 }
 
                 await MainActor.run {
+                    self.downloadSpeeds.removeValue(forKey: vodId)
+                    self.lastSpeedSample.removeValue(forKey: vodId)
+                    self.vodCumulativeBytes.removeValue(forKey: vodId)
                     if self.activeDownloads.values.allSatisfy({ $0 >= 1.0 }) {
                         UIApplication.shared.isIdleTimerDisabled = false
                     }
                 }
 
             } catch {
-                AppLogger.shared.log("❌ Remux error: \(error.localizedDescription)")
+                AppLogger.shared.log("❌ Finalize error: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.downloadSpeeds.removeValue(forKey: vodId)
+                    self.lastSpeedSample.removeValue(forKey: vodId)
+                    self.vodCumulativeBytes.removeValue(forKey: vodId)
+                }
                 await setDownloadStateFailed(vodId: vodId)
             }
         }

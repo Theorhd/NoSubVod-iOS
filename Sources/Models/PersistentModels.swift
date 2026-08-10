@@ -9,7 +9,6 @@ class PersistentHistoryEntry {
     var duration: Int
     var updatedAt: Date
     
-    // Cached metadata
     var title: String?
     var streamerName: String?
     var streamerProfileURL: URL?

@@ -2,6 +2,16 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var authManager = TwitchAuthManager.shared
+    @AppStorage("appTheme") private var appTheme = "system"
+    @AppStorage("appLanguage") private var appLanguage = "en"
+    
+    var colorScheme: ColorScheme? {
+        switch appTheme {
+        case "dark": return .dark
+        case "light": return .light
+        default: return nil
+        }
+    }
     
     var body: some View {
         TabView {
@@ -25,8 +35,9 @@ struct ContentView: View {
                     Label("Downloads", systemImage: "arrow.down.circle")
                 }
         }
-        .tint(.purple) // Twitch brand color
-        .preferredColorScheme(.dark)
+        .tint(.purple)
+        .preferredColorScheme(colorScheme)
+        .environment(\.locale, Locale(identifier: appLanguage))
     }
 }
 

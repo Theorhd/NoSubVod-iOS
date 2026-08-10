@@ -1,0 +1,102 @@
+/* Tabs */
+"Home" = "Home";
+"Search" = "Search";
+"Downloads" = "Downloads";
+"History" = "History";
+"Settings" = "Settings";
+
+/* SettingsView */
+"App Preferences" = "App Preferences";
+"Language" = "Language";
+"English" = "English";
+"Français" = "Français";
+"App Theme" = "App Theme";
+"System" = "System";
+"Dark" = "Dark";
+"Light" = "Light";
+"Network Preference" = "Network Preference";
+"Wi-Fi Only" = "Wi-Fi Only";
+"Wi-Fi + Cellular" = "Wi-Fi + Cellular";
+"Default Quality" = "Default Quality";
+"Video Player" = "Video Player";
+"Default Quality (Wi-Fi)" = "Default Quality (Wi-Fi)";
+"Default Quality (Cellular)" = "Default Quality (Cellular)";
+"About" = "About";
+"Version" = "Version";
+"Developer" = "Developer";
+"Delete" = "Delete";
+
+/* HistoryView */
+"History is empty" = "History is empty";
+
+/* DownloadsView */
+"No downloads yet" = "No downloads yet";
+"The local playlist file for this VOD is missing. You can delete it and re-download." = "The local playlist file for this VOD is missing. You can delete it and re-download.";
+"Downloaded" = "Downloaded";
+"Failed" = "Failed";
+"Paused" = "Paused";
+"Segment" = "Segment";
+
+/* ChannelView */
+"Currently Live" = "Currently Live";
+"LIVE" = "LIVE";
+"Recent VODs" = "Recent VODs";
+
+/* PlayerView / BottomSheet */
+"Recharger au début" = "Reload from start";
+"Sélectionnez le segment à télécharger" = "Select the segment to download";
+"Début" = "Start";
+"Fin" = "End";
+
+"Segment selected successfully!" = "Segment selected successfully!";
+"Download Options" = "Download Options";
+"Quality" = "Quality";
+"Download Full VOD" = "Download Full VOD";
+"Download Segment" = "Download Segment";
+
+"Auto" = "Auto";
+"1080p" = "1080p";
+"720p" = "720p";
+"480p" = "480p";
+"360p" = "360p";
+"160p" = "160p";
+"Audio Only" = "Audio Only";
+"Source" = "Source";
+
+/* Debug / LiveContainer */
+"LiveContainer" = "LiveContainer";
+"Stockage Compatible" = "Compatible Storage";
+"Assure la persistance des données lors de l'utilisation via LiveContainer. Un redémarrage de l'application est nécessaire pour que les changements sur l'historique et la base de données prennent effet." = "Ensures data persistence when using LiveContainer. An app restart is required for changes to history and database to take effect.";
+"Debug" = "Debug";
+"Activer le mode debug" = "Enable debug mode";
+"Exporter les logs" = "Export logs";
+
+/* Cache */
+"Cache" = "Cache";
+"Clear Cache" = "Clear Cache";
+"Cache Size" = "Cache Size";
+
+/* Interpolated Strings */
+"%lld%%" = "%lld%%";
+"%lld viewers • %@" = "%lld viewers • %@";
+"%lld views • %lldh %lldm" = "%lld views • %lldh %lldm";
+"%lld viewers" = "%lld viewers";
+"%lld views" = "%lld views";
+
+/* Home Page */
+"Your Subs" = "Your Subs";
+"Live Streams" = "Live Streams";
+"Trending VODs" = "Trending VODs";
+
+/* Search Page */
+"Search for channels or VODs" = "Search for channels or VODs";
+"No results" = "No results";
+"Try searching for something else" = "Try searching for something else";
+"Channels" = "Channels";
+"Channels, games, etc." = "Channels, games, etc.";
+
+/* Misc */
+"Done" = "Done";
+"See all" = "See all";
+"Cancel" = "Cancel";
+"File unavailable" = "File unavailable";

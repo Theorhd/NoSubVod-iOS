@@ -1,12 +1,12 @@
 import Foundation
 
-// MARK: - GQL Decodable Models
 
-private struct GQLResponse: Codable {
+
+struct GQLResponse: Codable {
     let data: GQLData?
 }
 
-private struct GQLData: Codable {
+struct GQLData: Codable {
     let streams: GQLStreams?
     let game: GQLGameSearch?
     let searchFor: GQLSearchFor?
@@ -15,15 +15,15 @@ private struct GQLData: Codable {
     let video: GQLVideoNode?
 }
 
-private struct GQLStreams: Codable {
+struct GQLStreams: Codable {
     let edges: [GQLEdge]?
 }
 
-private struct GQLEdge: Codable {
+struct GQLEdge: Codable {
     let node: GQLLiveNode?
 }
 
-private struct GQLLiveNode: Codable {
+struct GQLLiveNode: Codable {
     let id: String
     let title: String?
     let viewersCount: Int?
@@ -34,21 +34,21 @@ private struct GQLLiveNode: Codable {
     let broadcaster: GQLBroadcasterNode?
 }
 
-private struct GQLGameNode: Codable {
+struct GQLGameNode: Codable {
     let id: String
     let name: String
     let boxArtURL: String?
 }
 
-private struct GQLBroadcasterNode: Codable {
+struct GQLBroadcasterNode: Codable {
     let id: String
     let login: String
     let displayName: String
     let profileImageURL: String?
 }
 
-// Search specific
-private struct GQLGameSearch: Codable {
+
+struct GQLGameSearch: Codable {
     let id: String?
     let name: String?
     let boxArtURL: String?
@@ -56,16 +56,16 @@ private struct GQLGameSearch: Codable {
     let videos: GQLVideos?
     let clips: GQLClips?
 }
-private struct GQLSearchFor: Codable {
+struct GQLSearchFor: Codable {
     let channels: GQLSearchChannels?
 }
-private struct GQLSearchChannels: Codable {
+struct GQLSearchChannels: Codable {
     let edges: [GQLSearchResult]?
 }
-private struct GQLSearchResult: Codable {
+struct GQLSearchResult: Codable {
     let item: GQLSearchItem?
 }
-private struct GQLSearchItem: Codable {
+struct GQLSearchItem: Codable {
     let id: String?
     let login: String?
     let displayName: String?
@@ -73,14 +73,14 @@ private struct GQLSearchItem: Codable {
     let stream: GQLLiveNode?
 }
 
-// Clips specific
-private struct GQLClips: Codable {
+
+struct GQLClips: Codable {
     let edges: [GQLClipEdge]?
 }
-private struct GQLClipEdge: Codable {
+struct GQLClipEdge: Codable {
     let node: GQLClipNode?
 }
-private struct GQLClipNode: Codable {
+struct GQLClipNode: Codable {
     let id: String
     let title: String?
     let durationSeconds: Int?
@@ -91,14 +91,14 @@ private struct GQLClipNode: Codable {
     let game: GQLGameNode?
 }
 
-// VOD specific
-private struct GQLVideos: Codable {
+
+struct GQLVideos: Codable {
     let edges: [GQLVideoEdge]?
 }
-private struct GQLVideoEdge: Codable {
+struct GQLVideoEdge: Codable {
     let node: GQLVideoNode?
 }
-private struct GQLVideoNode: Codable {
+struct GQLVideoNode: Codable {
     let id: String
     let title: String?
     let lengthSeconds: Int?
@@ -110,11 +110,10 @@ private struct GQLVideoNode: Codable {
     let owner: GQLBroadcasterNode?
 }
 
-private struct GQLUserNode: Codable {
+struct GQLUserNode: Codable {
     let videos: GQLVideos?
 }
 
-// MARK: - Service Extension
 
 extension TwitchAPIService {
     
@@ -130,7 +129,9 @@ extension TwitchAPIService {
         return formatter
     }()
     
-    private func parseDate(_ dateStr: String?) -> Date {
+    /// Parse ISO8601 date strings (with or without fractional seconds).
+    /// Made internal for testability.
+    func parseDate(_ dateStr: String?) -> Date {
         guard let d = dateStr else { return Date() }
         if let date = Self.fractionalDateFormatter.date(from: d) { return date }
         if let date = Self.standardDateFormatter.date(from: d) { return date }
@@ -252,7 +253,6 @@ extension TwitchAPIService {
         var seenChannelIds = Set<String>()
         var seenCategoryIds = Set<String>()
         
-        // 1. Catégorie exacte (game)
         if let gameNode = response.data?.game {
             let game = Game(
                 id: gameNode.id ?? "0",
@@ -274,12 +274,10 @@ extension TwitchAPIService {
             }
         }
         
-        // 2. Chaînes & Leurs Lives
         if let searchEdges = response.data?.searchFor?.channels?.edges {
             for result in searchEdges {
                 guard let item = result.item, let id = item.id else { continue }
                 
-                // Extraire le channel
                 if !seenChannelIds.contains(id) {
                     seenChannelIds.insert(id)
                     let broadcaster = LiveStreamBroadcaster(
@@ -290,7 +288,6 @@ extension TwitchAPIService {
                     )
                     channels.append(broadcaster)
                     
-                    // Extraire le live si existant
                     if let stream = item.stream, !seenLiveIds.contains(stream.id) {
                         seenLiveIds.insert(stream.id)
                         let game = Game(
@@ -343,8 +340,6 @@ extension TwitchAPIService {
             return mapVideoNode(node)
         } ?? []
     }
-    
-    // Algorithme "light" pour les Trending VODs a été déplacé dans TwitchTrendingActor
 
     func fetchGameVODs(gameName: String, limit: Int = 15) async throws -> [VOD] {
         let safeName = gameName.replacingOccurrences(of: "\"", with: "\\\"")
@@ -542,7 +537,6 @@ extension TwitchAPIService {
         var clips: [VOD] = []
         
         if let game = response.data?.game {
-            // Map streams
             if let streamEdges = game.streams?.edges {
                 lives = streamEdges.compactMap { edge -> LiveStream? in
                     guard let node = edge.node, let broadcaster = node.broadcaster else { return nil }
@@ -567,14 +561,12 @@ extension TwitchAPIService {
                     )
                 }
             }
-            // Map VODs
             if let videoEdges = game.videos?.edges {
                 vods = videoEdges.compactMap { edge -> VOD? in
                     guard let node = edge.node else { return nil }
                     return mapVideoNode(node)
                 }
             }
-            // Map Clips
             if let clipEdges = game.clips?.edges {
                 clips = clipEdges.compactMap { edge -> VOD? in
                     guard let node = edge.node else { return nil }

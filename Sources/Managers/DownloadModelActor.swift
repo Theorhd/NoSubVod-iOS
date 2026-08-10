@@ -3,7 +3,7 @@ import SwiftData
 
 @ModelActor
 actor DownloadModelActor {
-    
+
     func createDownload(
         vodId: String,
         title: String,
@@ -31,49 +31,75 @@ actor DownloadModelActor {
             viewCount: viewCount
         )
         modelContext.insert(download)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.shared.log("[DownloadModelActor] Failed to create download for \(vodId): \(error)")
+        }
     }
-    
+
     func setDownloadStateFailed(vodId: String) {
         let descriptor = FetchDescriptor<VODDownload>(predicate: #Predicate { $0.vodId == vodId })
-        if let model = try? modelContext.fetch(descriptor).first {
-            model.state = .failed
-            try? modelContext.save()
+        do {
+            if let model = try modelContext.fetch(descriptor).first {
+                model.state = .failed
+                try modelContext.save()
+            }
+        } catch {
+            AppLogger.shared.log("[DownloadModelActor] Failed to set state failed for \(vodId): \(error)")
         }
     }
-    
+
     func updateSwiftDataProgress(vodId: String, progress: Double, state: DownloadState) {
         let descriptor = FetchDescriptor<VODDownload>(predicate: #Predicate { $0.vodId == vodId })
-        if let model = try? modelContext.fetch(descriptor).first {
-            model.progress = progress
-            model.state = state
-            try? modelContext.save()
+        do {
+            if let model = try modelContext.fetch(descriptor).first {
+                model.progress = progress
+                model.state = state
+                try modelContext.save()
+            }
+        } catch {
+            AppLogger.shared.log("[DownloadModelActor] Failed to update progress for \(vodId): \(error)")
         }
     }
-    
+
     /// Atomically marks a download as completed with its local playlist path.
     /// Both `localPlaylistPath` and `state = .completed` are written in a single save,
     /// so `@Query` observers never see `.completed` with a nil path.
-    func completeDownload(vodId: String, playlistPath: String) {
+    func completeDownload(vodId: String, playlistPath: String, durationSeconds: Double? = nil) {
         let descriptor = FetchDescriptor<VODDownload>(predicate: #Predicate { $0.vodId == vodId })
-        if let model = try? modelContext.fetch(descriptor).first {
-            model.localPlaylistPath = playlistPath
-            model.progress = 1.0
-            model.state = .completed
-            try? modelContext.save()
+        do {
+            if let model = try modelContext.fetch(descriptor).first {
+                model.localPlaylistPath = playlistPath
+                model.progress = 1.0
+                model.state = .completed
+                model.durationSeconds = durationSeconds
+                try modelContext.save()
+            }
+        } catch {
+            AppLogger.shared.log("[DownloadModelActor] Failed to complete download for \(vodId): \(error)")
         }
     }
-    
+
     func fetchInterruptedDownloads() -> [VODDownload] {
         let descriptor = FetchDescriptor<VODDownload>(predicate: #Predicate { $0.stateRaw == "downloading" })
-        return (try? modelContext.fetch(descriptor)) ?? []
+        do {
+            return try modelContext.fetch(descriptor)
+        } catch {
+            AppLogger.shared.log("[DownloadModelActor] Failed to fetch interrupted downloads: \(error)")
+            return []
+        }
     }
-    
+
     func deleteDownload(vodId: String) {
         let descriptor = FetchDescriptor<VODDownload>(predicate: #Predicate { $0.vodId == vodId })
-        if let model = try? modelContext.fetch(descriptor).first {
-            modelContext.delete(model)
-            try? modelContext.save()
+        do {
+            if let model = try modelContext.fetch(descriptor).first {
+                modelContext.delete(model)
+                try modelContext.save()
+            }
+        } catch {
+            AppLogger.shared.log("[DownloadModelActor] Failed to delete download for \(vodId): \(error)")
         }
     }
 }
