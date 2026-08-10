@@ -15,6 +15,8 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
     private var lastProgressUpdate: [String: Date] = [:]
     private var lastProgressValue: [String: Double] = [:]
     private var lastSpeedSample: [String: (bytes: Int64, time: Date)] = [:]
+    private var taskLastBytes: [Int: Int64] = [:]
+    private var vodCumulativeBytes: [String: Int64] = [:]
     private var downloadActor: DownloadModelActor?
 
     private var downloadTasks: [Int: String] = [:]
@@ -35,9 +37,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
     private var cancellables = Set<AnyCancellable>()
 
     private lazy var urlSession: URLSession = {
-        // Use .default (not .background) because Twitch Cloudfront URLs are signed
-        // and expire quickly. A background session can defer task start, causing
-        // all chunk URLs to expire before they are fetched → download stays at 0%.
         let config = URLSessionConfiguration.default
         config.httpMaximumConnectionsPerHost = 4
         config.timeoutIntervalForRequest = 30
@@ -168,8 +167,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                 }
 
                 // Download fMP4 init segments synchronously before chunks.
-                // These are referenced by #EXT-X-MAP tags in the playlist and MUST be present
-                // on disk for AVPlayer to decode the fMP4 chunks — missing them causes a black screen.
                 for initURL in initSegmentURLs {
                     let localFilename = initURL.lastPathComponent
                     let destURL = vodDirectory.appendingPathComponent(localFilename)
@@ -238,18 +235,27 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             }
 
-            // --- Download speed (MB/s) ---
+            let taskDelta: Int64
+            if let previous = self.taskLastBytes[downloadTask.taskIdentifier] {
+                taskDelta = max(0, totalBytesWritten - previous)
+            } else {
+                taskDelta = totalBytesWritten
+            }
+            self.taskLastBytes[downloadTask.taskIdentifier] = totalBytesWritten
+            self.vodCumulativeBytes[vodId, default: 0] += taskDelta
+
             let now = Date()
+            let vodTotal = self.vodCumulativeBytes[vodId] ?? 0
             if let last = self.lastSpeedSample[vodId] {
                 let elapsed = now.timeIntervalSince(last.time)
                 if elapsed >= 1.0 { // update every second
-                    let bytesDelta = totalBytesWritten - last.bytes
+                    let bytesDelta = vodTotal - last.bytes
                     let mbPerSec = Double(bytesDelta) / elapsed / 1_048_576.0
                     self.downloadSpeeds[vodId] = max(0, mbPerSec)
-                    self.lastSpeedSample[vodId] = (bytes: totalBytesWritten, time: now)
+                    self.lastSpeedSample[vodId] = (bytes: vodTotal, time: now)
                 }
             } else {
-                self.lastSpeedSample[vodId] = (bytes: totalBytesWritten, time: now)
+                self.lastSpeedSample[vodId] = (bytes: vodTotal, time: now)
             }
 
             var activeProgressSum: Double = 0
@@ -286,10 +292,6 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        // ⚠️ Apple requirement: the file at `location` MUST be moved before this method returns.
-        // The system deletes it as soon as this delegate method exits.
-        // We use taskDescription (set at task creation, read-only & thread-safe) to get vodId
-        // without touching any shared mutable dictionary from a non-main thread.
         guard let vodId = downloadTask.taskDescription,
               let sourceURL = downloadTask.originalRequest?.url else { return }
 
@@ -300,15 +302,12 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             .appendingPathComponent(vodId)
             .appendingPathComponent(filename)
 
-        // Move the file synchronously on the URLSession delegate queue (before this method returns).
         do {
             if FileManager.default.fileExists(atPath: destinationURL.path) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.moveItem(at: location, to: destinationURL)
             
-            // SECURITY/DEBUG: Check if the file we just saved is actually an XML error page
-            // (e.g. Cloudfront 403 Access Denied) instead of a valid video chunk.
             let fileHandle = try FileHandle(forReadingFrom: destinationURL)
             let headerData = fileHandle.readData(ofLength: 5)
             fileHandle.closeFile()
@@ -329,6 +328,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
             self.downloadTasks.removeValue(forKey: downloadTask.taskIdentifier)
             self.taskProgress.removeValue(forKey: downloadTask.taskIdentifier)
+            self.taskLastBytes.removeValue(forKey: downloadTask.taskIdentifier)
 
             self.completedChunksCount[vodId, default: 0] += 1
             if let idx = self.activeChunkTasks[vodId]?.firstIndex(of: downloadTask) {
@@ -363,6 +363,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
             self.downloadTasks.removeValue(forKey: task.taskIdentifier)
             self.taskProgress.removeValue(forKey: task.taskIdentifier)
+            self.taskLastBytes.removeValue(forKey: task.taskIdentifier)
 
             if let downloadTask = task as? URLSessionDownloadTask,
                let idx = self.activeChunkTasks[vodId]?.firstIndex(of: downloadTask) {
@@ -374,6 +375,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
             self.activeDownloads.removeValue(forKey: vodId)
             self.downloadSpeeds.removeValue(forKey: vodId)
             self.lastSpeedSample.removeValue(forKey: vodId)
+            self.vodCumulativeBytes.removeValue(forKey: vodId)
 
             if self.activeDownloads.isEmpty || self.activeDownloads.values.allSatisfy({ $0 >= 1.0 }) {
                 UIApplication.shared.isIdleTimerDisabled = false
@@ -492,12 +494,19 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
     func pauseDownload(vodId: String) {
         AppLogger.shared.log("Pausing download for \(vodId)")
 
+        // Clean up per-task tracking for all active chunk tasks of this VOD.
+        if let tasks = activeChunkTasks[vodId] {
+            for task in tasks {
+                taskLastBytes.removeValue(forKey: task.taskIdentifier)
+            }
+        }
         activeChunkTasks[vodId]?.forEach { $0.cancel() }
 
         let progress = activeDownloads[vodId] ?? 0.0
         activeDownloads.removeValue(forKey: vodId)
         downloadSpeeds.removeValue(forKey: vodId)
         lastSpeedSample.removeValue(forKey: vodId)
+        vodCumulativeBytes.removeValue(forKey: vodId)
         pendingChunks.removeValue(forKey: vodId)
         activeChunkTasks.removeValue(forKey: vodId)
         expectedChunksCount.removeValue(forKey: vodId)
@@ -528,11 +537,18 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
     }
 
     func deleteDownload(vodId: String, modelContext: ModelContext) {
+        // Clean up per-task tracking for all active chunk tasks of this VOD.
+        if let tasks = activeChunkTasks[vodId] {
+            for task in tasks {
+                taskLastBytes.removeValue(forKey: task.taskIdentifier)
+            }
+        }
         activeChunkTasks[vodId]?.forEach { $0.cancel() }
 
         activeDownloads.removeValue(forKey: vodId)
         downloadSpeeds.removeValue(forKey: vodId)
         lastSpeedSample.removeValue(forKey: vodId)
+        vodCumulativeBytes.removeValue(forKey: vodId)
         pendingChunks.removeValue(forKey: vodId)
         activeChunkTasks.removeValue(forKey: vodId)
         expectedChunksCount.removeValue(forKey: vodId)
@@ -564,13 +580,21 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
     
     /// Copie le contenu de `source` dans `handle` par blocs de `chunkSize` octets.
     /// Évite de charger tout le fichier en mémoire d'un coup (crucial pour les chunks fMP4 ≥ 10 Mo).
+    /// Chaque itération est wrappée dans `autoreleasepool` pour que les objets `Data`
+    /// autoreleasés retournés par `readData(ofLength:)` soient libérés immédiatement
+    /// au lieu de s'accumuler jusqu'à la fin du runloop — sans cela, concaténer
+    /// plusieurs Go de chunks TS déclenche un jetsam (crash mémoire).
     private func streamCopy(from source: URL, to handle: FileHandle, chunkSize: Int = 4 * 1024 * 1024) throws {
         let input = try FileHandle(forReadingFrom: source)
         defer { try? input.close() }
         while true {
-            let block = input.readData(ofLength: chunkSize)
-            if block.isEmpty { break }
-            try handle.write(contentsOf: block)
+            let done = try autoreleasepool { () -> Bool in
+                let block = input.readData(ofLength: chunkSize)
+                if block.isEmpty { return true }
+                try handle.write(contentsOf: block)
+                return false
+            }
+            if done { break }
         }
     }
 
@@ -651,6 +675,9 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                     var missingCount = 0
 
                     /// Finalizes the current batch: writes the TS file and records segment metadata.
+                    /// Each chunk copy is wrapped in `autoreleasepool` so that filesystem API
+                    /// objects (NSDictionary from attributesOfItem, etc.) are drained immediately
+                    /// rather than accumulating across hundreds of chunks.
                     func flushBatch() throws {
                         guard !batchChunks.isEmpty else { return }
                         let filename = String(format: "video_%03d.ts", fileIndex)
@@ -661,20 +688,22 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
 
                         var currentOffset: UInt64 = 0
                         for chunk in batchChunks {
-                            let chunkURL = vodDirectory.appendingPathComponent(chunk.filename)
-                            guard FileManager.default.fileExists(atPath: chunkURL.path),
-                                  let attrs = try? FileManager.default.attributesOfItem(atPath: chunkURL.path),
-                                  let chunkSize = (attrs[.size] as? NSNumber)?.uint64Value else {
-                                missingCount += 1; continue
+                            try autoreleasepool {
+                                let chunkURL = vodDirectory.appendingPathComponent(chunk.filename)
+                                guard FileManager.default.fileExists(atPath: chunkURL.path),
+                                      let attrs = try? FileManager.default.attributesOfItem(atPath: chunkURL.path),
+                                      let chunkSize = (attrs[.size] as? NSNumber)?.uint64Value else {
+                                    missingCount += 1; return
+                                }
+                                try streamCopy(from: chunkURL, to: handle)
+                                allSegmentMetadatas.append([
+                                    "file": filename,
+                                    "offset": currentOffset,
+                                    "duration": chunk.duration,
+                                    "length": chunkSize,
+                                ])
+                                currentOffset += chunkSize
                             }
-                            try streamCopy(from: chunkURL, to: handle)
-                            allSegmentMetadatas.append([
-                                "file": filename,
-                                "offset": currentOffset,
-                                "duration": chunk.duration,
-                                "length": chunkSize,
-                            ])
-                            currentOffset += chunkSize
                         }
 
                         AppLogger.shared.log("📦 Wrote \(filename): \(batchChunks.count) chunks, \(String(format: "%.1f", batchDuration))s")
@@ -727,6 +756,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                 await MainActor.run {
                     self.downloadSpeeds.removeValue(forKey: vodId)
                     self.lastSpeedSample.removeValue(forKey: vodId)
+                    self.vodCumulativeBytes.removeValue(forKey: vodId)
                     if self.activeDownloads.values.allSatisfy({ $0 >= 1.0 }) {
                         UIApplication.shared.isIdleTimerDisabled = false
                     }
@@ -737,6 +767,7 @@ class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate
                 await MainActor.run {
                     self.downloadSpeeds.removeValue(forKey: vodId)
                     self.lastSpeedSample.removeValue(forKey: vodId)
+                    self.vodCumulativeBytes.removeValue(forKey: vodId)
                 }
                 await setDownloadStateFailed(vodId: vodId)
             }

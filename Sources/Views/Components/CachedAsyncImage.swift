@@ -19,6 +19,10 @@ class ImageCache {
     func get(forKey key: String) -> UIImage? {
         return cache.object(forKey: key as NSString)
     }
+    
+    func clearCache() {
+        cache.removeAllObjects()
+    }
 }
 
 @MainActor

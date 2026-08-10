@@ -71,6 +71,11 @@
 "Activer le mode debug" = "Activer le mode debug";
 "Exporter les logs" = "Exporter les logs";
 
+/* Cache */
+"Cache" = "Cache";
+"Clear Cache" = "Vider le cache";
+"Cache Size" = "Taille du cache";
+
 /* Interpolated Strings */
 "%lld%%" = "%lld%%";
 "%lld viewers • %@" = "%lld spectateurs • %@";

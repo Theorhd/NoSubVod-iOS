@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("isDebugModeEnabled") private var isDebugModeEnabled = false
     @AppStorage("isLiveContainerStorageEnabled") private var isLiveContainerStorageEnabled = false
     @Environment(\.dismiss) private var dismiss
+    @State private var cacheSize: String = ""
     
     var body: some View {
         NavigationStack {
@@ -83,6 +84,27 @@ struct SettingsView: View {
                         }
                     }
                 }
+                
+                Section(header: Text("Cache")) {
+                    HStack {
+                        Text("Cache Size")
+                        Spacer()
+                        if cacheSize.isEmpty {
+                            ProgressView()
+                        } else {
+                            Text(cacheSize)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Button(role: .destructive, action: {
+                        ImageCache.shared.clearCache()
+                        URLCache.shared.removeAllCachedResponses()
+                        clearCachesDirectory()
+                        calculateCacheSize()
+                    }) {
+                        Text("Clear Cache")
+                    }
+                }
                 Section(header: Text("About")) {
                     HStack {
                         Text("Version")
@@ -105,6 +127,44 @@ struct SettingsView: View {
                     Button("Done") {
                         dismiss()
                     }
+                }
+            }
+            .onAppear {
+                calculateCacheSize()
+            }
+        }
+    }
+    
+    private func calculateCacheSize() {
+        DispatchQueue.global(qos: .background).async {
+            var totalSize: Int64 = 0
+            
+            if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                if let enumerator = FileManager.default.enumerator(at: cacheURL, includingPropertiesForKeys: [.fileSizeKey]) {
+                    for case let fileURL as URL in enumerator {
+                        if let fileSize = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                            totalSize += Int64(fileSize)
+                        }
+                    }
+                }
+            }
+            
+            let formatter = ByteCountFormatter()
+            formatter.allowedUnits = [.useKB, .useMB, .useGB]
+            formatter.countStyle = .file
+            let sizeString = formatter.string(fromByteCount: totalSize)
+            
+            DispatchQueue.main.async {
+                self.cacheSize = sizeString
+            }
+        }
+    }
+    
+    private func clearCachesDirectory() {
+        if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            if let enumerator = FileManager.default.enumerator(at: cacheURL, includingPropertiesForKeys: nil) {
+                for case let fileURL as URL in enumerator {
+                    try? FileManager.default.removeItem(at: fileURL)
                 }
             }
         }
