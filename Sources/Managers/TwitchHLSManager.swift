@@ -38,7 +38,8 @@ final class TwitchHLSManager {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.addValue(TwitchAPIService.shared.clientId, forHTTPHeaderField: "Client-Id")
+        // Lecture (GQL) : web client ID Twitch, inchangé.
+        request.addValue(TwitchAPIService.shared.webClientId, forHTTPHeaderField: "Client-Id")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let body: [String: Any] = ["query": query, "variables": variables]
@@ -71,7 +72,7 @@ final class TwitchHLSManager {
         // The TTV proxy URL is user-configurable: normalize it (scheme, host,
         // optional path prefix) or fall back to the real usher endpoint.
         let usherBase = TwitchHLSManager.normalizeTTVProxyURL(ttvProxyURL) ?? "https://usher.ttvnw.net"
-        let masterUrlStr = "\(usherBase)/api/channel/hls/\(videoID).m3u8?client_id=\(TwitchAPIService.shared.clientId)&token=\(safeToken)&sig=\(safeSig)&allow_source=true&allow_audio_only=true&fast_bread=true&player_backend=mediaplayer&playlist_include_framerate=true&player=twitchweb&p=\(p)"
+        let masterUrlStr = "\(usherBase)/api/channel/hls/\(videoID).m3u8?client_id=\(TwitchAPIService.shared.webClientId)&token=\(safeToken)&sig=\(safeSig)&allow_source=true&allow_audio_only=true&fast_bread=true&player_backend=mediaplayer&playlist_include_framerate=true&player=twitchweb&p=\(p)"
         
         guard let masterUrl = URL(string: masterUrlStr) else {
             throw TwitchHLSError.invalidPlaylistURL
