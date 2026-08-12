@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @AppStorage("defaultVideoQuality") private var defaultVideoQuality = "auto"
@@ -14,15 +15,59 @@ struct SettingsView: View {
     @AppStorage("externalProxyURL") private var externalProxyURL = ""
     @AppStorage("externalProxyLastGood") private var externalProxyLastGood = ""
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @StateObject private var authManager = TwitchAuthManager.shared
+    @State private var showLoginSheet = false
     @State private var cacheSize: String = ""
     @State private var proxyTestResult: String?
     @State private var isTestingProxy = false
     @State private var fetchProxyResult: String?
     @State private var isFetchingProxy = false
-    
+
     var body: some View {
         NavigationStack {
             Form {
+                Section(header: Text("Twitch Account")) {
+                    if authManager.isAuthenticated, let user = authManager.currentUser {
+                        HStack(spacing: 12) {
+                            if let url = user.profileImageURL {
+                                AsyncImage(url: url) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle().fill(Color.gray.opacity(0.3))
+                                }
+                                .frame(width: 44, height: 44)
+                                .clipShape(Circle())
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(user.displayName)
+                                    .font(.headline)
+                                Text("@\(user.login)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+
+                        Button("Sync Subs") {
+                            syncFollows()
+                        }
+
+                        Button("Se déconnecter", role: .destructive) {
+                            authManager.logout()
+                        }
+                    } else {
+                        Button("Se connecter avec Twitch") {
+                            showLoginSheet = true
+                        }
+
+                        Text("Connecte-toi pour importer tes abonnements dans « Your Subs » et envoyer des messages dans le chat des lives.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 Section(header: Text("App Preferences")) {
                     Picker("Language", selection: $appLanguage) {
                         Text("English").tag("en")
@@ -216,9 +261,18 @@ struct SettingsView: View {
             .onAppear {
                 calculateCacheSize()
             }
+            .sheet(isPresented: $showLoginSheet) {
+                TwitchLoginSheet()
+            }
         }
     }
     
+    private func syncFollows() {
+        Task {
+            try? await authManager.syncFollows(into: modelContext)
+        }
+    }
+
     private func testExternalProxy() {
         guard let proxy = ExternalProxyService.parse(externalProxyURL) else {
             proxyTestResult = NSLocalizedString("Invalid proxy URL — use host:port", comment: "")

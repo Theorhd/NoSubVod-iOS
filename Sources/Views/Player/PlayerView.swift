@@ -14,15 +14,17 @@ struct VideoMetadata {
 
 struct PlayerView: View {
     @StateObject private var viewModel: PlayerViewModel
+    @StateObject private var authManager = TwitchAuthManager.shared
     let metadata: VideoMetadata?
-    
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("defaultVideoQuality") private var defaultVideoQuality = "auto"
     @AppStorage("defaultVideoQualityCellular") private var defaultVideoQualityCellular = "auto"
     
     @State private var historyActor: HistoryManagerActor?
-    
+    @State private var showLoginSheet = false
+
     init(videoID: String, isLive: Bool, clipThumbnailURL: URL? = nil, metadata: VideoMetadata? = nil, localPlaylistPath: String? = nil) {
         _viewModel = StateObject(wrappedValue: PlayerViewModel(videoID: videoID, isLive: isLive, clipThumbnailURL: clipThumbnailURL, localPlaylistPath: localPlaylistPath))
         self.metadata = metadata
@@ -196,8 +198,15 @@ struct PlayerView: View {
                     }
                     
                     Divider()
-                    
-                    ChatView(messages: viewModel.chatMessages)
+
+                    ChatView(
+                        messages: viewModel.chatMessages,
+                        isLiveChat: viewModel.isLive,
+                        canSend: authManager.isAuthenticated,
+                        sendError: viewModel.chatSendError,
+                        onSend: { viewModel.sendChatMessage($0) },
+                        onLogin: { showLoginSheet = true }
+                    )
                 }
                 .padding()
             } else {
@@ -307,6 +316,13 @@ struct PlayerView: View {
                 if let duration = player.currentItem?.duration.seconds, duration.isFinite {
                     updateHistory(timecode: currentTime, duration: Int(duration))
                 }
+            }
+        }
+        .sheet(isPresented: $showLoginSheet) {
+            TwitchLoginSheet {
+                // Le chat s'était connecté en anonyme — on rejoint le salon
+                // avec le compte fraîchement connecté (PASS oauth + NICK).
+                viewModel.reconnectChatIfNeeded()
             }
         }
         .sheet(isPresented: $viewModel.isDownloadSheetPresented) {

@@ -56,6 +56,20 @@ final class PlayerViewModel: ObservableObject {
     var vodChatService: VODChatService?
 
     @Published var chatMessages: [ChatMessage] = []
+    /// Erreur d'envoi du chat live (NOTICE serveur, non connecté…).
+    @Published var chatSendError: String?
+
+    /// Reconnecte le chat live avec les identifiants à jour (après un login).
+    func reconnectChatIfNeeded() {
+        guard isLive, let service = liveChatService else { return }
+        service.connect(channel: videoID)
+    }
+
+    /// Envoie un message dans le chat live. Retourne false si rien n'est parti
+    /// (non connecté, texte vide) — l'erreur est publiée dans chatSendError.
+    func sendChatMessage(_ text: String) -> Bool {
+        liveChatService?.sendChatMessage(text) ?? false
+    }
     private var cancellables = Set<AnyCancellable>()
     private var playerItemCancellables = Set<AnyCancellable>()
     // Retain TSPlayerItem (owns the local HTTP server) for the entire playback session.
@@ -129,6 +143,9 @@ final class PlayerViewModel: ObservableObject {
             service.$messages
                 .receive(on: DispatchQueue.main)
                 .assign(to: &$chatMessages)
+            service.$lastSendError
+                .receive(on: DispatchQueue.main)
+                .assign(to: &$chatSendError)
         } else {
             let service = VODChatService(videoID: videoID)
             self.vodChatService = service
@@ -327,7 +344,7 @@ final class PlayerViewModel: ObservableObject {
             }
             let fetcher = RemotePlaylistFetcher(
                 userAgent: ua,
-                extraHeaders: ["Client-Id": TwitchAPIService.shared.clientId],
+                extraHeaders: ["Client-Id": TwitchAPIService.shared.webClientId],
                 proxy: proxy
             )
             if let proxy = try? AdStrippingProxy(remoteURL: url, fetcher: fetcher) {
