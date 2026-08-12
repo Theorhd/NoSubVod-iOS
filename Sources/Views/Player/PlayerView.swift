@@ -61,8 +61,8 @@ struct PlayerView: View {
                             .cornerRadius(8)
                         }
                     }
-                } else if let player = viewModel.player {
-                    CustomVideoPlayer(player: player)
+                } else if let controller = viewModel.playerController {
+                    CustomVideoPlayer(playerController: controller)
                         .overlay(alignment: .topTrailing) {
                             if viewModel.localPlaylistPath == nil {
                                 qualityMenu
@@ -73,12 +73,12 @@ struct PlayerView: View {
                         .simultaneousGesture(TapGesture().onEnded {
                             viewModel.toggleQualityMenu()
                         })
-                        .onAppear {
-                            player.play()
-                        }
                         .onDisappear {
+                            // Pause only when the whole PlayerView is dismissed,
+                            // not when the inline controller is stolen by the
+                            // full-screen cover (re-parenting).
                             if !isFullScreen {
-                                player.pause()
+                                viewModel.player?.pause()
                             }
                         }
                 } else {
@@ -89,7 +89,7 @@ struct PlayerView: View {
             }
             .aspectRatio(16/9, contentMode: .fit)
             
-            if viewModel.isSegmentSelectionMode, let player = viewModel.player {
+            if viewModel.isSegmentSelectionMode, viewModel.player != nil {
                 VStack(spacing: 8) {
                     HStack {
                         Text("Sélectionnez le segment à télécharger")
@@ -104,7 +104,7 @@ struct PlayerView: View {
                             VStack(spacing: 4) {
                                 Image(systemName: viewModel.startTimecode == nil ? "play.circle" : "checkmark.circle.fill")
                                     .font(.title3)
-                                Text(viewModel.startTimecode == nil ? "Début" : formatTime(viewModel.startTimecode!))
+                                Text(viewModel.startTimecode.map { formatTime($0) } ?? "Début")
                                     .font(.footnote)
                                     .fontWeight(.semibold)
                             }
@@ -119,7 +119,7 @@ struct PlayerView: View {
                             VStack(spacing: 4) {
                                 Image(systemName: viewModel.endTimecode == nil ? "stop.circle" : "checkmark.circle.fill")
                                     .font(.title3)
-                                Text(viewModel.endTimecode == nil ? "Fin" : formatTime(viewModel.endTimecode!))
+                                Text(viewModel.endTimecode.map { formatTime($0) } ?? "Fin")
                                     .font(.footnote)
                                     .fontWeight(.semibold)
                             }
@@ -207,12 +207,15 @@ struct PlayerView: View {
         .background(Color(.systemBackground))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+
             if historyActor == nil {
                 historyActor = HistoryManagerActor(modelContainer: modelContext.container)
             }
             
             let vid = viewModel.videoID
             let descriptor = FetchDescriptor<PersistentHistoryEntry>(predicate: #Predicate { $0.vodId == vid })
+            // Valeur optionnelle, nil prévu
             if let existing = try? modelContext.fetch(descriptor).first {
                 viewModel.initialTimecode = existing.timecode
             }
@@ -250,8 +253,8 @@ struct PlayerView: View {
         .fullScreenCover(isPresented: $isFullScreen) {
             ZStack {
                 Color.black.ignoresSafeArea()
-                if let player = viewModel.player {
-                    CustomVideoPlayer(player: player)
+                if let controller = viewModel.playerController {
+                    CustomVideoPlayer(playerController: controller)
                         .ignoresSafeArea()
                         .overlay(alignment: .topTrailing) {
                             if viewModel.localPlaylistPath == nil {
@@ -268,9 +271,23 @@ struct PlayerView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
-            if UIDevice.current.orientation.isLandscape {
-                isFullScreen = true
+            let orientation = UIDevice.current.orientation
+            // Ignore face-up, face-down, and unknown — only react to flat-landscape/portrait.
+            guard orientation.isValidInterfaceOrientation else { return }
+
+            if orientation.isLandscape {
+                // Don't open our cover if UIKit native full-screen is already active
+                // (the user pressed the AVPlayerViewController full-screen button).
+                guard !viewModel.isNativeFullScreen else { return }
+                if !isFullScreen { isFullScreen = true }
+            } else if orientation.isPortrait {
+                if isFullScreen { isFullScreen = false }
             }
+        }
+        .onChange(of: isFullScreen) { _, full in
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+            let target: UIInterfaceOrientationMask = full ? .landscape : .portrait
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: target))
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .background || newPhase == .inactive {
@@ -283,6 +300,8 @@ struct PlayerView: View {
             }
         }
         .onDisappear {
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+
             if let player = viewModel.player, !viewModel.isLive {
                 let currentTime = Int(player.currentTime().seconds)
                 if let duration = player.currentItem?.duration.seconds, duration.isFinite {

@@ -1,8 +1,28 @@
 import Foundation
 import AVFoundation
+import AVKit
 import Combine
 import SwiftUI
 import TSPlayerKit
+
+// MARK: - Native fullscreen delegate
+
+/// Tracks whether UIKitʼs own full-screen presentation (the button in the
+/// AVPlayerViewController toolbar) is active, so we never open a SwiftUI
+/// cover on top of it — and thus never have two full-screen players stacked.
+final class PlayerFullscreenDelegate: NSObject, AVPlayerViewControllerDelegate, @unchecked Sendable {
+    var onFullScreenChange: (@MainActor (Bool) -> Void)?
+
+    func playerViewController(_ playerViewController: AVPlayerViewController,
+                              willBeginFullScreenPresentationWithAnimationCoordinator coordinator: UIViewControllerTransitionCoordinator) {
+        Task { @MainActor in onFullScreenChange?(true) }
+    }
+
+    func playerViewController(_ playerViewController: AVPlayerViewController,
+                              willEndFullScreenPresentationWithAnimationCoordinator coordinator: UIViewControllerTransitionCoordinator) {
+        Task { @MainActor in onFullScreenChange?(false) }
+    }
+}
 
 @MainActor
 final class PlayerViewModel: ObservableObject {
@@ -21,6 +41,16 @@ final class PlayerViewModel: ObservableObject {
     private var qualityMenuTask: Task<Void, Never>?
 
     let localPlaylistPath: String?
+
+    /// The single `AVPlayerViewController` shared between inline and full-screen
+    /// presentations. Reparenting the same instance avoids re-creating the player
+    /// layer — the root cause of the full-screen "jump" on rotation.
+    @Published private(set) var playerController: AVPlayerViewController?
+
+    /// `true` while UIKitʼs native full-screen presentation is on screen.
+    /// Gating the SwiftUI cover on this flag prevents double-full-screen races.
+    @Published var isNativeFullScreen = false
+    private let fullscreenDelegate = PlayerFullscreenDelegate()
 
     var liveChatService: TwitchChatService?
     var vodChatService: VODChatService?
@@ -141,6 +171,20 @@ final class PlayerViewModel: ObservableObject {
                     self.player = newPlayer
                     self._playerForDeinit = newPlayer
                     self.setupTimeObserver()
+
+                    // Create the shared AVPlayerViewController once, configure
+                    // the native-fullscreen delegate so we can gate the SwiftUI
+                    // cover and avoid double-presentation races.
+                    if self.playerController == nil {
+                        let controller = AVPlayerViewController()
+                        controller.player = newPlayer
+                        controller.allowsPictureInPicturePlayback = true
+                        controller.delegate = self.fullscreenDelegate
+                        self.fullscreenDelegate.onFullScreenChange = { [weak self] active in
+                            self?.isNativeFullScreen = active
+                        }
+                        self.playerController = controller
+                    }
                 } else {
                     self.player?.replaceCurrentItem(with: playerItem)
                 }
@@ -159,7 +203,10 @@ final class PlayerViewModel: ObservableObject {
                 } else {
                     var observer: NSKeyValueObservation?
                     observer = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
-                        guard let self else { observer?.invalidate(); return }
+                        guard let self else {
+                            observer?.invalidate()
+                            return
+                        }
                         switch item.status {
                         case .readyToPlay:
                             Task { @MainActor [weak self] in self?.player?.play() }
