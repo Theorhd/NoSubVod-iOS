@@ -21,7 +21,7 @@ struct PlayerView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("defaultVideoQuality") private var defaultVideoQuality = "auto"
     @AppStorage("defaultVideoQualityCellular") private var defaultVideoQualityCellular = "auto"
-    
+
     @State private var historyActor: HistoryManagerActor?
     @State private var showLoginSheet = false
 
@@ -29,14 +29,12 @@ struct PlayerView: View {
         _viewModel = StateObject(wrappedValue: PlayerViewModel(videoID: videoID, isLive: isLive, clipThumbnailURL: clipThumbnailURL, localPlaylistPath: localPlaylistPath))
         self.metadata = metadata
     }
-    
-    @State private var isFullScreen: Bool = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 Color.black.ignoresSafeArea()
-                
+
                 if let error = viewModel.errorMessage {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
@@ -46,7 +44,7 @@ struct PlayerView: View {
                             .foregroundColor(.white)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
-                        
+
                         Button(action: {
                             viewModel.initialTimecode = 0
                             updateHistory(timecode: 0, duration: 0)
@@ -64,25 +62,49 @@ struct PlayerView: View {
                         }
                     }
                 } else if let controller = viewModel.playerController {
-                    CustomVideoPlayer(playerController: controller)
-                        .overlay(alignment: .topTrailing) {
-                            if viewModel.localPlaylistPath == nil {
-                                qualityMenu
-                                    .opacity(viewModel.showQualityMenu ? 1 : 0)
-                                    .animation(.easeInOut(duration: 0.3), value: viewModel.showQualityMenu)
-                            }
+                    CustomVideoPlayer(playerController: controller) { host in
+                        viewModel.setHost(host)
+                        // Lock landscape synchronously before the modal
+                        // presentation starts — no mid-transition rotation.
+                        host.onPrepareForFullScreen = {
+                            viewModel.prepareForFullScreenEntry()
                         }
-                        .simultaneousGesture(TapGesture().onEnded {
-                            viewModel.toggleQualityMenu()
-                        })
-                        .onDisappear {
-                            // Pause only when the whole PlayerView is dismissed,
-                            // not when the inline controller is stolen by the
-                            // full-screen cover (re-parenting).
-                            if !isFullScreen {
-                                viewModel.player?.pause()
-                            }
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        // Always visible: no tap-to-toggle, no timer — the gear
+                        // never fights the native controls or its own Menu.
+                        if viewModel.localPlaylistPath == nil {
+                            qualityMenu
                         }
+                    }
+                    .overlay(alignment: .top) {
+                        // Non-destructive busy states (stall recovery, quality
+                        // switch): the video keeps rendering underneath.
+                        if let activity = viewModel.playerActivity {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(.white)
+                                Text(activity == .reconnecting ? "Reconnecting…" : "Switching quality…")
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.black.opacity(0.65), in: Capsule())
+                            .padding(.top, 8)
+                            .transition(.opacity)
+                            .animation(.easeInOut(duration: 0.2), value: viewModel.playerActivity)
+                        }
+                    }
+                    .onDisappear {
+                        // Pause only when the whole PlayerView is dismissed,
+                        // never during a full-screen presentation — the modal
+                        // and AVKit's native full-screen keep this view mounted.
+                        if !viewModel.isFullScreen {
+                            viewModel.player?.pause()
+                        }
+                    }
                 } else {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -90,7 +112,7 @@ struct PlayerView: View {
                 }
             }
             .aspectRatio(16/9, contentMode: .fit)
-            
+
             if viewModel.isSegmentSelectionMode, viewModel.player != nil {
                 VStack(spacing: 8) {
                     HStack {
@@ -100,7 +122,7 @@ struct PlayerView: View {
                         Spacer()
                     }
                     .padding(.horizontal, 16)
-                    
+
                     HStack(spacing: 12) {
                         Button(action: { viewModel.setStartTimecode() }) {
                             VStack(spacing: 4) {
@@ -138,14 +160,14 @@ struct PlayerView: View {
                 .background(Color(.systemBackground))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            
+
             if let meta = metadata {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(meta.title)
                         .font(.title3)
                         .bold()
                         .lineLimit(2)
-                    
+
                     HStack(spacing: 12) {
                         if let url = meta.streamerProfileURL {
                             CachedAsyncImage(url: url) { image in
@@ -156,20 +178,20 @@ struct PlayerView: View {
                             .frame(width: 50, height: 50)
                             .clipShape(Circle())
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text(meta.streamerName)
                                 .font(.headline)
-                            
+
                             if let game = meta.gameName {
                                 Text(game)
                                     .font(.subheadline)
                                     .foregroundColor(.purple)
                             }
                         }
-                        
+
                         Spacer()
-                        
+
                         VStack(alignment: .trailing, spacing: 4) {
                             if let viewers = meta.viewerCount {
                                 HStack(spacing: 4) {
@@ -183,7 +205,7 @@ struct PlayerView: View {
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
-                            
+
                             if !viewModel.isLive && viewModel.localPlaylistPath == nil {
                                 Button(action: {
                                     viewModel.isDownloadSheetPresented = true
@@ -196,7 +218,7 @@ struct PlayerView: View {
                             }
                         }
                     }
-                    
+
                     Divider()
 
                     ChatView(
@@ -221,23 +243,25 @@ struct PlayerView: View {
             if historyActor == nil {
                 historyActor = HistoryManagerActor(modelContainer: modelContext.container)
             }
-            
+
             let vid = viewModel.videoID
             let descriptor = FetchDescriptor<PersistentHistoryEntry>(predicate: #Predicate { $0.vodId == vid })
-            // Valeur optionnelle, nil prévu
-            if let existing = try? modelContext.fetch(descriptor).first {
+            // Valeur optionnelle, nil prévu. Ne jamais réécrire le timecode
+            // d'une session active : loadStream() l'utiliserait pour un seek
+            // arrière si la vue réapparaît.
+            if viewModel.player == nil, let existing = try? modelContext.fetch(descriptor).first {
                 viewModel.initialTimecode = existing.timecode
             }
-            
+
             viewModel.onTimeUpdate = { timecode, duration in
                 updateHistory(timecode: timecode, duration: duration)
             }
-            
+
             let targetQuality = NetworkMonitor.shared.isCellular ? defaultVideoQualityCellular : defaultVideoQuality
             if viewModel.selectedQuality == "auto" && targetQuality != "auto" {
                 viewModel.selectedQuality = targetQuality
             }
-            
+
             viewModel.onSegmentDownloadRequested = { [weak viewModel] start, end, quality in
                 guard let viewModel else { return }
                 VODDownloadManager.shared.startDownload(
@@ -256,28 +280,9 @@ struct PlayerView: View {
                 )
             }
 
+            viewModel.configureNowPlaying(metadata: metadata)
             viewModel.loadStream()
-            viewModel.resetQualityMenuTimer()
-        }
-        .fullScreenCover(isPresented: $isFullScreen) {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                if let controller = viewModel.playerController {
-                    CustomVideoPlayer(playerController: controller)
-                        .ignoresSafeArea()
-                        .overlay(alignment: .topTrailing) {
-                            if viewModel.localPlaylistPath == nil {
-                                qualityMenu
-                                    .padding(.top, 40)
-                                    .opacity(viewModel.showQualityMenu ? 1 : 0)
-                                    .animation(.easeInOut(duration: 0.3), value: viewModel.showQualityMenu)
-                            }
-                        }
-                        .simultaneousGesture(TapGesture().onEnded {
-                            viewModel.toggleQualityMenu()
-                        })
-                }
-            }
+            viewModel.consumePendingFullScreenEntry()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             let orientation = UIDevice.current.orientation
@@ -285,18 +290,20 @@ struct PlayerView: View {
             guard orientation.isValidInterfaceOrientation else { return }
 
             if orientation.isLandscape {
-                // Don't open our cover if UIKit native full-screen is already active
-                // (the user pressed the AVPlayerViewController full-screen button).
-                guard !viewModel.isNativeFullScreen else { return }
-                if !isFullScreen { isFullScreen = true }
+                viewModel.enterFullScreen()
             } else if orientation.isPortrait {
-                if isFullScreen { isFullScreen = false }
+                // Stay full-screen: re-assert landscape so neither the modal
+                // nor AVKit's native full-screen rotates away. The user exits
+                // ONLY with the full-screen button.
+                viewModel.reassertLandscapeIfFullScreen()
             }
         }
-        .onChange(of: isFullScreen) { _, full in
-            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-            let target: UIInterfaceOrientationMask = full ? .landscape : .portrait
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: target))
+        .onChange(of: viewModel.playerController) { _, newController in
+            // A full-screen entry requested while the stream was still
+            // loading can now be honored.
+            if newController != nil {
+                viewModel.consumePendingFullScreenEntry()
+            }
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .background || newPhase == .inactive {
@@ -355,7 +362,7 @@ struct PlayerView: View {
             )
         }
     }
-    
+
     private var qualityMenu: some View {
         Menu {
             Picker("Quality", selection: Binding(
@@ -382,7 +389,7 @@ struct PlayerView: View {
         }
         .padding()
     }
-    
+
     private func formatTime(_ seconds: Int) -> String {
         let h = seconds / 3600
         let m = (seconds % 3600) / 60
@@ -393,12 +400,12 @@ struct PlayerView: View {
             return String(format: "%02d:%02d", m, s)
         }
     }
-    
+
     private func updateHistory(timecode: Int, duration: Int) {
         guard let actor = historyActor else { return }
         let vid = viewModel.videoID
         let meta = metadata
-        
+
         Task {
             await actor.updateHistory(
                 vodId: vid,
@@ -414,4 +421,3 @@ struct PlayerView: View {
         }
     }
 }
-

@@ -8,6 +8,7 @@ struct GQLResponse: Codable {
 
 struct GQLData: Codable {
     let streams: GQLStreams?
+    let games: GQLGames?
     let game: GQLGameSearch?
     let searchFor: GQLSearchFor?
     let videos: GQLVideos?
@@ -38,6 +39,13 @@ struct GQLGameNode: Codable {
     let id: String
     let name: String
     let boxArtURL: String?
+}
+
+struct GQLGames: Codable {
+    let edges: [GQLGameEdge]?
+}
+struct GQLGameEdge: Codable {
+    let node: GQLGameNode?
 }
 
 struct GQLBroadcasterNode: Codable {
@@ -112,6 +120,7 @@ struct GQLVideoNode: Codable {
 
 struct GQLUserNode: Codable {
     let videos: GQLVideos?
+    let stream: GQLLiveNode?
 }
 
 
@@ -341,6 +350,52 @@ extension TwitchAPIService {
         } ?? []
     }
 
+    /// Live actuel d'un channel (nil si le streamer n'est pas en live).
+    func fetchLiveStream(login: String) async throws -> LiveStream? {
+        let gql = """
+        query {
+            user(login: "\(login)") {
+                stream {
+                    id title viewersCount previewImageURL(width: 640, height: 360) createdAt language
+                    game { id name boxArtURL(width: 110, height: 147) }
+                    broadcaster { id login displayName profileImageURL(width: 70) }
+                }
+            }
+        }
+        """
+        let data = try await executeGQLQuery(query: gql, variables: [:])
+        let response = try await Task.detached { try JSONDecoder().decode(GQLResponse.self, from: data) }.value
+        guard let node = response.data?.user?.stream else { return nil }
+        return mapLiveNode(node, fallbackGame: nil)
+    }
+
+    /// Catégories populaires du moment — alimente la section "Popular
+    /// Categories" de la SearchView.
+    func fetchPopularGames(limit: Int = 12) async throws -> [Game] {
+        let gql = """
+        query {
+            games(first: \(limit)) {
+                edges {
+                    node {
+                        id name boxArtURL(width: 110, height: 147)
+                    }
+                }
+            }
+        }
+        """
+        let data = try await executeGQLQuery(query: gql, variables: [:])
+        let response = try await Task.detached { try JSONDecoder().decode(GQLResponse.self, from: data) }.value
+        let edges = response.data?.games?.edges ?? []
+        return edges.compactMap { edge in
+            guard let node = edge.node else { return nil }
+            return Game(
+                id: node.id,
+                name: node.name,
+                boxArtURL: URL(string: node.boxArtURL ?? "")
+            )
+        }
+    }
+
     func fetchGameVODs(gameName: String, limit: Int = 15) async throws -> [VOD] {
         let safeName = gameName.replacingOccurrences(of: "\"", with: "\\\"")
         let gql = """
@@ -508,7 +563,7 @@ extension TwitchAPIService {
                         }
                     }
                 }
-                videos(first: 5, sort: TRENDING) {
+                videos(first: 5, sort: VIEWS) {
                     edges {
                         node {
                             id title lengthSeconds previewThumbnailURL(width: 320, height: 180) createdAt viewCount broadcastType

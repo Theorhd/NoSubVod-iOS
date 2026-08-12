@@ -6,6 +6,9 @@ final class MockURLProtocol: URLProtocol {
     static var responses: [URL: Result<(HTTPURLResponse, Data), Error>] = [:]
 
     static var callCounts: [URL: Int] = [:]
+    /// Dernier corps de requête POST capturé — permet d'asserter les requêtes
+    /// GQL sortantes (ex: valeur d'un enum de tri) dans les tests de régression.
+    static var lastRequestBody: Data?
     // URLProtocol hooks fire on arbitrary URLSession threads. The counters
     // are mutated concurrently (e.g. findFirstValid validates in parallel).
     private static let lock = NSLock()
@@ -14,6 +17,7 @@ final class MockURLProtocol: URLProtocol {
         lock.lock()
         responses.removeAll()
         callCounts.removeAll()
+        lastRequestBody = nil
         lock.unlock()
     }
     static func registerJSON(url: URL, jsonString: String, statusCode: Int = 200) {
@@ -53,6 +57,26 @@ final class MockURLProtocol: URLProtocol {
 
         MockURLProtocol.lock.lock()
         MockURLProtocol.callCounts[url, default: 0] += 1
+        // URLSession canonise le corps POST en httpBodyStream avant
+        // URLProtocol → lire le flux quand httpBody est nil.
+        if let body = request.httpBody {
+            MockURLProtocol.lastRequestBody = body
+        } else if let stream = request.httpBodyStream {
+            stream.open()
+            var body = Data()
+            let bufferSize = 4096
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+            defer {
+                buffer.deallocate()
+                stream.close()
+            }
+            while stream.hasBytesAvailable {
+                let count = stream.read(buffer, maxLength: bufferSize)
+                if count <= 0 { break }
+                body.append(buffer, count: count)
+            }
+            MockURLProtocol.lastRequestBody = body
+        }
         MockURLProtocol.lock.unlock()
 
         guard let result = MockURLProtocol.responses[url] else {

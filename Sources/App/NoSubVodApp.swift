@@ -16,7 +16,7 @@ struct NoSubVodApp: App {
         
         LiveContainerStorageManager.shared.setup()
         
-        let schema = Schema([PersistentHistoryEntry.self, PersistentWatchlistEntry.self, PersistentSubscription.self, VODDownload.self])
+        let schema = Schema([PersistentHistoryEntry.self, PersistentWatchlistEntry.self, PersistentSubscription.self, PersistentRecentSearch.self, VODDownload.self])
         let isLiveContainer = UserDefaults.standard.bool(forKey: "isLiveContainerStorageEnabled")
         
         var modelConfiguration: ModelConfiguration

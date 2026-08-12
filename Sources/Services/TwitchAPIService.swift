@@ -33,9 +33,14 @@ final class TwitchAPIService {
         let data: Data
         let expiry: Date
     }
-    /// Cache in-memory des réponses GQL, clé = hash(query).
+    /// Cache in-memory des réponses GQL, clé = requête + variables.
+    ///
+    /// Thread-safe : le singleton est appelé depuis des TaskGroups concurrents
+    /// (trending, catégories…), un Dictionary Swift non-verrouillé mute en
+    /// course et peut crash (bridging KVC sur les clés non-String).
     /// TTL de 60s — assez court pour du live, assez long pour éviter les requêtes en rafale.
-    private var gqlCache: [Int: CacheEntry] = [:]
+    private var gqlCache: [String: CacheEntry] = [:]
+    private let gqlCacheLock = NSLock()
     private let gqlCacheTTL: TimeInterval = 60
 
     /// Date du dernier appel à fetchLiveStatus — throttle à 30s minimum.
@@ -218,10 +223,14 @@ final class TwitchAPIService {
 
 
     func executeGQLQuery(query: String, variables: [String: Any]) async throws -> Data {
-        let cacheKey = query.hashValue &+ variables.description.hashValue
+        let cacheKey = query + "\u{0}" + variables.description
+
+        gqlCacheLock.lock()
         if let entry = gqlCache[cacheKey], entry.expiry > Date() {
+            gqlCacheLock.unlock()
             return entry.data
         }
+        gqlCacheLock.unlock()
 
         guard let url = URL(string: gqlBaseURL) else {
             AppLogger.shared.log("GQL ERROR: invalidURL")
@@ -230,6 +239,9 @@ final class TwitchAPIService {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        // Le timeout par défaut (60 s) gèle l'app sur réseau dégradé — le
+        // stream peut retomber sur une qualité par défaut, pas geler le player.
+        request.timeoutInterval = 20
         // Lecture GQL anonyme via le web client ID : on n'attache JAMAIS le
         // token utilisateur ici — un token émis par notre app OAuth avec le
         // header Client-Id du web client fait rejeter la requête par
@@ -257,14 +269,18 @@ final class TwitchAPIService {
             throw TwitchAPIError.invalidResponse
         }
 
+        gqlCacheLock.lock()
         gqlCache[cacheKey] = CacheEntry(data: data, expiry: Date().addingTimeInterval(gqlCacheTTL))
+        gqlCacheLock.unlock()
 
         return data
     }
 
     /// Invalide l'intégralité du cache GQL (utile lors d'un pull-to-refresh explicite).
     func invalidateGQLCache() {
+        gqlCacheLock.lock()
         gqlCache.removeAll()
+        gqlCacheLock.unlock()
     }
 
 

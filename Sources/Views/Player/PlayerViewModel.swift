@@ -7,21 +7,127 @@ import TSPlayerKit
 
 // MARK: - Native fullscreen delegate
 
-/// Tracks whether UIKitʼs own full-screen presentation (the button in the
-/// AVPlayerViewController toolbar) is active, so we never open a SwiftUI
-/// cover on top of it — and thus never have two full-screen players stacked.
+/// Tracks AVKitʼs own full-screen presentation (the button in the
+/// AVPlayerViewController toolbar) — the second full-screen path, alongside
+/// our modal presentation (`PlayerHostViewController.presentFullScreen`).
+///
+/// Two jobs:
+/// - publishes the unified `isFullScreen` state (begin immediately, end only
+///   once the exit transition has fully completed),
+/// - compensates the render-pipeline layer detach: AVKit's transition resets
+///   the player rate, so playback is re-issued (play) when the transition
+///   completes if it was playing before it started. This fixes the
+///   "full-screen button pauses the player" and "black zone after exit"
+///   regressions.
 final class PlayerFullscreenDelegate: NSObject, AVPlayerViewControllerDelegate, @unchecked Sendable {
+    /// True when playback was in progress before a full-screen transition —
+    /// the transition must then be compensated by a play() on completion.
+    private(set) var shouldResumeAfterTransition = false
+
+    /// True while PiP is active. Rotation-driven full-screen entry is refused
+    /// in this state: the player already lives in the PiP window, and a modal
+    /// presentation on top of it would double-present the same controller.
+    private(set) var isPictureInPictureActive = false
+
+    /// Publishes full-screen state. `false` is only delivered AFTER the exit
+    /// transition has completed, so the orientation lock can return to
+    /// portrait without fighting the exit animation.
     var onFullScreenChange: (@MainActor (Bool) -> Void)?
+    /// Called when PiP starts, so a modal full-screen can be dismissed.
+    var onPictureInPictureStarted: (@MainActor () -> Void)?
+    /// Called before PiP starts (also used to drop the modal early).
+    var onPictureInPictureWillStart: (@MainActor () -> Void)?
+    /// Called when AVKit needs the player UI restored after a full-screen exit.
+    var onRestorePlayerUI: (@MainActor () -> Void)?
+
+    // MARK: - Testable entry points (called by the delegate methods below)
+
+    func beginFullScreen(wasPlaying: Bool) {
+        // "Playing" means the user intent is playback: paused is the only
+        // state where we must NOT resume. While buffering
+        // (waitingToPlayAtSpecifiedRate) the transition must still restore
+        // playback once the layer is back.
+        shouldResumeAfterTransition = wasPlaying
+    }
+
+    func endFullScreenTransition(player: AVPlayer?) {
+        if shouldResumeAfterTransition {
+            player?.play()
+        }
+    }
+
+    // MARK: - AVPlayerViewControllerDelegate
 
     func playerViewController(_ playerViewController: AVPlayerViewController,
                               willBeginFullScreenPresentationWithAnimationCoordinator coordinator: UIViewControllerTransitionCoordinator) {
+        beginFullScreen(wasPlaying: (playerViewController.player?.timeControlStatus ?? .paused) != .paused)
         Task { @MainActor in onFullScreenChange?(true) }
+        coordinator.animate(alongsideTransition: nil) { [weak self, weak playerViewController] context in
+            // If the begin transition was cancelled, no full-screen ever
+            // happened — back out of the published state.
+            if context.isCancelled {
+                Task { @MainActor in self?.onFullScreenChange?(false) }
+                return
+            }
+            self?.endFullScreenTransition(player: playerViewController?.player)
+        }
     }
 
     func playerViewController(_ playerViewController: AVPlayerViewController,
                               willEndFullScreenPresentationWithAnimationCoordinator coordinator: UIViewControllerTransitionCoordinator) {
-        Task { @MainActor in onFullScreenChange?(false) }
+        // Capture the state at exit time (a fresh willEnd is not guaranteed
+        // to follow a willBegin of this session).
+        beginFullScreen(wasPlaying: (playerViewController.player?.timeControlStatus ?? .paused) != .paused)
+        coordinator.animate(alongsideTransition: nil) { [weak self, weak playerViewController] context in
+            // A cancelled exit (e.g. the landscape lock re-asserted during
+            // the transition) must not publish the end of full-screen.
+            guard !context.isCancelled else { return }
+            // Resume playback first (the layer is back in the render
+            // pipeline), then publish the end of full-screen so the view can
+            // request portrait AFTER the exit animation completes.
+            self?.endFullScreenTransition(player: playerViewController?.player)
+            Task { @MainActor in self?.onFullScreenChange?(false) }
+        }
     }
+
+    /// AVKit's full-screen is always restored to our inline host.
+    func playerViewController(_ playerViewController: AVPlayerViewController,
+                              restoreUserInterfaceForFullScreenExitWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        Task { @MainActor in onRestorePlayerUI?() }
+        completionHandler(true)
+    }
+
+    // MARK: - PiP
+
+    func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+        Task { @MainActor in onPictureInPictureWillStart?() }
+    }
+
+    func playerViewControllerShouldAutomaticallyDismissAtPictureInPictureStart(_ playerViewController: AVPlayerViewController) -> Bool {
+        true
+    }
+
+    func playerViewControllerDidStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+        isPictureInPictureActive = true
+        Task { @MainActor in onPictureInPictureStarted?() }
+    }
+
+    func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
+        isPictureInPictureActive = false
+    }
+
+    /// The player is always hosted inline, so restoring the UI is trivial.
+    func playerViewController(_ playerViewController: AVPlayerViewController,
+                              restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        completionHandler(true)
+    }
+}
+
+/// Transient, non-destructive player states surfaced as a lightweight overlay
+/// — unlike `errorMessage`, these never hide the video.
+enum PlayerActivity: Equatable {
+    case reconnecting
+    case switchingQuality
 }
 
 @MainActor
@@ -37,23 +143,135 @@ final class PlayerViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     @Published var selectedQuality: String = "auto"
-    @Published var showQualityMenu: Bool = false
-    private var qualityMenuTask: Task<Void, Never>?
+
+    /// Non-destructive busy state (reconnecting after a stall, preloading a
+    /// quality switch). nil when playback is steady.
+    @Published var playerActivity: PlayerActivity?
+
+    // MARK: - Seamless recovery (stalls, expired CDN tokens)
+
+    /// Consecutive recovery attempts so far. Reset after 10 min of stable
+    /// playback (a long VOD whose CDN token expires at minute 45 must still
+    /// have its full retry budget).
+    private(set) var recoveryAttempts = 0
+    private let maxRecoveryAttempts = 3
+    /// Internal for tests: last time a recovery was attempted.
+    var lastRecoveryDate: Date?
+    private(set) var isRecovering = false
+    private var recoveryTask: Task<Void, Never>?
+    private var stallWatchdog: Task<Void, Never>?
+
+    /// Test seam: replaces network URL resolution during recovery.
+    var resolveStreamURLOverride: (() async throws -> URL)?
+    /// Test seam: backoff before attempt N (1-based). Zero in tests.
+    var recoveryBackoffNanoseconds: (Int) -> UInt64 = { UInt64($0) * 2_000_000_000 }
+    /// Test seam: delay before a stall is considered unrecoverable by itself.
+    var stallWatchdogNanoseconds: UInt64 = 8_000_000_000
+
+    /// Generation counter: a slow quality switch must never overwrite the
+    /// item installed by a newer one.
+    private var qualityChangeGeneration = 0
 
     let localPlaylistPath: String?
 
-    /// The single `AVPlayerViewController` shared between inline and full-screen
-    /// presentations. Reparenting the same instance avoids re-creating the player
-    /// layer — the root cause of the full-screen "jump" on rotation.
-    @Published private(set) var playerController: AVPlayerViewController?
+    /// The single `NSVPlayerViewController` shared between inline and
+    /// full-screen presentations. Presenting the same instance (modal or
+    /// AVKit native) never rebuilds the player layer — the root cause of the
+    /// full-screen "jump", "pause" and "black zone" regressions.
+    @Published private(set) var playerController: NSVPlayerViewController?
 
-    /// `true` while UIKitʼs native full-screen presentation is on screen.
-    /// Gating the SwiftUI cover on this flag prevents double-full-screen races.
-    @Published var isNativeFullScreen = false
+    /// Unified full-screen state: true while EITHER the modal presentation
+    /// (`enterFullScreen`) or AVKitʼs native full-screen (toolbar button) is
+    /// active. Drives the scene's orientation lock in PlayerView.
+    @Published var isFullScreen = false
     private let fullscreenDelegate = PlayerFullscreenDelegate()
+    /// The UIKit host that presents the modal full-screen. Weak: the host is
+    /// owned by SwiftUI and must not outlive the view model.
+    private weak var host: PlayerHostViewController?
+    /// A full-screen entry requested before the presentation was possible
+    /// (stream still loading, controller not yet in a window).
+    private var pendingFullScreenEntry = false
 
     var liveChatService: TwitchChatService?
     var vodChatService: VODChatService?
+
+    /// Metadata used to feed the Control Center media widget (Now Playing).
+    private var nowPlayingMetadata: VideoMetadata?
+    /// Ownership token for the current Now Playing session (see
+    /// `NowPlayingManager.teardown(owner:)`).
+    private var nowPlayingOwner: UUID?
+
+    // MARK: - Full-screen (modal presentation)
+
+    /// Called by the inline `CustomVideoPlayer` once its host view controller
+    /// exists, so the view model can present/dismiss the modal full-screen.
+    func setHost(_ host: PlayerHostViewController) {
+        self.host = host
+    }
+
+    /// Rotation-driven entry: presents the shared player full-screen as a
+    /// UIKit modal. No-op if a full-screen (modal or AVKit native) is already
+    /// active, or if the host isn't on screen yet. If the presentation can't
+    /// start yet (e.g. the user rotated while the stream was still loading),
+    /// the entry is remembered and consumed by `consumePendingFullScreenEntry`.
+    func enterFullScreen() {
+        // No-op while PiP owns the player — presenting the modal full-screen
+        // over the PiP window would double-present the shared controller.
+        guard !isFullScreen, !fullscreenDelegate.isPictureInPictureActive, let host else { return }
+        if host.presentFullScreen() {
+            setFullScreen(true)
+        } else {
+            pendingFullScreenEntry = true
+        }
+    }
+
+    /// Consumes a deferred full-screen entry — called when the player
+    /// controller becomes available, and on every player screen appear.
+    func consumePendingFullScreenEntry() {
+        guard pendingFullScreenEntry, !isFullScreen, let host else { return }
+        pendingFullScreenEntry = false
+        if host.presentFullScreen() {
+            setFullScreen(true)
+        }
+    }
+
+    /// Programmatic exit of the MODAL presentation only (e.g. when PiP starts).
+    /// AVKit's native full-screen is exited through its own toolbar button.
+    func exitFullScreen() {
+        guard isFullScreen, let host else { return }
+        host.exitFullScreen()
+    }
+
+    /// Portrait rotation while full-screen must NOT exit — re-assert the
+    /// landscape lock so neither the modal nor AVKit's full-screen window
+    /// rotates away. The user exits only with the full-screen button.
+    func reassertLandscapeIfFullScreen() {
+        guard isFullScreen else { return }
+        applyOrientationLock(.landscape)
+    }
+
+    /// Called by the host synchronously BEFORE presenting the modal —
+    /// locking landscape first avoids a mid-transition rotation jump.
+    func prepareForFullScreenEntry() {
+        applyOrientationLock(.landscape)
+    }
+
+    /// Single mutation point for the full-screen state: every transition
+    /// also (re)applies the orientation lock, so the scene geometry always
+    /// follows the presentation state.
+    private func setFullScreen(_ value: Bool) {
+        guard isFullScreen != value else { return }
+        isFullScreen = value
+        applyOrientationLock(value ? .landscape : .portrait)
+    }
+
+    /// Locks the scene to a single orientation. iPhone only — on iPad the
+    /// system rotation is left alone (split view etc.). Failures are silent.
+    private func applyOrientationLock(_ mask: UIInterfaceOrientationMask) {
+        guard UIDevice.current.userInterfaceIdiom == .phone,
+              let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+    }
 
     @Published var chatMessages: [ChatMessage] = []
     /// Erreur d'envoi du chat live (NOTICE serveur, non connecté…).
@@ -156,13 +374,63 @@ final class PlayerViewModel: ObservableObject {
     }
 
     deinit {
+        recoveryTask?.cancel()
+        stallWatchdog?.cancel()
         if let observer = timeObserver, let p = _playerForDeinit {
             p.removeTimeObserver(observer)
         }
+        // Leaving the player screen stops playback (AVPlayer is thread-safe;
+        // deinit is nonisolated).
+        _playerForDeinit?.pause()
         liveChatService?.disconnect()
+        if let owner = nowPlayingOwner {
+            Task { @MainActor in
+                // Clear the media widget when the player screen is closed —
+                // only if this session is still the widget's current one.
+                NowPlayingManager.shared.teardown(owner: owner)
+            }
+        }
     }
 
-    func loadStream() {
+    // MARK: - Now Playing (Control Center media widget)
+
+    /// Called by PlayerView on appear with the screen's metadata. The media
+    /// widget is fed once the player exists (or immediately, if it already
+    /// does — e.g. after a TTV fallback reload).
+    func configureNowPlaying(metadata: VideoMetadata?) {
+        nowPlayingMetadata = metadata
+        configureNowPlayingIfReady()
+    }
+
+    private func configureNowPlayingIfReady() {
+        guard let player else { return }
+        let metadata = NowPlayingMetadata(
+            title: nowPlayingMetadata?.title ?? (isLive ? String(localized: "Live Stream") : "VOD"),
+            artist: nowPlayingMetadata?.streamerName ?? videoID,
+            album: nowPlayingMetadata?.gameName,
+            artworkURL: nowPlayingMetadata?.previewThumbnailURL ?? clipThumbnailURL,
+            isLive: isLive
+        )
+        nowPlayingOwner = NowPlayingManager.shared.configure(player: player, metadata: metadata)
+    }
+
+    func loadStream(force: Bool = false) {
+        // Idempotence: a duplicate onAppear (view re-creation, tab re-selection)
+        // must never tear down a healthy session — replacing the item would cut
+        // playback. Fallbacks (TTV proxy, error reload) pass force: true.
+        if !force, player != nil, errorMessage == nil {
+            AppLogger.shared.log("🎬 loadStream skipped — session already active")
+            return
+        }
+
+        // A fresh load supersedes any recovery in flight and restores the
+        // full retry budget.
+        recoveryTask?.cancel()
+        stallWatchdog?.cancel()
+        isRecovering = false
+        recoveryAttempts = 0
+        if playerActivity == .reconnecting { playerActivity = nil }
+
         isLoading = true
         errorMessage = nil
 
@@ -189,18 +457,39 @@ final class PlayerViewModel: ObservableObject {
                     self._playerForDeinit = newPlayer
                     self.setupTimeObserver()
 
-                    // Create the shared AVPlayerViewController once, configure
-                    // the native-fullscreen delegate so we can gate the SwiftUI
-                    // cover and avoid double-presentation races.
+                    // Create the shared player view controller once. Both
+                    // full-screen paths — our modal presentation and AVKit's
+                    // native full-screen button — use this same instance, so
+                    // the layer is never rebuilt across transitions.
                     if self.playerController == nil {
-                        let controller = AVPlayerViewController()
+                        let controller = NSVPlayerViewController()
                         controller.player = newPlayer
                         controller.allowsPictureInPicturePlayback = true
+                        // Auto-start PiP when the app goes to the background —
+                        // watching continues in the floating window.
+                        controller.canStartPictureInPictureAutomaticallyFromInline = true
                         controller.delegate = self.fullscreenDelegate
+                        controller.onDismissed = { [weak self] in
+                            // Modal full-screen closed (Done button).
+                            self?.setFullScreen(false)
+                        }
                         self.fullscreenDelegate.onFullScreenChange = { [weak self] active in
-                            self?.isNativeFullScreen = active
+                            self?.setFullScreen(active)
+                        }
+                        self.fullscreenDelegate.onPictureInPictureWillStart = { [weak self] in
+                            // PiP is taking over — drop the modal full-screen.
+                            self?.exitFullScreen()
+                        }
+                        self.fullscreenDelegate.onPictureInPictureStarted = { [weak self] in
+                            self?.exitFullScreen()
+                        }
+                        self.fullscreenDelegate.onRestorePlayerUI = { [weak self] in
+                            // AVKit asks for the player UI back after a
+                            // full-screen exit — re-home the controller.
+                            self?.host?.reattach()
                         }
                         self.playerController = controller
+                        self.configureNowPlayingIfReady()
                     }
                 } else {
                     self.player?.replaceCurrentItem(with: playerItem)
@@ -210,8 +499,11 @@ final class PlayerViewModel: ObservableObject {
 
                 if self.initialTimecode > 0 {
                     let time = CMTime(seconds: Double(self.initialTimecode), preferredTimescale: 1000)
-                    self.player?.seek(to: time) { [weak self] _ in
+                    self.player?.seek(to: time) { [weak self] finished in
                         Task { @MainActor in
+                            // A cancelled seek (superseded by a newer one) must
+                            // not resume playback at a stale position.
+                            guard finished else { return }
                             self?.player?.play()
                         }
                     }
@@ -281,6 +573,24 @@ final class PlayerViewModel: ObservableObject {
     }
 
     private func makePlayerItem(url: URL) -> AVPlayerItem {
+        let item = buildPlayerItem(url: url)
+        // Buffering policy (remote content only):
+        // - VODs get a generous 30 s forward buffer so network jitter never
+        //   surfaces as a rebuffer; live keeps AVKit's low-latency defaults.
+        // - On cellular, capping the peak bitrate steers adaptive selection
+        //   toward variants the link can actually sustain.
+        if !url.isFileURL {
+            if !isLive {
+                item.preferredForwardBufferDuration = 30
+            }
+            if NetworkMonitor.shared.isCellular {
+                item.preferredPeakBitRate = 2_000_000
+            }
+        }
+        return item
+    }
+
+    private func buildPlayerItem(url: URL) -> AVPlayerItem {
         if url.isFileURL, url.pathExtension == "m3u8" {
             // Chaîne de fallback: chaque mode de lecture essayé en séquence, l'échec d'un mode est prévu
             if let tsItem = try? TSPlayerItem(fmp4Directory: url.deletingLastPathComponent()) {
@@ -382,11 +692,18 @@ final class PlayerViewModel: ObservableObject {
                         self.didFallbackFromTTV = true
                         self.adBlockModeOverride = .local
                         AppLogger.shared.log("🛡 TTV proxy playback failed — falling back to local ad blocking")
-                        self.loadStream()
+                        self.loadStream(force: true)
                         return
                     }
 
-                    self.errorMessage = playerItem.error?.localizedDescription
+                    // Mid-playback failure (expired CDN token, dropped
+                    // connection): try to resume in place before surfacing
+                    // the blocking error UI.
+                    if self.localPlaylistPath == nil, self.clipThumbnailURL == nil {
+                        self.attemptSeamlessRecovery(reason: "item failed (\(detail?.errorStatusCode ?? 0))")
+                    } else {
+                        self.errorMessage = playerItem.error?.localizedDescription
+                    }
                 case .readyToPlay:
                     let dur = playerItem.duration.seconds
                     AppLogger.shared.log("🎬 AVPlayerItem READY — duration: \(dur)s")
@@ -403,7 +720,7 @@ final class PlayerViewModel: ObservableObject {
                         self.didFallbackFromTTV = true
                         self.adBlockModeOverride = .local
                         AppLogger.shared.log("🛡 TTV proxy returned unplayable stream (NaN duration) — falling back to local")
-                        self.loadStream()
+                        self.loadStream(force: true)
                         return
                     }
                 case .unknown: break
@@ -413,13 +730,24 @@ final class PlayerViewModel: ObservableObject {
             .store(in: &playerItemCancellables)
 
         for (name, handler) in [
-            (Notification.Name.AVPlayerItemFailedToPlayToEndTime, { (n: Notification) in
+            (Notification.Name.AVPlayerItemFailedToPlayToEndTime, { [weak self] (n: Notification) in
                 let err = n.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
                 AppLogger.shared.log("🎬 FailedToPlayToEndTime: \(err?.localizedDescription ?? "?")")
+                // The stream died mid-playback (network drop, expired token) —
+                // resume in place instead of leaving a frozen frame.
+                self?.attemptSeamlessRecovery(reason: "failedToPlayToEndTime")
             }),
-            (Notification.Name.AVPlayerItemNewErrorLogEntry, { n in
+            (Notification.Name.AVPlayerItemPlaybackStalled, { [weak self] (_: Notification) in
+                self?.scheduleStallWatchdog()
+            }),
+            (Notification.Name.AVPlayerItemNewErrorLogEntry, { [weak self] _ in
                 if let e = playerItem.errorLog()?.events.last {
                     AppLogger.shared.log("🎬 ErrorLog: \(e.errorComment ?? "") (\(e.errorStatusCode)) — \(e.uri ?? "")")
+                    // 403/410 = expired CDN token. Recover proactively, before
+                    // the item gives up entirely.
+                    if e.errorStatusCode == 403 || e.errorStatusCode == 410 {
+                        self?.attemptSeamlessRecovery(reason: "HTTP \(e.errorStatusCode)")
+                    }
                 }
             }),
         ] {
@@ -429,6 +757,121 @@ final class PlayerViewModel: ObservableObject {
                 .store(in: &playerItemCancellables)
         }
     }
+
+    // MARK: - Seamless recovery
+
+    /// A stall is only a problem if it persists: brief rebuffering resolves
+    /// itself. After `stallWatchdogNanoseconds` with the player still waiting
+    /// (never when user-paused), kick a seamless recovery.
+    private func scheduleStallWatchdog() {
+        stallWatchdog?.cancel()
+        stallWatchdog = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: stallWatchdogNanoseconds)
+            guard let self, !Task.isCancelled else { return }
+            guard let player = self.player,
+                  player.timeControlStatus == .waitingToPlayAtSpecifiedRate else { return }
+            self.attemptSeamlessRecovery(reason: "prolonged stall")
+        }
+    }
+
+    /// In-place playback recovery: re-resolves the stream URL (fresh CDN
+    /// token), swaps the item and resumes exactly where playback stopped.
+    /// The video freezes briefly instead of dying. Retries with backoff; the
+    /// blocking error UI only appears once the budget is exhausted.
+    func attemptSeamlessRecovery(reason: String) {
+        // Local files and clips can't expire or be re-resolved — nothing to do.
+        guard localPlaylistPath == nil, clipThumbnailURL == nil else { return }
+        guard !isRecovering else { return }
+
+        // Refill the budget after 10 min of stable playback.
+        if let last = lastRecoveryDate, Date().timeIntervalSince(last) > 600 {
+            recoveryAttempts = 0
+        }
+        recoveryAttempts += 1
+        lastRecoveryDate = Date()
+
+        guard recoveryAttempts <= maxRecoveryAttempts else {
+            AppLogger.shared.log("🎬 Recovery aborted (\(reason)) — budget exhausted")
+            playerActivity = nil
+            errorMessage = String(localized: "Playback failed. Check your connection and try again.")
+            return
+        }
+
+        isRecovering = true
+        playerActivity = .reconnecting
+        AppLogger.shared.log("🎬 Seamless recovery #\(recoveryAttempts) (\(reason))")
+
+        // VOD: resume where we stopped. Live: the fresh item rejoins the edge.
+        let resumePosition: Double? = isLive ? nil : player?.currentTime().seconds
+        let attempt = recoveryAttempts
+
+        recoveryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: recoveryBackoffNanoseconds(attempt))
+            guard let self, !Task.isCancelled else { return }
+            do {
+                // `??` ne supporte pas l'await côté droit (autoclosure).
+                let url: URL
+                if let override = self.resolveStreamURLOverride {
+                    url = try await override()
+                } else {
+                    url = try await self.resolveStreamURL()
+                }
+                let item = self.makePlayerItem(url: url)
+                self.setupPlayerItemObservers(item)
+                self.player?.replaceCurrentItem(with: item)
+
+                if let resumePosition, resumePosition > 0 {
+                    let time = CMTime(seconds: resumePosition, preferredTimescale: 600)
+                    self.player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+                        Task { @MainActor [weak self] in
+                            guard let self else { return }
+                            if finished { self.player?.play() }
+                            self.isRecovering = false
+                            self.playerActivity = nil
+                        }
+                    }
+                } else {
+                    self.player?.play()
+                    self.isRecovering = false
+                    self.playerActivity = nil
+                }
+            } catch {
+                AppLogger.shared.log("🎬 Recovery #\(attempt) failed: \(error.localizedDescription)")
+                self.isRecovering = false
+                self.playerActivity = nil
+                // Chain into the next attempt (longer backoff) — or the error
+                // UI once the budget is exhausted.
+                self.attemptSeamlessRecovery(reason: reason)
+            }
+        }
+    }
+
+    /// Waits for an item to become playable WITHOUT touching the current one.
+    /// Returns false on failure or timeout — the caller keeps the old stream.
+    private func waitUntilReady(_ item: AVPlayerItem, timeoutNanoseconds: UInt64 = 12_000_000_000) async -> Bool {
+        if item.status == .readyToPlay { return true }
+        return await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                for await _ in item.publisher(for: \.status).values {
+                    switch item.status {
+                    case .readyToPlay: return true
+                    case .failed: return false
+                    default: continue
+                    }
+                }
+                return false
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+                return false
+            }
+            let result = await group.next() ?? false
+            group.cancelAll()
+            return result
+        }
+    }
+
+    private enum QualitySwitchError: Error { case preloadFailed }
 
     private func setupTimeObserver() {
         guard !isLive, timeObserver == nil else { return }
@@ -450,12 +893,18 @@ final class PlayerViewModel: ObservableObject {
         guard newQuality != selectedQuality else { return }
         guard localPlaylistPath == nil, clipThumbnailURL == nil else { return }
 
-        if !isLive, let currentTime = player?.currentTime().seconds, currentTime > 0 {
-            self.initialTimecode = Int(currentTime)
+        let previousQuality = selectedQuality
+        // Sub-second capture: seeking to a truncated Int would visibly jump.
+        let currentSeconds = player?.currentTime().seconds ?? 0
+        let resumePosition: Double? = (!isLive && currentSeconds > 0) ? currentSeconds : nil
+        if let resumePosition {
+            initialTimecode = Int(resumePosition)
         }
 
-        self.selectedQuality = newQuality
-        self.isLoading = true
+        selectedQuality = newQuality
+        playerActivity = .switchingQuality
+        qualityChangeGeneration += 1
+        let generation = qualityChangeGeneration
 
         // Resolve ad-block mode so .ttv gets the proxy URL — same as resolveStreamURL.
         let mode = resolvedAdBlockMode()
@@ -474,46 +923,44 @@ final class PlayerViewModel: ObservableObject {
                     quality: newQuality,
                     ttvProxyURL: ttvURL
                 )
-                let playerItem = makePlayerItem(url: url)
+                let newItem = makePlayerItem(url: url)
 
-                self.setupPlayerItemObservers(playerItem)
-                self.player?.replaceCurrentItem(with: playerItem)
+                // Preload: the OLD item keeps rendering until the new one is
+                // ready — the swap then costs ~1 frame instead of a full
+                // rebuffer with a black screen.
+                guard await waitUntilReady(newItem) else {
+                    throw QualitySwitchError.preloadFailed
+                }
+                // A newer quality change owns the player now — discard.
+                guard generation == qualityChangeGeneration else { return }
 
-                if !self.isLive && self.initialTimecode > 0 {
-                    let time = CMTime(seconds: Double(self.initialTimecode), preferredTimescale: 1000)
-                    self.player?.seek(to: time) { [weak self] _ in
+                setupPlayerItemObservers(newItem)
+                player?.replaceCurrentItem(with: newItem)
+
+                if let resumePosition {
+                    let time = CMTime(seconds: resumePosition, preferredTimescale: 600)
+                    player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
                         Task { @MainActor in
+                            guard finished else { return }
                             self?.player?.play()
                         }
                     }
                 } else {
-                    self.player?.play()
+                    player?.play()
                 }
-                self.isLoading = false
+                if generation == qualityChangeGeneration {
+                    playerActivity = nil
+                }
             } catch {
+                // Preload or swap failed: the previous item was never touched,
+                // so playback continues uninterrupted on the old quality.
                 AppLogger.shared.log("Failed to change quality: \(error)")
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
-            }
-        }
-    }
-
-    func resetQualityMenuTimer() {
-        qualityMenuTask?.cancel()
-        if showQualityMenu {
-            qualityMenuTask = Task {
-                // Annulation ignorée volontairement: la tentative doit continuer
-                try? await Task.sleep(nanoseconds: 3_500_000_000)
-                if !Task.isCancelled {
-                    self.showQualityMenu = false
+                if generation == qualityChangeGeneration {
+                    playerActivity = nil
+                    selectedQuality = previousQuality
                 }
             }
         }
-    }
-
-    func toggleQualityMenu() {
-        showQualityMenu.toggle()
-        resetQualityMenuTimer()
     }
 
     // MARK: - Segment Selection & Download

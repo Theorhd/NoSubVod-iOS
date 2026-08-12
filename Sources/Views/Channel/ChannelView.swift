@@ -4,22 +4,20 @@ import SwiftData
 struct ChannelView: View {
     let login: String
     @StateObject private var viewModel: ChannelViewModel
-    
+
     @Environment(\.modelContext) private var modelContext
-    @Query private var subscriptions: [PersistentSubscription]
-    
+    // État chargé une fois, pas un @Query filtré par prédicat capturé : celui-ci
+    // re-fetch SwiftData à chaque lecture du body et invalide l'AttributeGraph en
+    // boucle (layout loop ~200% CPU → freeze). L'état local reste synchrone avec
+    // le ModelContext via toggleSubscription.
+    @State private var subscriptions: [PersistentSubscription] = []
+    @State private var isSubscribed = false
+
     init(login: String) {
         self.login = login
         _viewModel = StateObject(wrappedValue: ChannelViewModel(login: login))
-        
-        let predicateLogin = login
-        _subscriptions = Query(filter: #Predicate<PersistentSubscription> { $0.login == predicateLogin })
     }
-    
-    var isSubscribed: Bool {
-        !subscriptions.isEmpty
-    }
-    
+
     var body: some View {
         ScrollView {
             VStack {
@@ -44,7 +42,7 @@ struct ChannelView: View {
                     .bold()
                 
                 if let live = viewModel.liveStream {
-                    Text("Currently Live")
+                    Text(NSLocalizedString("Now Live", comment: ""))
                         .font(.headline)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal)
@@ -72,7 +70,7 @@ struct ChannelView: View {
                                 .frame(width: 140, height: 78)
                                 .cornerRadius(8)
                                 
-                                Text("LIVE")
+                                Text(NSLocalizedString("LIVE", comment: ""))
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 4)
@@ -87,7 +85,7 @@ struct ChannelView: View {
                                     .font(.headline)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
-                                Text("\(live.viewerCount) viewers • \(live.game?.name ?? "")")
+                                Text(String(format: NSLocalizedString("%lld viewers • %@", comment: ""), live.viewerCount, live.game?.name ?? ""))
                                     .font(.caption)
                                     .foregroundColor(.red)
                             }
@@ -105,7 +103,7 @@ struct ChannelView: View {
                         .padding(.vertical)
                 }
                 
-                Text("Recent VODs")
+                Text(NSLocalizedString("Recent VODs", comment: ""))
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
@@ -143,7 +141,7 @@ struct ChannelView: View {
                                             .font(.headline)
                                             .lineLimit(2)
                                             .multilineTextAlignment(.leading)
-                                        Text("\(vod.viewCount) views • \(vod.lengthSeconds / 3600)h \((vod.lengthSeconds % 3600) / 60)m")
+                                        Text(String(format: NSLocalizedString("%lld views • %lldh %lldm", comment: ""), vod.viewCount, vod.lengthSeconds / 3600, (vod.lengthSeconds % 3600) / 60))
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                             
@@ -170,12 +168,23 @@ struct ChannelView: View {
         }
         .task(id: login) {
             await viewModel.loadVODs()
+            loadSubscriptionState()
         }
     }
-    
+
+    /// Fetch ponctuel de l'abonnement (une seule fois, pas dans le body).
+    private func loadSubscriptionState() {
+        let login = self.login
+        let descriptor = FetchDescriptor<PersistentSubscription>(predicate: #Predicate { $0.login == login })
+        subscriptions = (try? modelContext.fetch(descriptor)) ?? []
+        isSubscribed = !subscriptions.isEmpty
+    }
+
     private func toggleSubscription() {
         if let sub = subscriptions.first {
             modelContext.delete(sub)
+            subscriptions.removeAll()
+            isSubscribed = false
         } else {
             let newSub = PersistentSubscription(
                 login: login,
@@ -183,7 +192,10 @@ struct ChannelView: View {
                 profileImageURL: viewModel.profileImageURL
             )
             modelContext.insert(newSub)
+            subscriptions = [newSub]
+            isSubscribed = true
         }
+        try? modelContext.save()
     }
 }
 
@@ -204,11 +216,15 @@ final class ChannelViewModel: ObservableObject {
     func loadVODs() async {
         guard vods.isEmpty else { return }
         isLoading = true
-        
+
         do {
-            let results = try await TwitchAPIService.shared.fetchChannelVODs(login: login)
+            // VODs et live en parallèle — le live pilote la section "Now Live".
+            async let vodsTask = TwitchAPIService.shared.fetchChannelVODs(login: login)
+            async let streamTask = TwitchAPIService.shared.fetchLiveStream(login: login)
+            let (results, live) = try await (vodsTask, streamTask)
             if !Task.isCancelled {
                 self.vods = results
+                self.liveStream = live
                 if let owner = results.first?.owner {
                     self.displayName = owner.displayName
                     self.profileImageURL = owner.profileImageURL

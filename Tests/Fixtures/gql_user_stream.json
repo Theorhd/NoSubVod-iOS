@@ -1,0 +1,25 @@
+{
+  "data": {
+    "user": {
+      "stream": {
+        "id": "42080878076",
+        "title": "BIG SUBATHON DAY 30",
+        "viewersCount": 25120,
+        "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_kaicenat-640x360.jpg",
+        "createdAt": "2024-06-15T14:30:00.000Z",
+        "language": "en",
+        "game": {
+          "id": "509658",
+          "name": "Just Chatting",
+          "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-110x147.jpg"
+        },
+        "broadcaster": {
+          "id": "123456",
+          "login": "kaicenat",
+          "displayName": "KaiCenat",
+          "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/kaicenat-profile_image-70x70.png"
+        }
+      }
+    }
+  }
+}

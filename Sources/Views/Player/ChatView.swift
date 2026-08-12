@@ -12,6 +12,12 @@ struct ChatView: View {
 
     @State private var draft: String = ""
     @State private var displayedError: String?
+    /// Auto-scroll only happens while the user is already at the bottom —
+    /// reading backlog must never be interrupted by incoming messages.
+    @State private var isAtBottom = true
+    @State private var unreadCount = 0
+
+    private let bottomMarkerID = "chat-bottom-marker"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,15 +43,49 @@ struct ChatView: View {
                                     .padding(.vertical, 2)
                                     .id(message.id)
                                 }
+
+                                // Visibility tracker: visible ⟺ user is at the
+                                // bottom of the chat.
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id(bottomMarkerID)
+                                    .onAppear {
+                                        isAtBottom = true
+                                        unreadCount = 0
+                                    }
+                                    .onDisappear { isAtBottom = false }
                             }
                         }
                         .frame(minHeight: geometry.size.height, alignment: .bottom)
                     }
-                    .onChange(of: messages.count) {
-                        if let lastId = messages.last?.id {
+                    .onChange(of: messages.count) { oldCount, newCount in
+                        guard newCount > oldCount else { return }
+                        if isAtBottom {
                             withAnimation {
-                                proxy.scrollTo(lastId, anchor: .bottom)
+                                proxy.scrollTo(bottomMarkerID, anchor: .bottom)
                             }
+                        } else {
+                            unreadCount += newCount - oldCount
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if !isAtBottom && unreadCount > 0 {
+                            Button {
+                                withAnimation {
+                                    proxy.scrollTo(bottomMarkerID, anchor: .bottom)
+                                }
+                                unreadCount = 0
+                                isAtBottom = true
+                            } label: {
+                                Label("\(unreadCount) new messages", systemImage: "arrow.down")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(.purple, in: Capsule())
+                            }
+                            .padding(.bottom, 8)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
                 }

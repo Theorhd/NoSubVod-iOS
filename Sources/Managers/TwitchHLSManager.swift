@@ -38,6 +38,9 @@ final class TwitchHLSManager {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        // Timeout court : un réseau dégradé doit échouer vite et laisser le
+        // player afficher une erreur, pas geler l'app 60 s (défaut).
+        request.timeoutInterval = 20
         // Lecture (GQL) : web client ID Twitch, inchangé.
         request.addValue(TwitchAPIService.shared.webClientId, forHTTPHeaderField: "Client-Id")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -92,7 +95,11 @@ final class TwitchHLSManager {
         let mappedQuality = TwitchHLSManager.mapQualityToTwitch(targetQuality)
 
         do {
-            let (masterData, _) = try await URLSession.shared.data(from: masterUrl)
+            // Timeout court (20 s) pour le master usher : sur réseau dégradé,
+            // on retombe sur auto au lieu de geler le lancement du live.
+            var masterRequest = URLRequest(url: masterUrl)
+            masterRequest.timeoutInterval = 20
+            let (masterData, _) = try await URLSession.shared.data(for: masterRequest)
             if let masterString = String(data: masterData, encoding: .utf8) {
                 let lines = masterString.components(separatedBy: .newlines)
                 var pendingVariantURL = false

@@ -49,7 +49,7 @@
 "Segment" = "Segment";
 
 /* ChannelView */
-"Currently Live" = "En direct";
+"Now Live" = "En direct";
 "LIVE" = "LIVE";
 "Recent VODs" = "VODs récentes";
 
@@ -58,6 +58,9 @@
 "Select the segment to download" = "Sélectionnez le segment à télécharger";
 "Start" = "Début";
 "End" = "Fin";
+"Reconnecting…" = "Reconnexion…";
+"Switching quality…" = "Changement de qualité…";
+"Playback failed. Check your connection and try again." = "La lecture a échoué. Vérifiez votre connexion et réessayez.";
 
 "Segment selected successfully!" = "Segment sélectionné avec succès !";
 "Download Options" = "Options de téléchargement";
@@ -83,6 +86,7 @@
 "Sign in" = "Se connecter";
 "Sign in to chat" = "Connecte-toi pour chatter";
 "Message..." = "Message...";
+"%lld new messages" = "%lld nouveaux messages";
 
 /* Twitch Sign-In */
 "Twitch Sign-In" = "Connexion Twitch";
@@ -137,8 +141,14 @@
 "Channels" = "Chaînes";
 "Categories" = "Catégories";
 "Channels, games, etc." = "Chaînes, jeux, etc.";
+"Recent Search" = "Recherches récentes";
+"Popular Categories" = "Catégories populaires";
+"Clear" = "Effacer";
 
 /* Misc */
 "Done" = "Terminé";
 "See all" = "Tout voir";
 "File unavailable" = "Fichier indisponible";
+
+/* Now Playing (Control Center) */
+"Live Stream" = "En direct";

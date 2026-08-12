@@ -42,28 +42,46 @@ enum ProxyScraperService {
 
     /// Fetches every country page and parses the proxies, deduped across
     /// pages by host:port. A dead page is skipped, not fatal.
+    ///
+    /// Pages fetched CONCURRENTLY with a hard 12 s deadline: on a degraded
+    /// network, a slow page must not block the live launch (the old sequential
+    /// loop could take up to ~40 s of 10 s timeouts).
     static func fetchCandidates(session: URLSession? = nil) async -> [HTTPProxy] {
         let urlSession = session ?? makeScrapeSession()
-        var proxies: [HTTPProxy] = []
-        var seen = Set<String>()
-        for page in countryPages.values {
-            do {
-                guard let pageURL = URL(string: page) else { continue }
-                let (data, response) = try await urlSession.data(from: pageURL)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200,
-                      let html = String(data: data, encoding: .utf8) else { continue }
-                for proxy in parseProxies(from: html) {
+        return await withTaskGroup(of: [HTTPProxy].self) { group in
+            for page in countryPages.values {
+                group.addTask {
+                    await Self.fetchPage(page, session: urlSession)
+                }
+            }
+            var proxies: [HTTPProxy] = []
+            var seen = Set<String>()
+            let deadline = Date().addingTimeInterval(12)
+            while let batch = await group.next(), Date() < deadline {
+                for proxy in batch {
                     let key = "\(proxy.host):\(proxy.port)"
                     if !seen.contains(key) {
                         seen.insert(key)
                         proxies.append(proxy)
                     }
                 }
-            } catch {
-                continue
             }
+            group.cancelAll()
+            return proxies
         }
-        return proxies
+    }
+
+    /// Parses proxies from a single spys.one page. Returns [] on any failure.
+    private static func fetchPage(_ page: String, session: URLSession) async -> [HTTPProxy] {
+        guard let pageURL = URL(string: page) else { return [] }
+        do {
+            let (data, response) = try await session.data(from: pageURL)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  let html = String(data: data, encoding: .utf8) else { return [] }
+            return parseProxies(from: html)
+        } catch {
+            return []
+        }
     }
 
     /// Validates candidates CONCURRENTLY and returns the first valid one in
