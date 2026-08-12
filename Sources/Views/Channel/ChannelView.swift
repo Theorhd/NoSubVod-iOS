@@ -216,7 +216,7 @@ final class ChannelViewModel: ObservableObject {
                 self.isLoading = false
             }
         } catch {
-            print("Erreur de chargement des VODs pour \(login): \(error)")
+            AppLogger.shared.log("Erreur de chargement des VODs pour \(login): \(error)")
             if !Task.isCancelled {
                 self.isLoading = false
             }

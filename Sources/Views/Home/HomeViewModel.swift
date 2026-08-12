@@ -22,6 +22,7 @@ final class HomeViewModel: ObservableObject {
             if TwitchAPIService.shared.shouldSkipLiveStatusFetch() {
                 subsLive = liveSubscriptions
             } else {
+                // Échec → liste vide, fallback prévu
                 subsLive = (try? await TwitchAPIService.shared.fetchLiveStatus(for: subs.map { $0.login })) ?? []
                 TwitchAPIService.shared.markLiveStatusFetched()
             }
@@ -36,7 +37,7 @@ final class HomeViewModel: ObservableObject {
                 self.isLoading         = false
             }
         } catch {
-            print("Erreur de chargement HomeViewModel: \(error)")
+            AppLogger.shared.log("Erreur de chargement HomeViewModel: \(error)")
             if !Task.isCancelled {
                 self.isLoading = false
             }

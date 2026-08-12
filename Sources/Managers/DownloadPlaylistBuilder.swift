@@ -33,7 +33,8 @@ enum DownloadPlaylistBuilder {
             }
             for tag in chunk.trailingTags { m3u8Lines.append(tag) }
             guard FileManager.default.fileExists(atPath: vodDirectory.appendingPathComponent(chunk.filename).path) else {
-                missingCount += 1; continue
+                missingCount += 1
+                continue
             }
             m3u8Lines.append("#EXTINF:\(String(format: "%.3f", chunk.duration)),")
             m3u8Lines.append(chunk.filename)
@@ -61,9 +62,13 @@ enum DownloadPlaylistBuilder {
         segmentMetadatas: [[String: Any]],
         vodDirectory: URL
     ) {
-        guard !segmentMetadatas.isEmpty,
-              let jsonData = try? JSONSerialization.data(withJSONObject: segmentMetadatas) else { return }
-        try? jsonData.write(to: vodDirectory.appendingPathComponent("video.segments.json"))
+        guard !segmentMetadatas.isEmpty else { return }
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: segmentMetadatas)
+            try jsonData.write(to: vodDirectory.appendingPathComponent("video.segments.json"))
+        } catch {
+            AppLogger.shared.log("DownloadPlaylistBuilder: failed to write video.segments.json — \(error)")
+        }
         AppLogger.shared.log("📝 video.segments.json: \(segmentMetadatas.count) segments")
     }
 
@@ -71,9 +76,9 @@ enum DownloadPlaylistBuilder {
     /// as they are no longer needed (their content has been merged).
     static func cleanupChunkFiles(chunks: [HLSPlaylistParser.ChunkInfo], vodDirectory: URL) {
         for chunk in chunks {
-            try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(chunk.filename))
+            FileManager.default.removeItemIfExists(at: vodDirectory.appendingPathComponent(chunk.filename))
         }
-        try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("index.m3u8"))
+        FileManager.default.removeItemIfExists(at: vodDirectory.appendingPathComponent("index.m3u8"))
     }
 
     // MARK: - Error

@@ -11,7 +11,7 @@ struct NoSubVodApp: App {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("Failed to configure audio session: \(error)")
+            AppLogger.shared.log("Failed to configure audio session: \(error)")
         }
         
         LiveContainerStorageManager.shared.setup()
@@ -21,8 +21,7 @@ struct NoSubVodApp: App {
         
         var modelConfiguration: ModelConfiguration
         if isLiveContainer {
-            let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-            let storeURL = paths[0].appendingPathComponent("NoSubVod_LiveContainer.sqlite")
+            let storeURL = FileManager.documentsDirectory.appendingPathComponent("NoSubVod_LiveContainer.sqlite")
             modelConfiguration = ModelConfiguration(url: storeURL)
         } else {
             modelConfiguration = ModelConfiguration()
@@ -50,11 +49,11 @@ final class AppLogger {
     private let queue = DispatchQueue(label: "com.nosubvod.logger")
     
     private init() {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        logFileURL = paths[0].appendingPathComponent("NoSubVod.log")
+        logFileURL = FileManager.documentsDirectory.appendingPathComponent("NoSubVod.log")
         
         if let attr = try? FileManager.default.attributesOfItem(atPath: logFileURL.path),
            let size = attr[.size] as? UInt64, size > 2_000_000 {
+            // Best-effort : AppLogger ne peut pas se logger lui-même pendant son init
             try? FileManager.default.removeItem(at: logFileURL)
         }
     }
@@ -86,10 +85,4 @@ final class AppLogger {
         }
         return logFileURL
     }
-}
-
-public func print(_ items: Any..., separator: String = " ", terminator: String = "\n") {
-    let message = items.map { "\($0)" }.joined(separator: separator)
-    Swift.print(message, terminator: terminator)
-    AppLogger.shared.log(message)
 }

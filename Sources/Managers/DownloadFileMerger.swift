@@ -10,6 +10,7 @@ enum DownloadFileMerger {
     /// triggers a memory crash (jetsam).
     static func streamCopy(from source: URL, to handle: FileHandle, chunkSize: Int = 4 * 1_024 * 1_024) throws {
         let input = try FileHandle(forReadingFrom: source)
+        // Fermeture best-effort du handle
         defer { try? input.close() }
         while true {
             let done = try autoreleasepool { () -> Bool in
@@ -46,16 +47,19 @@ enum DownloadFileMerger {
             let outputURL = vodDirectory.appendingPathComponent(filename)
             FileManager.default.createFile(atPath: outputURL.path, contents: nil)
             let handle = try FileHandle(forWritingTo: outputURL)
+            // Fermeture best-effort du handle
             defer { try? handle.close() }
 
             var currentOffset: UInt64 = 0
             for chunk in batchChunks {
                 try autoreleasepool {
                     let chunkURL = vodDirectory.appendingPathComponent(chunk.filename)
+                    // Métadonnée optionnelle, nil prévu
                     guard FileManager.default.fileExists(atPath: chunkURL.path),
                           let attrs = try? FileManager.default.attributesOfItem(atPath: chunkURL.path),
                           let chunkSize = (attrs[.size] as? NSNumber)?.uint64Value else {
-                        missingCount += 1; return
+                        missingCount += 1
+                        return
                     }
                     try streamCopy(from: chunkURL, to: handle)
                     allSegmentMetadatas.append([

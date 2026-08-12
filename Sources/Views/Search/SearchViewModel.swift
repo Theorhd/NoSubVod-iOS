@@ -31,7 +31,7 @@ final class SearchViewModel: ObservableObject {
                 }
             } catch {
                 if !(error is CancellationError) {
-                    print("Erreur de recherche: \(error)")
+                    AppLogger.shared.log("Erreur de recherche: \(error)")
                 }
                 if !Task.isCancelled {
                     self.isSearching = false

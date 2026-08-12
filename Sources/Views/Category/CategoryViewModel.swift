@@ -27,7 +27,7 @@ final class CategoryViewModel: ObservableObject {
                 self.isLoading = false
             }
         } catch {
-            print("Erreur de chargement pour la catégorie \(game.name): \(error)")
+            AppLogger.shared.log("Erreur de chargement pour la catégorie \(game.name): \(error)")
             if !Task.isCancelled {
                 self.isLoading = false
             }

@@ -56,17 +56,17 @@ final class LiveContainerStorageManager {
                     self.defaults.set(token, forKey: "twitch_access_token")
                 }
                 self.defaults.set(true, forKey: "isLiveContainerStorageEnabled")
-                print("Restored UserDefaults from LiveContainerPrefs.json")
+                AppLogger.shared.log("Restored UserDefaults from LiveContainerPrefs.json")
             }
         } catch {
-            print("Failed to restore LiveContainerPrefs: \(error)")
+            AppLogger.shared.log("Failed to restore LiveContainerPrefs: \(error)")
         }
     }
     
     private func saveIfNeeded() {
         guard isEnabled else {
             if self.fileManager.fileExists(atPath: prefsURL.path) {
-                try? self.fileManager.removeItem(at: prefsURL)
+                self.fileManager.removeItemIfExists(at: prefsURL)
             }
             return
         }
@@ -88,7 +88,7 @@ final class LiveContainerStorageManager {
             let data = try JSONEncoder().encode(prefs)
             try data.write(to: prefsURL)
         } catch {
-            print("Failed to save LiveContainerPrefs: \(error)")
+            AppLogger.shared.log("Failed to save LiveContainerPrefs: \(error)")
         }
     }
 }

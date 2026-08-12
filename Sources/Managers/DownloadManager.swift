@@ -30,7 +30,7 @@ final class DownloadManager: NSObject, ObservableObject, URLSessionDownloadDeleg
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let sourceURL = downloadTask.originalRequest?.url else { return }
         
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let documentsPath = FileManager.documentsDirectory
         let destinationURL = documentsPath.appendingPathComponent(sourceURL.lastPathComponent)
         
         do {
@@ -38,13 +38,13 @@ final class DownloadManager: NSObject, ObservableObject, URLSessionDownloadDeleg
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.moveItem(at: location, to: destinationURL)
-            print("Successfully downloaded to: \\(destinationURL.path)")
+            AppLogger.shared.log("Successfully downloaded to: \(destinationURL.path)")
             
             DispatchQueue.main.async {
                 self.activeDownloads.removeValue(forKey: sourceURL.absoluteString)
             }
         } catch {
-            print("File move error: \\(error)")
+            AppLogger.shared.log("File move error: \(error)")
         }
     }
     

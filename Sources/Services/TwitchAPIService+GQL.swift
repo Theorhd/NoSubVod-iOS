@@ -409,6 +409,7 @@ extension TwitchAPIService {
         await withTaskGroup(of: [VOD].self) { group in
             for game in topGames {
                 group.addTask {
+                    // Échec → liste vide, fallback prévu
                     return (try? await self.fetchGameVODs(gameName: game, limit: 15)) ?? []
                 }
             }
@@ -477,7 +478,7 @@ extension TwitchAPIService {
                             return self.mapVideoNode(node)
                         }
                     } catch {
-                        print("Error fetching video \(id): \(error)")
+                        AppLogger.shared.log("Error fetching video \(id): \(error)")
                     }
                     return nil
                 }

@@ -89,7 +89,11 @@ struct HistoryView: View {
     
     private func deleteEntry(_ entry: PersistentHistoryEntry) {
         modelContext.delete(entry)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.shared.log("Failed to save history view — \(error)")
+        }
     }
 }
 

@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-class PersistentHistoryEntry {
+final class PersistentHistoryEntry {
     @Attribute(.unique) var id: UUID
     var vodId: String
     var timecode: Int
@@ -33,7 +33,7 @@ class PersistentHistoryEntry {
 }
 
 @Model
-class PersistentWatchlistEntry {
+final class PersistentWatchlistEntry {
     @Attribute(.unique) var id: UUID
     var vodId: String
     var title: String
@@ -52,7 +52,7 @@ class PersistentWatchlistEntry {
 }
 
 @Model
-class PersistentSubscription {
+final class PersistentSubscription {
     @Attribute(.unique) var login: String
     var displayName: String
     var profileImageURL: URL?

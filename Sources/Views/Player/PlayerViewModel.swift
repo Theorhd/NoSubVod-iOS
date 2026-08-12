@@ -220,7 +220,7 @@ final class PlayerViewModel: ObservableObject {
                 }
                 self.isLoading = false
             } catch {
-                print("Failed to load stream: \(error)")
+                AppLogger.shared.log("Failed to load stream: \(error)")
                 self.errorMessage = error.localizedDescription
                 self.isLoading = false
             }
@@ -229,7 +229,7 @@ final class PlayerViewModel: ObservableObject {
 
     private func resolveStreamURL() async throws -> URL {
         if let localPath = localPlaylistPath {
-            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let documentsPath = FileManager.documentsDirectory
             let vodDirectory = documentsPath.appendingPathComponent(localPath).deletingLastPathComponent()
 
             // Priority: index.m3u8 (fMP4) → video_000.ts (multi-file TS) → video.ts (legacy TS) → video.mp4 → raw path
@@ -398,11 +398,11 @@ final class PlayerViewModel: ObservableObject {
         for (name, handler) in [
             (Notification.Name.AVPlayerItemFailedToPlayToEndTime, { (n: Notification) in
                 let err = n.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
-                print("🎬 FailedToPlayToEndTime: \(err?.localizedDescription ?? "?")")
+                AppLogger.shared.log("🎬 FailedToPlayToEndTime: \(err?.localizedDescription ?? "?")")
             }),
             (Notification.Name.AVPlayerItemNewErrorLogEntry, { n in
                 if let e = playerItem.errorLog()?.events.last {
-                    print("🎬 ErrorLog: \(e.errorComment ?? "") (\(e.errorStatusCode)) — \(e.uri ?? "")")
+                    AppLogger.shared.log("🎬 ErrorLog: \(e.errorComment ?? "") (\(e.errorStatusCode)) — \(e.uri ?? "")")
                 }
             }),
         ] {
@@ -474,7 +474,7 @@ final class PlayerViewModel: ObservableObject {
                 }
                 self.isLoading = false
             } catch {
-                print("Failed to change quality: \(error)")
+                AppLogger.shared.log("Failed to change quality: \(error)")
                 self.errorMessage = error.localizedDescription
                 self.isLoading = false
             }
@@ -485,6 +485,7 @@ final class PlayerViewModel: ObservableObject {
         qualityMenuTask?.cancel()
         if showQualityMenu {
             qualityMenuTask = Task {
+                // Annulation ignorée volontairement: la tentative doit continuer
                 try? await Task.sleep(nanoseconds: 3_500_000_000)
                 if !Task.isCancelled {
                     self.showQualityMenu = false

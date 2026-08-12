@@ -78,7 +78,7 @@ final class TwitchAPIService {
         }
 
         guard let url = URL(string: gqlBaseURL) else {
-            print("GQL ERROR: invalidURL")
+            AppLogger.shared.log("GQL ERROR: invalidURL")
             throw TwitchAPIError.invalidURL
         }
 
@@ -100,12 +100,12 @@ final class TwitchAPIService {
         let (data, response) = try await urlSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("GQL ERROR: Not HTTPURLResponse")
+            AppLogger.shared.log("GQL ERROR: Not HTTPURLResponse")
             throw TwitchAPIError.invalidResponse
         }
 
         if httpResponse.statusCode != 200 {
-            print("GQL ERROR: statusCode = \(httpResponse.statusCode), body = \(String(data: data, encoding: .utf8) ?? "")")
+            AppLogger.shared.log("GQL ERROR: statusCode = \(httpResponse.statusCode), body = \(String(data: data, encoding: .utf8) ?? "")")
             throw TwitchAPIError.invalidResponse
         }
 

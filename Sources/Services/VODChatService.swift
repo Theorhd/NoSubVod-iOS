@@ -76,7 +76,7 @@ final class VODChatService: ObservableObject {
                             }
                         }
                         
-                        let chatCommenter = ChatCommenter(displayName: displayName, login: login, profileImageURL: nil)
+                        let chatCommenter = ChatCommenter(displayName: displayName, login: login, profileImageURL: nil, colorHex: nil)
                         let fragment = ChatFragment(text: text, emote: nil)
                         let chatContent = ChatMessageContent(fragments: [fragment])
                         
@@ -111,7 +111,7 @@ final class VODChatService: ObservableObject {
                     await MainActor.run { self.isFetching = false }
                 }
             } catch {
-                print("Failed to fetch VOD chat: \(error)")
+                AppLogger.shared.log("Failed to fetch VOD chat: \(error)")
                 await MainActor.run { self.isFetching = false }
             }
         }

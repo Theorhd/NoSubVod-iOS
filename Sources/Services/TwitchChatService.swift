@@ -9,10 +9,14 @@ final class TwitchChatService: ObservableObject {
     // concurrent à disconnect() depuis MainActor.
     private var isConnected: Bool = false
 
-    private let url = URL(string: "wss://irc-ws.chat.twitch.tv:443")!
+    private let url: URL? = URL(string: "wss://irc-ws.chat.twitch.tv:443")
 
     func connect(channel: String) {
         messages.removeAll()
+        guard let url else {
+            AppLogger.shared.log("TwitchChatService: invalid websocket URL")
+            return
+        }
         isConnected = true
 
         let request = URLRequest(url: url)
@@ -40,7 +44,7 @@ final class TwitchChatService: ObservableObject {
         let messageToSend = URLSessionWebSocketTask.Message.string(message)
         webSocketTask?.send(messageToSend) { error in
             if let error = error {
-                print("Error sending message: \(error)")
+                AppLogger.shared.log("Error sending message: \(error)")
             }
         }
     }
@@ -51,7 +55,7 @@ final class TwitchChatService: ObservableObject {
 
             switch result {
             case .failure(let error):
-                print("Error in receiving message: \(error)")
+                AppLogger.shared.log("Error in receiving message: \(error)")
             case .success(let message):
                 switch message {
                 case .string(let text):

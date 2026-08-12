@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-class VODDownload {
+final class VODDownload {
     @Attribute(.unique) var id: UUID
     var vodId: String
     var title: String
