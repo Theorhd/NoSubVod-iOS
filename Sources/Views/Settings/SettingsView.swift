@@ -11,8 +11,14 @@ struct SettingsView: View {
     @AppStorage("isLiveContainerStorageEnabled") private var isLiveContainerStorageEnabled = false
     @AppStorage("adBlockMode") private var adBlockMode = AdBlockMode.local.rawValue
     @AppStorage("ttvProxyURL") private var ttvProxyURL = "https://api.ttv.lol"
+    @AppStorage("externalProxyURL") private var externalProxyURL = ""
+    @AppStorage("externalProxyLastGood") private var externalProxyLastGood = ""
     @Environment(\.dismiss) private var dismiss
     @State private var cacheSize: String = ""
+    @State private var proxyTestResult: String?
+    @State private var isTestingProxy = false
+    @State private var fetchProxyResult: String?
+    @State private var isFetchingProxy = false
     
     var body: some View {
         NavigationStack {
@@ -66,6 +72,55 @@ struct SettingsView: View {
                         Text("Enter the URL of a TTV-compatible ad-blocking proxy.")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                    }
+
+                    if adBlockMode == AdBlockMode.external.rawValue {
+                        TextField("Proxy URL", text: $externalProxyURL)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .keyboardType(.URL)
+
+                        Text("HTTP proxy (host:port) in an ad-free country — e.g. your own Squid. Leave empty to auto-fetch a free proxy from the ad-free country lists.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        HStack {
+                            Button("Test Proxy") {
+                                testExternalProxy()
+                            }
+                            .disabled(isTestingProxy || isFetchingProxy)
+
+                            if isTestingProxy {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else if let proxyTestResult {
+                                Text(proxyTestResult)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        HStack {
+                            Button("Fetch Free Proxy") {
+                                fetchFreeProxy()
+                            }
+                            .disabled(isFetchingProxy || isTestingProxy)
+
+                            if isFetchingProxy {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else if let fetchProxyResult {
+                                Text(fetchProxyResult)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        if !externalProxyLastGood.isEmpty {
+                            Text(String(format: NSLocalizedString("Last auto-discovered: %@", comment: ""), externalProxyLastGood))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
 
                     if let mode = AdBlockMode(rawValue: adBlockMode) {
@@ -142,8 +197,10 @@ struct SettingsView: View {
                     HStack {
                         Text("Developer")
                         Spacer()
-                        Link("Theorhd", destination: URL(string: "https://github.com/Theorhd")!)
-                            .foregroundColor(.secondary)
+                        if let githubURL = URL(string: "https://github.com/Theorhd") {
+                            Link("Theorhd", destination: githubURL)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
@@ -162,6 +219,56 @@ struct SettingsView: View {
         }
     }
     
+    private func testExternalProxy() {
+        guard let proxy = ExternalProxyService.parse(externalProxyURL) else {
+            proxyTestResult = NSLocalizedString("Invalid proxy URL — use host:port", comment: "")
+            return
+        }
+        proxyTestResult = nil
+        isTestingProxy = true
+        Task {
+            let result = await ExternalProxyService.validate(proxy)
+            let text: String
+            switch result.status {
+            case .ok(let countryCode):
+                text = String(format: NSLocalizedString("✓ Ad-free country (%@)", comment: ""), countryCode)
+            case .notAdFree(let countryCode):
+                text = String(format: NSLocalizedString("✗ Country %@ still serves ads", comment: ""), countryCode)
+            case .unreachable:
+                text = NSLocalizedString("✗ Proxy unreachable", comment: "")
+            }
+            DispatchQueue.main.async {
+                isTestingProxy = false
+                proxyTestResult = text
+            }
+        }
+    }
+
+    /// Scrapes the ad-free country lists (spys.one MD/RU/EE/BG), validates
+    /// the candidates end-to-end and stores the first working proxy — the
+    /// same chain the player runs at playback when the URL field is empty.
+    /// The result message reports the scrape count so a failure tells apart
+    /// "lists unreachable" from "all candidates dead".
+    private func fetchFreeProxy() {
+        fetchProxyResult = nil
+        isFetchingProxy = true
+        Task {
+            let candidates = await ProxyScraperService.fetchCandidates()
+            let found = candidates.isEmpty ? nil : await ProxyScraperService.findFirstValid(candidates)
+            await MainActor.run {
+                isFetchingProxy = false
+                if candidates.isEmpty {
+                    fetchProxyResult = NSLocalizedString("✗ lists unreachable — no proxies scraped", comment: "")
+                } else if let found {
+                    externalProxyLastGood = "\(found.host):\(found.port)"
+                    fetchProxyResult = String(format: NSLocalizedString("✓ %@", comment: ""), externalProxyLastGood)
+                } else {
+                    fetchProxyResult = String(format: NSLocalizedString("✗ no usable proxy found (%d scraped)", comment: ""), candidates.count)
+                }
+            }
+        }
+    }
+
     private func calculateCacheSize() {
         DispatchQueue.global(qos: .background).async {
             var totalSize: Int64 = 0
@@ -169,6 +276,7 @@ struct SettingsView: View {
             if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
                 if let enumerator = FileManager.default.enumerator(at: cacheURL, includingPropertiesForKeys: [.fileSizeKey]) {
                     for case let fileURL as URL in enumerator {
+                        // Valeur optionnelle, nil prévu
                         if let fileSize = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
                             totalSize += Int64(fileSize)
                         }
@@ -191,7 +299,7 @@ struct SettingsView: View {
         if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
             if let enumerator = FileManager.default.enumerator(at: cacheURL, includingPropertiesForKeys: nil) {
                 for case let fileURL as URL in enumerator {
-                    try? FileManager.default.removeItem(at: fileURL)
+                    FileManager.default.removeItemIfExists(at: fileURL)
                 }
             }
         }

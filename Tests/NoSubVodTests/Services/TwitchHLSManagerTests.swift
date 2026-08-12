@@ -38,4 +38,59 @@ final class TwitchHLSManagerTests: XCTestCase {
     func testMapQuality_empty_returnsEmpty() {
         XCTAssertEqual(TwitchHLSManager.mapQualityToTwitch(""), "")
     }
+
+    // MARK: - TTV proxy URL normalization
+
+    func testNormalizeTTVProxyURL_fullURL_staysIntact() {
+        XCTAssertEqual(
+            TwitchHLSManager.normalizeTTVProxyURL("https://api.ttv.lol"),
+            "https://api.ttv.lol"
+        )
+    }
+
+    func testNormalizeTTVProxyURL_missingScheme_getsHTTPS() {
+        XCTAssertEqual(
+            TwitchHLSManager.normalizeTTVProxyURL("api.ttv.lol"),
+            "https://api.ttv.lol"
+        )
+    }
+
+    func testNormalizeTTVProxyURL_trailingSlash_isStripped() {
+        XCTAssertEqual(
+            TwitchHLSManager.normalizeTTVProxyURL("https://api.ttv.lol/"),
+            "https://api.ttv.lol"
+        )
+    }
+
+    func testNormalizeTTVProxyURL_customPathPrefix_isPreserved() {
+        XCTAssertEqual(
+            TwitchHLSManager.normalizeTTVProxyURL("https://my-proxy.example.com/ttv"),
+            "https://my-proxy.example.com/ttv"
+        )
+    }
+
+    func testNormalizeTTVProxyURL_queryAndFragment_areDropped() {
+        XCTAssertEqual(
+            TwitchHLSManager.normalizeTTVProxyURL("https://api.ttv.lol?foo=bar#frag"),
+            "https://api.ttv.lol"
+        )
+    }
+
+    func testNormalizeTTVProxyURL_surroundingWhitespace_isTrimmed() {
+        XCTAssertEqual(
+            TwitchHLSManager.normalizeTTVProxyURL("  https://api.ttv.lol  "),
+            "https://api.ttv.lol"
+        )
+    }
+
+    func testNormalizeTTVProxyURL_nilOrBlank_returnsNil() {
+        XCTAssertNil(TwitchHLSManager.normalizeTTVProxyURL(nil))
+        XCTAssertNil(TwitchHLSManager.normalizeTTVProxyURL(""))
+        XCTAssertNil(TwitchHLSManager.normalizeTTVProxyURL("   "))
+    }
+
+    func testNormalizeTTVProxyURL_malformed_returnsNil() {
+        XCTAssertNil(TwitchHLSManager.normalizeTTVProxyURL("://"))
+        XCTAssertNil(TwitchHLSManager.normalizeTTVProxyURL("https://"))
+    }
 }

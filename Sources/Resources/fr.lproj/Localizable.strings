@@ -79,12 +79,12 @@
 /* Ad Blocking */
 "Ad Blocking" = "Blocage des pubs";
 "Ad Block Mode" = "Mode anti-pub";
-"Local (recommended)" = "Local (recommandé)";
+"Local" = "Local";
 "TTV Proxy" = "Proxy TTV";
 "Disabled" = "Désactivé";
 "Proxy URL" = "URL du proxy";
 "Enter the URL of a TTV-compatible ad-blocking proxy." = "Entrez l'URL d'un proxy anti-pub compatible TTV.";
-"Built-in proxy that cleans the stream locally" = "Proxy intégré qui nettoie le flux en local";
+"Built-in proxy that cleans the stream locally - Currently, the player may turn black for 5 to 15 seconds at the start of playback." = "Proxy intégré qui nettoie le flux en local - Le player peut devenir noir pendant les 5-15 premieres secondes de lectures.";
 "Delegates cleaning to an external proxy server" = "Délègue le nettoyage à un serveur proxy externe";
 "No blocking — native Twitch behavior" = "Aucun blocage — comportement natif Twitch";
 

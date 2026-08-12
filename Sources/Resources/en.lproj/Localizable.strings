@@ -79,12 +79,12 @@
 /* Ad Blocking */
 "Ad Blocking" = "Ad Blocking";
 "Ad Block Mode" = "Ad Block Mode";
-"Local (recommended)" = "Local (recommended)";
+"Local" = "Local";
 "TTV Proxy" = "TTV Proxy";
 "Disabled" = "Disabled";
 "Proxy URL" = "Proxy URL";
 "Enter the URL of a TTV-compatible ad-blocking proxy." = "Enter the URL of a TTV-compatible ad-blocking proxy.";
-"Built-in proxy that cleans the stream locally" = "Built-in proxy that cleans the stream locally";
+"Built-in proxy that cleans the stream locally - Currently, the player may turn black for 5 to 15 seconds at the start of playback." = "Built-in proxy that cleans the stream locally - Currently, the player may turn black for 5 to 15 seconds at the start of playback.";
 "Delegates cleaning to an external proxy server" = "Delegates cleaning to an external proxy server";
 "No blocking — native Twitch behavior" = "No blocking — native Twitch behavior";
 

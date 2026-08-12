@@ -33,10 +33,58 @@ final class PlayerViewModel: ObservableObject {
     private var currentTSPlayerItem: TSPlayerItem?
     // Retain AdStrippingProxy for the playback session (same reason as above).
     private var currentProxy: AdStrippingProxy?
+    /// The external proxy resolved for this playback session (configured URL,
+    /// cached auto-discovered proxy, or a fresh scrape). nil → plain local
+    /// stripping, the fallback when nothing usable.
+    private var currentExternalProxy: HTTPProxy?
     nonisolated(unsafe) var timeObserver: Any?
 
     var onTimeUpdate: ((Int, Int) -> Void)?
     var initialTimecode: Int = 0
+
+    /// One-shot fallback state: if playback through the external TTV proxy
+    /// fails (proxy down, rate-limited, or serving unplayable playlists), we
+    /// retry exactly once with local ad blocking instead of surfacing a
+    /// cryptic AVPlayer error.
+    private var adBlockModeOverride: AdBlockMode?
+    private var didFallbackFromTTV = false
+
+    /// The effective ad-block mode — the user setting, unless a fallback
+    /// override kicked in for this playback session.
+    private func resolvedAdBlockMode() -> AdBlockMode {
+        if let adBlockModeOverride { return adBlockModeOverride }
+        return AdBlockMode(rawValue: UserDefaults.standard.string(forKey: "adBlockMode") ?? AdBlockMode.local.rawValue) ?? .local
+    }
+
+    /// Resolves the proxy for `.external` mode, in order:
+    /// 1. the user-configured URL, if it validates,
+    /// 2. the last auto-discovered free proxy, if it still works,
+    /// 3. a fresh scrape of the ad-free country lists (spys.one).
+    /// Returns nil when nothing works — the caller falls back to `.local`.
+    private func resolveExternalProxy() async -> HTTPProxy? {
+        // 1. User-configured proxy.
+        let userProxy = ExternalProxyService.parse(UserDefaults.standard.string(forKey: "externalProxyURL") ?? "")
+        if let userProxy, case .ok = await ExternalProxyService.validate(userProxy).status {
+            AppLogger.shared.log("🛡 External proxy: using configured \(userProxy.host):\(userProxy.port)")
+            return userProxy
+        }
+        // 2. Last auto-discovered proxy, if it still exits ad-free.
+        let cached = UserDefaults.standard.string(forKey: "externalProxyLastGood")
+            .flatMap(ExternalProxyService.parse)
+        if let cached, case .ok = await ExternalProxyService.validate(cached).status {
+            AppLogger.shared.log("🛡 External proxy: using cached \(cached.host):\(cached.port)")
+            return cached
+        }
+        // 3. Scrape the ad-free lists and validate candidates end-to-end.
+        let candidates = await ProxyScraperService.fetchCandidates()
+        if let found = await ProxyScraperService.findFirstValid(candidates) {
+            UserDefaults.standard.set("\(found.host):\(found.port)", forKey: "externalProxyLastGood")
+            AppLogger.shared.log("🛡 External proxy: auto-discovered \(found.host):\(found.port)")
+            return found
+        }
+        AppLogger.shared.log("🛡 External proxy: no usable proxy found")
+        return nil
+    }
 
     init(videoID: String, isLive: Bool, clipThumbnailURL: URL? = nil, localPlaylistPath: String? = nil) {
         self.videoID = videoID
@@ -73,6 +121,18 @@ final class PlayerViewModel: ObservableObject {
 
         Task {
             do {
+                // .external: resolve a working proxy (configured URL, cached
+                // auto-discovered proxy, or a fresh scrape of the ad-free
+                // lists) before burning a playback on it — a dead proxy would
+                // 502 every fetch. On failure, fall back to local stripping
+                // for this session.
+                if resolvedAdBlockMode() == .external {
+                    currentExternalProxy = await resolveExternalProxy()
+                    if currentExternalProxy == nil {
+                        adBlockModeOverride = .local
+                        AppLogger.shared.log("🛡 External proxy: none usable — falling back to local")
+                    }
+                }
                 let url = try await resolveStreamURL()
                 let playerItem = makePlayerItem(url: url)
 
@@ -141,7 +201,7 @@ final class PlayerViewModel: ObservableObject {
             return URL(string: urlString) ?? clipThumb
         } else {
             let ttvURL: String?
-            let mode = AdBlockMode(rawValue: UserDefaults.standard.string(forKey: "adBlockMode") ?? AdBlockMode.local.rawValue) ?? .local
+            let mode = resolvedAdBlockMode()
             if mode == .ttv {
                 ttvURL = UserDefaults.standard.string(forKey: "ttvProxyURL") ?? "https://api.ttv.lol"
             } else {
@@ -158,6 +218,7 @@ final class PlayerViewModel: ObservableObject {
 
     private func makePlayerItem(url: URL) -> AVPlayerItem {
         if url.isFileURL, url.pathExtension == "m3u8" {
+            // Chaîne de fallback: chaque mode de lecture essayé en séquence, l'échec d'un mode est prévu
             if let tsItem = try? TSPlayerItem(fmp4Directory: url.deletingLastPathComponent()) {
                 currentTSPlayerItem = tsItem
                 return tsItem.playerItem
@@ -190,13 +251,37 @@ final class PlayerViewModel: ObservableObject {
             return AVPlayerItem(asset: AVURLAsset(url: url))
         }
 
-        // Ad-blocking proxy for remote HLS streams
-        let mode = AdBlockMode(rawValue: UserDefaults.standard.string(forKey: "adBlockMode") ?? AdBlockMode.local.rawValue) ?? .local
-        if mode == .local, !url.isFileURL {
+        // Ad-blocking proxy for remote HLS streams. Every non-disabled mode
+        // goes through the local AdStrippingProxy:
+        // - .local: the proxy fetches from usher/CDN and strips ads itself.
+        // - .external: same local proxy, but the fetcher relays every request
+        //   through a user-configured HTTP proxy in an ad-free country — Twitch
+        //   then serves no ads at all, and stripping is only a fallback.
+        // - .ttv:   the URL already points at the external TTV proxy (server-side
+        //           blocking), but its responses pass LL-HLS signaling through
+        //           untouched (CAN-BLOCK-RELOAD, PRELOAD-HINT, …) — the cause of
+        //           the HLS-FASB / ICY PUMP playback failures. The local proxy
+        //           normalizes the playlist for AVPlayer and strips any residual
+        //           ad segments the external proxy let through (e.g. VODs, which
+        //           TTV proxies never clean).
+        let mode = resolvedAdBlockMode()
+        if mode != .disabled, !url.isFileURL {
             let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+            // .external: relay every upstream request through the proxy
+            // resolved for this session (configured URL, cached or freshly
+            // scraped free proxy) so Twitch inserts no ads. nil proxy =
+            // plain local stripping — the fallback when nothing usable.
+            let proxy: HTTPProxy?
+            if mode == .external {
+                proxy = currentExternalProxy
+                    ?? ExternalProxyService.parse(UserDefaults.standard.string(forKey: "externalProxyURL") ?? "")
+            } else {
+                proxy = nil
+            }
             let fetcher = RemotePlaylistFetcher(
                 userAgent: ua,
-                extraHeaders: ["Client-Id": TwitchAPIService.shared.clientId]
+                extraHeaders: ["Client-Id": TwitchAPIService.shared.clientId],
+                proxy: proxy
             )
             if let proxy = try? AdStrippingProxy(remoteURL: url, fetcher: fetcher) {
                 currentProxy?.stop()
@@ -215,14 +300,48 @@ final class PlayerViewModel: ObservableObject {
         playerItem.publisher(for: \.status)
             .receive(on: RunLoop.main)
             .sink { [weak self] status in
+                guard let self else { return }
                 switch status {
                 case .failed:
                     let detail = playerItem.errorLog()?.events.last
                     let msg = "\(playerItem.error?.localizedDescription ?? "?"), \(detail?.errorComment ?? "") (\(detail?.errorStatusCode ?? 0))"
-                    print("🎬 AVPlayerItem FAILED: \(msg)")
-                    self?.errorMessage = playerItem.error?.localizedDescription
+                    AppLogger.shared.log("🎬 AVPlayerItem FAILED: \(msg)")
+
+                    // One-shot recovery: if the external proxy (.ttv or the
+                    // .external HTTP proxy) let us down (outage, rate limiting,
+                    // unplayable playlist), retry once with local ad blocking
+                    // rather than dying on the error.
+                    if [.ttv, .external].contains(self.resolvedAdBlockMode()),
+                       !self.didFallbackFromTTV,
+                       self.localPlaylistPath == nil,
+                       self.clipThumbnailURL == nil {
+                        self.didFallbackFromTTV = true
+                        self.adBlockModeOverride = .local
+                        AppLogger.shared.log("🛡 TTV proxy playback failed — falling back to local ad blocking")
+                        self.loadStream()
+                        return
+                    }
+
+                    self.errorMessage = playerItem.error?.localizedDescription
                 case .readyToPlay:
-                    print("🎬 AVPlayerItem READY — duration: \(playerItem.duration.seconds)s")
+                    let dur = playerItem.duration.seconds
+                    AppLogger.shared.log("🎬 AVPlayerItem READY — duration: \(dur)s")
+
+                    // Detect broken TTV proxy responses: the player item reports
+                    // "ready" but the duration is NaN (unparseable timeline) and
+                    // playback never starts. Trigger the same one-shot fallback.
+                    if dur.isNaN,
+                       !self.isLive,
+                       [.ttv, .external].contains(self.resolvedAdBlockMode()),
+                       !self.didFallbackFromTTV,
+                       self.localPlaylistPath == nil,
+                       self.clipThumbnailURL == nil {
+                        self.didFallbackFromTTV = true
+                        self.adBlockModeOverride = .local
+                        AppLogger.shared.log("🛡 TTV proxy returned unplayable stream (NaN duration) — falling back to local")
+                        self.loadStream()
+                        return
+                    }
                 case .unknown: break
                 @unknown default: break
                 }
@@ -274,12 +393,22 @@ final class PlayerViewModel: ObservableObject {
         self.selectedQuality = newQuality
         self.isLoading = true
 
+        // Resolve ad-block mode so .ttv gets the proxy URL — same as resolveStreamURL.
+        let mode = resolvedAdBlockMode()
+        let ttvURL: String?
+        if mode == .ttv {
+            ttvURL = UserDefaults.standard.string(forKey: "ttvProxyURL") ?? "https://api.ttv.lol"
+        } else {
+            ttvURL = nil
+        }
+
         Task {
             do {
                 let url = try await TwitchHLSManager.shared.fetchPlaylistURL(
                     videoID: videoID,
                     isLive: isLive,
-                    quality: newQuality
+                    quality: newQuality,
+                    ttvProxyURL: ttvURL
                 )
                 let playerItem = makePlayerItem(url: url)
 

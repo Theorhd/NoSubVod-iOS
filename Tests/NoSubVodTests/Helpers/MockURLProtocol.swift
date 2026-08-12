@@ -6,10 +6,15 @@ final class MockURLProtocol: URLProtocol {
     static var responses: [URL: Result<(HTTPURLResponse, Data), Error>] = [:]
 
     static var callCounts: [URL: Int] = [:]
+    // URLProtocol hooks fire on arbitrary URLSession threads. The counters
+    // are mutated concurrently (e.g. findFirstValid validates in parallel).
+    private static let lock = NSLock()
 
     static func reset() {
+        lock.lock()
         responses.removeAll()
         callCounts.removeAll()
+        lock.unlock()
     }
     static func registerJSON(url: URL, jsonString: String, statusCode: Int = 200) {
         let data = Data(jsonString.utf8)
@@ -46,7 +51,9 @@ final class MockURLProtocol: URLProtocol {
             return
         }
 
+        MockURLProtocol.lock.lock()
         MockURLProtocol.callCounts[url, default: 0] += 1
+        MockURLProtocol.lock.unlock()
 
         guard let result = MockURLProtocol.responses[url] else {
             client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
