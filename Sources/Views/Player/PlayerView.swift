@@ -54,7 +54,7 @@ struct PlayerView: View {
                         }) {
                             HStack {
                                 Image(systemName: "arrow.clockwise")
-                                Text("Recharger au début")
+                                Text("Reload from start")
                             }
                             .padding(.horizontal, 20)
                             .padding(.vertical, 10)
@@ -94,7 +94,7 @@ struct PlayerView: View {
             if viewModel.isSegmentSelectionMode, viewModel.player != nil {
                 VStack(spacing: 8) {
                     HStack {
-                        Text("Sélectionnez le segment à télécharger")
+                        Text("Select the segment to download")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Spacer()
@@ -106,7 +106,7 @@ struct PlayerView: View {
                             VStack(spacing: 4) {
                                 Image(systemName: viewModel.startTimecode == nil ? "play.circle" : "checkmark.circle.fill")
                                     .font(.title3)
-                                Text(viewModel.startTimecode.map { formatTime($0) } ?? "Début")
+                                Text(viewModel.startTimecode.map { formatTime($0) } ?? "Start")
                                     .font(.footnote)
                                     .fontWeight(.semibold)
                             }
@@ -121,7 +121,7 @@ struct PlayerView: View {
                             VStack(spacing: 4) {
                                 Image(systemName: viewModel.endTimecode == nil ? "stop.circle" : "checkmark.circle.fill")
                                     .font(.title3)
-                                Text(viewModel.endTimecode.map { formatTime($0) } ?? "Fin")
+                                Text(viewModel.endTimecode.map { formatTime($0) } ?? "End")
                                     .font(.footnote)
                                     .fontWeight(.semibold)
                             }

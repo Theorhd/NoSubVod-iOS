@@ -84,7 +84,7 @@ struct ChatView: View {
             }
 
             HStack(spacing: 8) {
-                TextField(canSend ? "Message..." : "Connecte-toi pour chatter", text: $draft, axis: .vertical)
+                TextField(canSend ? "Message..." : "Sign in to chat", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
                     .autocorrectionDisabled()
@@ -98,7 +98,7 @@ struct ChatView: View {
                     }
                     .disabled(!isSendable)
                 } else {
-                    Button("Se connecter") {
+                    Button("Sign in") {
                         onLogin?()
                     }
                     .font(.subheadline)

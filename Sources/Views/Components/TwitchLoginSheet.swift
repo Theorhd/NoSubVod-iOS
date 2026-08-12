@@ -27,14 +27,14 @@ struct TwitchLoginSheet: View {
                 } else if errorMessage != nil {
                     failureView
                 } else {
-                    ProgressView("Préparation de la connexion…")
+                    ProgressView("Preparing sign-in…")
                 }
             }
-            .navigationTitle("Connexion Twitch")
+            .navigationTitle("Twitch Sign-In")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }
+                    Button("Cancel") { dismiss() }
                 }
             }
         }
@@ -45,10 +45,10 @@ struct TwitchLoginSheet: View {
                 TwitchAuthDebug.log("beginLogin OK — \(newSession.authURL)")
             } catch {
                 TwitchAuthDebug.log("beginLogin échoué: \(error)")
-                errorMessage = "Connexion impossible : \(error)"
+                errorMessage = String(format: NSLocalizedString("Unable to sign in: %@", comment: ""), "\(error)")
             }
         }
-        .alert("Connexion échouée", isPresented: $showError) {
+        .alert("Sign-In Failed", isPresented: $showError) {
             Button("OK") { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
@@ -64,9 +64,9 @@ struct TwitchLoginSheet: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.largeTitle)
                 .foregroundColor(.orange)
-            Text(errorMessage ?? "Erreur inconnue")
+            Text(errorMessage ?? "Unknown error")
                 .multilineTextAlignment(.center)
-            Button("Réessayer") {
+            Button("Retry") {
                 errorMessage = nil
                 session = try? authManager.beginLogin()
             }
@@ -84,7 +84,7 @@ struct TwitchLoginSheet: View {
             onLoggedIn?()
         } catch {
             TwitchAuthDebug.log("login échoué: \(error)")
-            errorMessage = "\(error)"
+            errorMessage = String(format: NSLocalizedString("Unable to sign in: %@", comment: ""), "\(error)")
             showError = true
         }
     }

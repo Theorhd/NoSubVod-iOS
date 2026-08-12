@@ -54,15 +54,15 @@ struct SettingsView: View {
                             syncFollows()
                         }
 
-                        Button("Se déconnecter", role: .destructive) {
+                        Button("Log Out", role: .destructive) {
                             authManager.logout()
                         }
                     } else {
-                        Button("Se connecter avec Twitch") {
+                        Button("Sign in with Twitch") {
                             showLoginSheet = true
                         }
 
-                        Text("Connecte-toi pour importer tes abonnements dans « Your Subs » et envoyer des messages dans le chat des lives.")
+                        Text("Sign in to import your subscriptions into Your Subs and send messages in live chat.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -193,21 +193,21 @@ struct SettingsView: View {
                 }
                 
                 Section(header: Text("LiveContainer")) {
-                    Toggle("Stockage Compatible", isOn: $isLiveContainerStorageEnabled)
-                    
+                    Toggle("Compatible Storage", isOn: $isLiveContainerStorageEnabled)
+
                     if isLiveContainerStorageEnabled {
-                        Text("Assure la persistance des données lors de l'utilisation via LiveContainer. Un redémarrage de l'application est nécessaire pour que les changements sur l'historique et la base de données prennent effet.")
+                        Text("Ensures data persistence when using LiveContainer. An app restart is required for changes to history and database to take effect.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
                 
                 Section(header: Text("Debug")) {
-                    Toggle("Activer le mode debug", isOn: $isDebugModeEnabled)
-                    
+                    Toggle("Enable debug mode", isOn: $isDebugModeEnabled)
+
                     if isDebugModeEnabled {
                         ShareLink(item: AppLogger.shared.getLogFileURL()) {
-                            Text("Exporter les logs")
+                            Text("Export logs")
                         }
                     }
                 }
@@ -236,7 +236,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.1.1")
+                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.0")
                             .foregroundColor(.secondary)
                     }
                     HStack {

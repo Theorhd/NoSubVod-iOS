@@ -25,6 +25,17 @@
 "Version" = "Version";
 "Developer" = "Developer";
 "Delete" = "Delete";
+"Compatible Storage" = "Compatible Storage";
+"Ensures data persistence when using LiveContainer. An app restart is required for changes to history and database to take effect." = "Ensures data persistence when using LiveContainer. An app restart is required for changes to history and database to take effect.";
+"Enable debug mode" = "Enable debug mode";
+"Export logs" = "Export logs";
+
+/* Twitch Account */
+"Twitch Account" = "Twitch Account";
+"Sign in with Twitch" = "Sign in with Twitch";
+"Sign in to import your subscriptions into Your Subs and send messages in live chat." = "Sign in to import your subscriptions into Your Subs and send messages in live chat.";
+"Sync Subs" = "Sync Subs";
+"Log Out" = "Log Out";
 
 /* HistoryView */
 "History is empty" = "History is empty";
@@ -43,10 +54,10 @@
 "Recent VODs" = "Recent VODs";
 
 /* PlayerView / BottomSheet */
-"Recharger au début" = "Reload from start";
-"Sélectionnez le segment à télécharger" = "Select the segment to download";
-"Début" = "Start";
-"Fin" = "End";
+"Reload from start" = "Reload from start";
+"Select the segment to download" = "Select the segment to download";
+"Start" = "Start";
+"End" = "End";
 
 "Segment selected successfully!" = "Segment selected successfully!";
 "Download Options" = "Download Options";
@@ -56,20 +67,36 @@
 
 "Auto" = "Auto";
 "1080p" = "1080p";
+"1080p60" = "1080p60";
 "720p" = "720p";
+"720p60" = "720p60";
 "480p" = "480p";
+"480p30" = "480p30";
 "360p" = "360p";
+"360p30" = "360p30";
 "160p" = "160p";
+"160p30" = "160p30";
 "Audio Only" = "Audio Only";
 "Source" = "Source";
 
+/* Live Chat */
+"Sign in" = "Sign in";
+"Sign in to chat" = "Sign in to chat";
+"Message..." = "Message...";
+
+/* Twitch Sign-In */
+"Twitch Sign-In" = "Twitch Sign-In";
+"Preparing sign-in…" = "Preparing sign-in…";
+"Cancel" = "Cancel";
+"Sign-In Failed" = "Sign-In Failed";
+"Unable to sign in: %@" = "Unable to sign in: %@";
+"Unknown error" = "Unknown error";
+"Retry" = "Retry";
+"OK" = "OK";
+
 /* Debug / LiveContainer */
 "LiveContainer" = "LiveContainer";
-"Stockage Compatible" = "Compatible Storage";
-"Assure la persistance des données lors de l'utilisation via LiveContainer. Un redémarrage de l'application est nécessaire pour que les changements sur l'historique et la base de données prennent effet." = "Ensures data persistence when using LiveContainer. An app restart is required for changes to history and database to take effect.";
 "Debug" = "Debug";
-"Activer le mode debug" = "Enable debug mode";
-"Exporter les logs" = "Export logs";
 
 /* Cache */
 "Cache" = "Cache";
@@ -87,6 +114,9 @@
 "Built-in proxy that cleans the stream locally - Currently, the player may turn black for 5 to 15 seconds at the start of playback." = "Built-in proxy that cleans the stream locally - Currently, the player may turn black for 5 to 15 seconds at the start of playback.";
 "Delegates cleaning to an external proxy server" = "Delegates cleaning to an external proxy server";
 "No blocking — native Twitch behavior" = "No blocking — native Twitch behavior";
+"HTTP proxy (host:port) in an ad-free country — e.g. your own Squid. Leave empty to auto-fetch a free proxy from the ad-free country lists." = "HTTP proxy (host:port) in an ad-free country — e.g. your own Squid. Leave empty to auto-fetch a free proxy from the ad-free country lists.";
+"Test Proxy" = "Test Proxy";
+"Fetch Free Proxy" = "Fetch Free Proxy";
 
 /* Interpolated Strings */
 "%lld%%" = "%lld%%";
@@ -105,10 +135,10 @@
 "No results" = "No results";
 "Try searching for something else" = "Try searching for something else";
 "Channels" = "Channels";
+"Categories" = "Categories";
 "Channels, games, etc." = "Channels, games, etc.";
 
 /* Misc */
 "Done" = "Done";
 "See all" = "See all";
-"Cancel" = "Cancel";
 "File unavailable" = "File unavailable";
