@@ -48,6 +48,13 @@ La version 1.1.0 est une release de consolidation centrée sur la qualité inter
 - Historique de lecture intelligent pour reprendre vos vidéos là où vous vous étiez arrêté.
 - Suivi des chaînes et persistance des données via SwiftData asynchrone.
 
+### 🔐 Connexion Twitch (compte)
+
+- **Connexion OAuth** (Authorization Code + PKCE) via le navigateur intégré — aucun secret embarqué dans l'IPA.
+- **« Your Subs » synchronisé** : à la connexion (ou via « Sync Subs » dans les réglages), vos chaînes suivies sont importées dans la liste d'abonnements de l'accueil.
+- **Envoi de messages dans le chat** des lives (compte requis ; les erreurs serveur type slow mode sont affichées).
+- Tokens stockés dans le **Keychain** avec refresh automatique ; session restaurée au lancement.
+
 ---
 
 ## 🧱 Stack Technique
@@ -93,9 +100,30 @@ La version 1.1.0 est une release de consolidation centrée sur la qualité inter
 3. Sélectionnez le simulateur ou votre appareil physique.
 4. Cliquez sur le bouton "Run" (▶️) ou utilisez le raccourci `Cmd + R`.
 
-### Configuration OAuth Twitch
+### Connexion Twitch (OAuth)
 
-Dans la console développeur Twitch, configurez votre application et récupérez les identifiants nécessaires pour permettre l'authentification des utilisateurs.
+La connexion au compte Twitch utilise OAuth **Authorization Code + PKCE** (avec `client_secret` si le client est Confidential — cf. ci-dessous).
+
+Twitch n'accepte que des redirect URIs `https://…` ou `http://localhost…` (pas d'URL scheme custom), et le navigateur de session iOS ne peut pas joindre localhost : la connexion se fait dans une **WKWebView de l'app** (stockage éphémère) qui **intercepte la redirection** vers le redirect URI (`code` + `state` capturés dans la politique de navigation, avant toute connexion réseau).
+
+1. **Crée ton app** sur [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) (2FA activée requise sur le compte).
+2. Renseigne les champs ainsi :
+   - **App Name** : `NoSubVod`
+   - **OAuth Redirect URLs** : `http://localhost:8142/oauth/callback` — le port doit correspondre **exactement** à celui de `TWITCH_REDIRECT_URI` dans `.env`
+   - **Category** : `Application Integration` (ou `Other`)
+   - **Client Type** : `Confidential` — ⚠️ constaté en pratique : même en cochant « Publique », l'endpoint token exige un `client_secret` pour cette catégorie d'app. Le type affiché dans la console ne fait pas foi : le serveur, si. Partir **Confidential** et renseigner le secret est la configuration qui fonctionne.
+3. Dans la page Manage, récupère le **Client ID** et génère/révèle le **Client Secret**.
+4. Crée le fichier `.env` depuis le modèle :
+   ```bash
+   cp .env.example .env
+   ```
+5. Renseigne dans `.env` :
+   ```
+   TWITCH_CLIENT_ID=<Client ID de ton app>
+   TWITCH_CLIENT_SECRET=<Client Secret de ton app>
+   ```
+
+> ⚠️ `.env` est gitignoré et lu uniquement au build (`scripts/generate_secrets.sh`) — il ne quitte jamais ta machine. Le client secret d'un client Confidential est présent dans l'IPA (extractible) — acceptable pour un usage personnel/sideloadé, à reconsidérer en cas de diffusion large.
 
 ---
 
@@ -107,7 +135,7 @@ Le script `build_ipa.sh` permet de générer une archive `.ipa` non signée, des
 ./build_ipa.sh
 ```
 
-L'artefact sera généré dans le répertoire `build/`.
+Le script lit `.env` (gitignoré) et injecte les secrets dans l'app via `Sources/Secrets/AppSecrets.swift` (fichier généré, lui aussi gitignoré) — **le build échoue si `TWITCH_CLIENT_ID` est vide**. L'artefact sera généré dans le répertoire `build/`.
 
 ---
 
