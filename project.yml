@@ -16,11 +16,19 @@ targets:
     sources: Sources
     dependencies:
       - package: TSPlayerKit
+    preBuildScripts:
+      # Injecte Sources/Secrets/AppSecrets.swift depuis .env à CHAQUE build
+      # (Xcode inclus — sans ça, un .env édité n'est pas pris en compte au Run).
+      - name: Inject AppSecrets
+        script: |
+          cd "$SRCROOT"
+          scripts/generate_secrets.sh --allow-placeholders
+        basedOnDependencyAnalysis: false
     info:
       path: Info.plist
       properties:
-        CFBundleShortVersionString: "1.1.1"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: "1.2.0"
+        CFBundleVersion: "3"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

@@ -7,6 +7,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  NoSubVod - Test Runner"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# ── Inject secrets (placeholders si pas de .env) ──────────────────
+echo "→ Injecting secrets (AppSecrets.swift)..."
+scripts/generate_secrets.sh --allow-placeholders
+
 # ── Generate project ──────────────────────────────────────────────
 echo ""
 echo "→ Generating Xcode project with XcodeGen..."
@@ -16,12 +20,22 @@ xcodegen generate
 echo ""
 echo "→ Looking for available iOS simulator..."
 
-SIMULATOR=$(xcodebuild -project NoSubVod.xcodeproj -scheme NoSubVod -showdestinations 2>&1 \
-    | grep "platform:iOS Simulator" \
-    | grep -v "placeholder" \
-    | head -1 \
-    | sed -E 's/.*name:([^}]+).*/\1/' \
-    | xargs)
+# Priorité aux iPhone : ne démarre jamais un iPad quand un iPhone est ouvert.
+pick_simulator() {
+    xcodebuild -project NoSubVod.xcodeproj -scheme NoSubVod -showdestinations 2>&1 \
+        | grep "platform:iOS Simulator" \
+        | grep -v "placeholder" \
+        | grep -i "$1" \
+        | head -1 \
+        | sed -E 's/.*name:([^}]+).*/\1/' \
+        | xargs
+}
+
+SIMULATOR=$(pick_simulator "iphone")
+if [ -z "$SIMULATOR" ]; then
+    echo "   Aucun iPhone trouvé — fallback sur n'importe quel simulateur..."
+    SIMULATOR=$(pick_simulator "ios")
+fi
 
 if [ -z "$SIMULATOR" ]; then
     echo "❌ No iOS Simulator found. Using 'Any iOS Simulator Device' as fallback."
