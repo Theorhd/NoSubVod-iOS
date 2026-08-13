@@ -17,6 +17,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @StateObject private var authManager = TwitchAuthManager.shared
+    @StateObject private var updateManager = UpdateManager.shared
     @State private var showLoginSheet = false
     @State private var cacheSize: String = ""
     @State private var proxyTestResult: String?
@@ -27,6 +28,44 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if updateManager.isUpdateAvailable, let release = updateManager.latestRelease {
+                    Section {
+                        Button(action: {
+                            if let url = URL(string: release.htmlUrl) {
+                                UIApplication.shared.open(url)
+                            }
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.white)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(String(format: NSLocalizedString("A new version of NoSubVod is available on GitHub (NoSubVod v%@)! Click here to download it!", comment: ""), release.displayVersion))
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.white)
+                                        .multilineTextAlignment(.leading)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .listRowBackground(
+                            LinearGradient(
+                                colors: [Color.purple, Color(red: 0.5, green: 0.2, blue: 0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    }
+                }
+
                 Section(header: Text("Twitch Account")) {
                     if authManager.isAuthenticated, let user = authManager.currentUser {
                         HStack(spacing: 12) {
@@ -206,9 +245,9 @@ struct SettingsView: View {
                     Toggle("Enable debug mode", isOn: $isDebugModeEnabled)
 
                     if isDebugModeEnabled {
-                        ShareLink(item: AppLogger.shared.getLogFileURL()) {
-                            Text("Export logs")
-                        }
+                        Text("Logs are streamed natively to system Console.app (subsystem: com.nosubvod)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 
@@ -260,6 +299,9 @@ struct SettingsView: View {
             }
             .onAppear {
                 calculateCacheSize()
+                Task {
+                    await updateManager.checkForUpdates()
+                }
             }
             .sheet(isPresented: $showLoginSheet) {
                 TwitchLoginSheet()

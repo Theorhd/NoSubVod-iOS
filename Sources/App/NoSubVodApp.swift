@@ -1,6 +1,17 @@
 import SwiftUI
 import SwiftData
 import AVFoundation
+import os
+
+extension Logger {
+    private static var subsystem = Bundle.main.bundleIdentifier ?? "com.nosubvod"
+
+    static let app = Logger(subsystem: subsystem, category: "App")
+    static let player = Logger(subsystem: subsystem, category: "Player")
+    static let auth = Logger(subsystem: subsystem, category: "Auth")
+    static let network = Logger(subsystem: subsystem, category: "Network")
+    static let download = Logger(subsystem: subsystem, category: "Download")
+}
 
 @main
 struct NoSubVodApp: App {
@@ -11,7 +22,7 @@ struct NoSubVodApp: App {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            AppLogger.shared.log("Failed to configure audio session: \(error)")
+            Logger.app.error("Failed to configure audio session: \(error.localizedDescription)")
         }
         
         LiveContainerStorageManager.shared.setup()
@@ -42,47 +53,14 @@ struct NoSubVodApp: App {
     }
 }
 
-final class AppLogger {
+/// Lightweight compatibility wrapper around `os.Logger` for generic application logs.
+final class AppLogger: @unchecked Sendable {
     static let shared = AppLogger()
     
-    private let logFileURL: URL
-    private let queue = DispatchQueue(label: "com.nosubvod.logger")
-    
-    private init() {
-        logFileURL = FileManager.documentsDirectory.appendingPathComponent("NoSubVod.log")
-        
-        if let attr = try? FileManager.default.attributesOfItem(atPath: logFileURL.path),
-           let size = attr[.size] as? UInt64, size > 2_000_000 {
-            // Best-effort : AppLogger ne peut pas se logger lui-même pendant son init
-            try? FileManager.default.removeItem(at: logFileURL)
-        }
-    }
+    private init() {}
     
     func log(_ message: String) {
-        queue.async {
-            let formatter = ISO8601DateFormatter()
-            let timestamp = formatter.string(from: Date())
-            let formatted = "[\(timestamp)] \(message)\n"
-            
-            if let data = formatted.data(using: .utf8) {
-                if FileManager.default.fileExists(atPath: self.logFileURL.path) {
-                    if let fileHandle = try? FileHandle(forWritingTo: self.logFileURL) {
-                        fileHandle.seekToEndOfFile()
-                        fileHandle.write(data)
-                        fileHandle.closeFile()
-                    }
-                } else {
-                    try? data.write(to: self.logFileURL)
-                }
-            }
-        }
-    }
-    
-    func getLogFileURL() -> URL {
-        if !FileManager.default.fileExists(atPath: logFileURL.path) {
-            let initialLog = "--- App Logs ---\n".data(using: .utf8)
-            try? initialLog?.write(to: logFileURL)
-        }
-        return logFileURL
+        Logger.app.info("\(message, privacy: .public)")
     }
 }
+

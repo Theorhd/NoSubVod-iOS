@@ -152,3 +152,7 @@
 
 /* Now Playing (Control Center) */
 "Live Stream" = "En direct";
+
+/* Update Alert */
+"A new version of NoSubVod is available on GitHub (NoSubVod v%@)! Click here to download it!" = "Une nouvelle version de NoSubVod est disponible sur GitHub (NoSubVod v%@) ! Cliquez ici pour la télécharger !";
+

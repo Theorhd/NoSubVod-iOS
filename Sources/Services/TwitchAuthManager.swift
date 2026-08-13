@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 import Combine
 import CryptoKit
+import os
 
 enum TwitchAuthError: Error {
     case invalidURL
@@ -14,11 +15,14 @@ enum TwitchAuthError: Error {
     case invalidResponse
 }
 
-/// Logs du flux OAuth — console Xcode + fichier AppLogger (mode debug).
+/// Logs du flux OAuth — os.Logger (category: Auth) avec masquage .private des données sensibles.
 enum TwitchAuthDebug {
-    static func log(_ message: String) {
-        print("🟣 TwitchAuth: \(message)")
-        AppLogger.shared.log("🟣 TwitchAuth: \(message)")
+    static func log(_ message: String, sensitive: String? = nil) {
+        if let sensitive = sensitive {
+            Logger.auth.debug("🟣 TwitchAuth: \(message, privacy: .public) \(sensitive, privacy: .private)")
+        } else {
+            Logger.auth.debug("🟣 TwitchAuth: \(message, privacy: .public)")
+        }
     }
 }
 
@@ -130,7 +134,7 @@ final class TwitchAuthManager: ObservableObject {
     /// échange le code contre des tokens, récupère l'utilisateur courant.
     @MainActor
     func completeLogin(callbackURL: URL, session: TwitchLoginSession) async throws {
-        TwitchAuthDebug.log("completeLogin: verifier=\(session.codeVerifier)")
+        TwitchAuthDebug.log("completeLogin: verifier=", sensitive: session.codeVerifier)
         guard callbackURL.queryValue("state") == session.state else {
             throw TwitchAuthError.stateMismatch
         }
@@ -147,7 +151,7 @@ final class TwitchAuthManager: ObservableObject {
         let user = try await TwitchAPIService.shared.fetchCurrentUser()
         currentUser = user
         persistCurrentUser(user)
-        AppLogger.shared.log("🟣 TwitchAuth: connecté en tant que \(user.displayName) (\(user.login))")
+        Logger.auth.info("🟣 TwitchAuth: connecté en tant que \(user.displayName, privacy: .private) (\(user.login, privacy: .private))")
     }
 
     // MARK: - Refresh
@@ -276,7 +280,7 @@ final class TwitchAuthManager: ObservableObject {
             throw TwitchAuthError.invalidURL
         }
 
-        TwitchAuthDebug.log("échange: POST \(requestURL.absoluteString)\n  body: \(body)")
+        TwitchAuthDebug.log("échange: POST \(requestURL.absoluteString)", sensitive: "body: \(body)")
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
@@ -288,7 +292,8 @@ final class TwitchAuthManager: ObservableObject {
             throw TwitchAuthError.invalidResponse
         }
         if http.statusCode != 200 {
-            TwitchAuthDebug.log("échange de code échoué (\(http.statusCode)): \(String(data: data, encoding: .utf8) ?? "")")
+            let errorText = String(data: data, encoding: .utf8) ?? ""
+            TwitchAuthDebug.log("échange de code échoué (\(http.statusCode))", sensitive: errorText)
             throw TwitchAuthError.invalidResponse
         }
         return try Self.iso8601Decoder().decode(TokenResponse.self, from: data)

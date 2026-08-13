@@ -71,10 +71,10 @@ struct PlayerView: View {
                         }
                     }
                     .overlay(alignment: .topTrailing) {
-                        // Always visible: no tap-to-toggle, no timer — the gear
-                        // never fights the native controls or its own Menu.
-                        if viewModel.localPlaylistPath == nil {
+                        if viewModel.localPlaylistPath == nil && viewModel.areControlsVisible {
                             qualityMenu
+                                .transition(.opacity)
+                                .animation(.easeInOut(duration: 0.25), value: viewModel.areControlsVisible)
                         }
                     }
                     .overlay(alignment: .top) {

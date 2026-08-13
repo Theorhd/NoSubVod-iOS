@@ -203,10 +203,15 @@ final class PlayerViewModel: ObservableObject {
 
     // MARK: - Full-screen (modal presentation)
 
+    @Published var areControlsVisible: Bool = true
+
     /// Called by the inline `CustomVideoPlayer` once its host view controller
     /// exists, so the view model can present/dismiss the modal full-screen.
     func setHost(_ host: PlayerHostViewController) {
         self.host = host
+        host.playerController.onControlsVisibilityChanged = { [weak self] isVisible in
+            self?.areControlsVisible = isVisible
+        }
     }
 
     /// Rotation-driven entry: presents the shared player full-screen as a
@@ -382,7 +387,11 @@ final class PlayerViewModel: ObservableObject {
         // Leaving the player screen stops playback (AVPlayer is thread-safe;
         // deinit is nonisolated).
         _playerForDeinit?.pause()
-        liveChatService?.disconnect()
+        if let chat = liveChatService {
+            Task { @MainActor in
+                chat.disconnect()
+            }
+        }
         if let owner = nowPlayingOwner {
             Task { @MainActor in
                 // Clear the media widget when the player screen is closed —

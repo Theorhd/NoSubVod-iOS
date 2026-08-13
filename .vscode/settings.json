@@ -1,0 +1,5 @@
+{
+  "yaml.schemas": {
+    "none": ".github/workflows/deploy_source.yml"
+  }
+}

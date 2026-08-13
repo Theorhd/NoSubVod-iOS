@@ -13,11 +13,39 @@ final class NSVPlayerViewController: AVPlayerViewController {
     /// (Done button). Not called for AVKit's native full-screen path
     /// (that one goes through the delegate).
     var onDismissed: (() -> Void)?
+    /// Notifies when AVKit's playback controls fade in (true) or fade out (false).
+    var onControlsVisibilityChanged: ((Bool) -> Void)?
+
+    private var alphaObservation: NSKeyValueObservation?
+    private weak var observedControlView: UIView?
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed {
             onDismissed?()
+        }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        setupControlsObserverIfNeeded()
+    }
+
+    private func setupControlsObserverIfNeeded() {
+        guard observedControlView == nil else { return }
+
+        let overlayView = contentOverlayView
+        for subview in view.subviews {
+            if subview !== overlayView && subview.bounds == view.bounds {
+                observedControlView = subview
+                alphaObservation = subview.observe(\.alpha, options: [.initial, .new]) { [weak self] view, _ in
+                    Task { @MainActor in
+                        let isVisible = view.alpha > 0.1 && !view.isHidden
+                        self?.onControlsVisibilityChanged?(isVisible)
+                    }
+                }
+                break
+            }
         }
     }
 }

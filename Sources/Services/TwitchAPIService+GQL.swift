@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 
 
@@ -533,7 +534,7 @@ extension TwitchAPIService {
                             return self.mapVideoNode(node)
                         }
                     } catch {
-                        AppLogger.shared.log("Error fetching video \(id): \(error)")
+                        Logger.network.error("Error fetching video \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     }
                     return nil
                 }
