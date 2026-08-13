@@ -3,7 +3,7 @@
   "identifier": "com.theorhd.nosubvod.source",
   "subtitle": "Client iOS natif Twitch sans pub",
   "description": "Source officielle NoSubVod pour SideStore, LiveContainer et AltStore.",
-  "iconURL": "https://raw.githubusercontent.com/Theorhd/NoSubVod-iOS/main/NoSubVod-iOS/Sources/Assets.xcassets/AppIcon.appiconset/icon.png",
+  "iconURL": "https://raw.githubusercontent.com/Theorhd/NoSubVod-iOS/main/Sources/Assets.xcassets/AppIcon.appiconset/icon.png",
   "website": "https://github.com/Theorhd/NoSubVod-iOS",
   "apps": [
     {
@@ -12,7 +12,7 @@
       "developerName": "Theorhd",
       "subtitle": "Lecteur Twitch VOD & Live",
       "localizedDescription": "Regardez des lives et VODs Twitch sans publicités avec support PiP, chat et téléchargement hors-ligne.",
-      "iconURL": "https://raw.githubusercontent.com/Theorhd/NoSubVod-iOS/main/NoSubVod-iOS/Sources/Assets.xcassets/AppIcon.appiconset/icon.png",
+      "iconURL": "https://raw.githubusercontent.com/Theorhd/NoSubVod-iOS/main/Sources/Assets.xcassets/AppIcon.appiconset/icon.png",
       "tintColor": "9146FF",
       "versions": [
         {

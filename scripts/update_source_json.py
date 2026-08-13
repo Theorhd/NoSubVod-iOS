@@ -85,7 +85,7 @@ def build_source_json(releases):
             "minOSVersion": "17.0"
         })
 
-    icon_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/main/NoSubVod-iOS/Sources/Assets.xcassets/AppIcon.appiconset/icon.png"
+    icon_url = f"https://raw.githubusercontent.com/Theorhd/NoSubVod-iOS/refs/heads/main/Sources/Assets.xcassets/AppIcon.appiconset/icon.png"
 
     source_data = {
         "name": "NoSubVod Source",
