@@ -15,7 +15,7 @@ actor HistoryManagerActor {
         previewThumbnailURL: URL?
     ) {
         let descriptor = FetchDescriptor<PersistentHistoryEntry>(predicate: #Predicate { $0.vodId == vodId })
-        if let existing = try? modelContext.fetch(descriptor).first {
+        if let existing = try? modelContext.fetch(descriptor).first { // Échec de fetch → nouvelle entrée d'historique, fallback prévu
             existing.timecode = timecode
             existing.duration = duration
             existing.updatedAt = Date()
@@ -41,6 +41,10 @@ actor HistoryManagerActor {
             )
             modelContext.insert(entry)
         }
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.shared.log("Failed to save history — \(error)")
+        }
     }
 }

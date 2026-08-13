@@ -1,18 +1,30 @@
 import Foundation
 import Combine
+import os
 
+@MainActor
 final class TwitchChatService: ObservableObject {
     private var webSocketTask: URLSessionWebSocketTask?
     @Published var messages: [ChatMessage] = []
+    /// Erreur d'envoi (NOTICE serveur : slow mode, message bloqué, non connecté…).
+    @Published var lastSendError: String?
+
+    private var channel: String?
 
     // Protège la boucle récursive receiveMessage() contre un appel
     // concurrent à disconnect() depuis MainActor.
     private var isConnected: Bool = false
 
-    private let url = URL(string: "wss://irc-ws.chat.twitch.tv:443")!
+    private let url: URL? = URL(string: "wss://irc-ws.chat.twitch.tv:443")
 
     func connect(channel: String) {
         messages.removeAll()
+        lastSendError = nil
+        guard let url else {
+            Logger.network.error("TwitchChatService: invalid websocket URL")
+            return
+        }
+        self.channel = channel.lowercased()
         isConnected = true
 
         let request = URLRequest(url: url)
@@ -25,7 +37,7 @@ final class TwitchChatService: ObservableObject {
         sendMessage("CAP REQ :twitch.tv/membership twitch.tv/tags twitch.tv/commands")
         sendMessage("PASS oauth:\(token)")
         sendMessage("NICK \(nick)")
-        sendMessage("JOIN #\(channel.lowercased())")
+        sendMessage("JOIN #\(self.channel ?? channel.lowercased())")
 
         receiveMessage()
     }
@@ -36,35 +48,86 @@ final class TwitchChatService: ObservableObject {
         webSocketTask = nil
     }
 
+    /// Envoie un message chat. Nécessite un compte connecté (IRC refuse les
+    /// pseudos anonymes). Le serveur renvoie notre propre message → rendu par
+    /// le handler PRIVMSG existant, pas d'append manuel.
+    func sendChatMessage(_ text: String) -> Bool {
+        let sanitized = Self.sanitizeMessage(text)
+        guard !sanitized.isEmpty else { return false }
+
+        guard TwitchAuthManager.shared.accessToken != nil else {
+            setSendError("Connecte-toi pour envoyer un message")
+            return false
+        }
+        guard let channel else {
+            setSendError("Chat non connecté")
+            return false
+        }
+
+        sendMessage(Self.privmsgPayload(channel: channel, text: sanitized))
+        return true
+    }
+
+    /// Nettoie un message avant envoi : trim, lignes multiples → espaces, max 500 chars.
+    nonisolated static func sanitizeMessage(_ text: String) -> String {
+        let cleaned = text
+            .replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+        let trimmed = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(trimmed.prefix(500))
+    }
+
+    /// Payload IRC d'un message : `PRIVMSG #channel :texte`.
+    nonisolated static func privmsgPayload(channel: String, text: String) -> String {
+        "PRIVMSG #\(channel.lowercased()) :\(text)"
+    }
+
+    /// Extrait le texte d'une NOTICE serveur (`:tmi.twitch.tv NOTICE #chan :msg`),
+    /// nil si la ligne n'est pas une NOTICE exploitable.
+    nonisolated static func parseNotice(_ line: String) -> String? {
+        let parts = line.components(separatedBy: " NOTICE ")
+        guard parts.count == 2 else { return nil }
+        let split = parts[1].components(separatedBy: " :")
+        guard split.count >= 2 else { return nil }
+        return split.dropFirst().joined(separator: " :")
+    }
+
     private func sendMessage(_ message: String) {
         let messageToSend = URLSessionWebSocketTask.Message.string(message)
         webSocketTask?.send(messageToSend) { error in
             if let error = error {
-                print("Error sending message: \(error)")
+                Logger.network.error("TwitchChatService error sending message: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
 
+    private func setSendError(_ message: String) {
+        self.lastSendError = message
+    }
+
     private func receiveMessage() {
         webSocketTask?.receive { [weak self] result in
-            guard let self, self.isConnected else { return }
+            Task { @MainActor in
+                guard let self, self.isConnected else { return }
 
-            switch result {
-            case .failure(let error):
-                print("Error in receiving message: \(error)")
-            case .success(let message):
-                switch message {
-                case .string(let text):
-                    self.handleIRCMessage(text)
-                case .data(let data):
-                    if let text = String(data: data, encoding: .utf8) {
+                switch result {
+                case .failure(let error):
+                    Logger.network.error("TwitchChatService error receiving message: \(error.localizedDescription, privacy: .public)")
+                case .success(let message):
+                    switch message {
+                    case .string(let text):
                         self.handleIRCMessage(text)
+                    case .data(let data):
+                        if let text = String(data: data, encoding: .utf8) {
+                            self.handleIRCMessage(text)
+                        }
+                    @unknown default:
+                        break
                     }
-                @unknown default:
-                    break
-                }
 
-                self.receiveMessage()
+                    self.receiveMessage()
+                }
             }
         }
     }
@@ -75,6 +138,15 @@ final class TwitchChatService: ObservableObject {
         for line in lines where !line.isEmpty {
             if line.hasPrefix("PING") {
                 sendMessage(line.replacingOccurrences(of: "PING", with: "PONG"))
+                continue
+            }
+
+            // NOTICE serveur → erreur d'envoi (slow mode, message bloqué…)
+            if line.contains(" NOTICE ") {
+                if let notice = Self.parseNotice(line) {
+                    Logger.network.info("TwitchChatService NOTICE: \(notice, privacy: .public)")
+                    setSendError(notice)
+                }
                 continue
             }
 

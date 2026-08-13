@@ -257,7 +257,7 @@ struct DownloadCard: View {
     }
 
     private func folderSize(for vodId: String) -> UInt64? {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let documentsPath = FileManager.documentsDirectory
         let vodDirectory = documentsPath
             .appendingPathComponent("downloads")
             .appendingPathComponent(vodId)
@@ -267,6 +267,7 @@ struct DownloadCard: View {
         ) else { return nil }
         var total: UInt64 = 0
         for case let fileURL as URL in enumerator {
+            // Valeur optionnelle, nil prévu
             guard let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey]),
                   let size = values.fileSize else { continue }
             total += UInt64(size)

@@ -3,6 +3,11 @@
 # Exit on error
 set -e
 
+echo "🔑 Injecting secrets from .env..."
+# Lit .env (gitignoré) et génère Sources/Secrets/AppSecrets.swift.
+# Échoue si TWITCH_CLIENT_ID est vide — voir .env.example.
+scripts/generate_secrets.sh
+
 echo "⚙️  Generating project with xcodegen..."
 xcodegen
 

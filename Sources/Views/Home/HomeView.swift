@@ -6,7 +6,7 @@ struct HomeView: View {
     @Query private var history: [PersistentHistoryEntry]
     @Query(sort: \PersistentSubscription.addedAt, order: .reverse) private var subscriptions: [PersistentSubscription]
     @State private var showSettings = false
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -196,6 +196,9 @@ struct HomeView: View {
                 SettingsView()
             }
             .task(id: subscriptions) {
+                // Refresh silencieux du token au lancement (connexion gérée
+                // uniquement depuis les réglages).
+                await TwitchAuthManager.shared.refreshTokenIfNeeded()
                 await viewModel.loadData(history: history, subs: subscriptions)
             }
         }

@@ -38,11 +38,19 @@ final class TwitchHLSManager {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.addValue(TwitchAPIService.shared.clientId, forHTTPHeaderField: "Client-Id")
+        // Timeout court : un réseau dégradé doit échouer vite et laisser le
+        // player afficher une erreur, pas geler l'app 60 s (défaut).
+        request.timeoutInterval = 20
+        // Lecture (GQL) : web client ID Twitch, inchangé.
+        request.addValue(TwitchAPIService.shared.webClientId, forHTTPHeaderField: "Client-Id")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let body: [String: Any] = ["query": query, "variables": variables]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        } catch {
+            AppLogger.shared.log("TwitchHLSManager: failed to serialize GQL body — \(error)")
+        }
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -64,42 +72,74 @@ final class TwitchHLSManager {
         }
         
         let p = Int.random(in: 1...999999)
-        let usherHost = ttvProxyURL.flatMap { URL(string: $0)?.host } ?? "usher.ttvnw.net"
-        let masterUrlStr = "https://\(usherHost)/api/channel/hls/\(videoID).m3u8?client_id=\(TwitchAPIService.shared.clientId)&token=\(safeToken)&sig=\(safeSig)&allow_source=true&allow_audio_only=true&fast_bread=true&player_backend=mediaplayer&playlist_include_framerate=true&player=twitchweb&p=\(p)"
+        // The TTV proxy URL is user-configurable: normalize it (scheme, host,
+        // optional path prefix) or fall back to the real usher endpoint.
+        let usherBase = TwitchHLSManager.normalizeTTVProxyURL(ttvProxyURL) ?? "https://usher.ttvnw.net"
+        let masterUrlStr = "\(usherBase)/api/channel/hls/\(videoID).m3u8?client_id=\(TwitchAPIService.shared.webClientId)&token=\(safeToken)&sig=\(safeSig)&allow_source=true&allow_audio_only=true&fast_bread=true&player_backend=mediaplayer&playlist_include_framerate=true&player=twitchweb&p=\(p)"
         
         guard let masterUrl = URL(string: masterUrlStr) else {
             throw TwitchHLSError.invalidPlaylistURL
         }
         
         let targetQuality = quality ?? "auto"
-        if targetQuality == "auto" {
+
+        // When using a TTV proxy, always return the master URL. The proxy rewrites
+        // every variant URL to point back to itself — extracting a variant URL from
+        // the proxied master and playing it directly risks bypassing the proxy if
+        // the URL happens to be absolute to the CDN. Let AVPlayer negotiate quality;
+        // the proxy strips ads regardless of which variant AVPlayer picks.
+        if ttvProxyURL != nil || targetQuality == "auto" {
             return masterUrl
         }
-        
+
         let mappedQuality = TwitchHLSManager.mapQualityToTwitch(targetQuality)
-        
+
         do {
-            let (masterData, _) = try await URLSession.shared.data(from: masterUrl)
+            // Timeout court (20 s) pour le master usher : sur réseau dégradé,
+            // on retombe sur auto au lieu de geler le lancement du live.
+            var masterRequest = URLRequest(url: masterUrl)
+            masterRequest.timeoutInterval = 20
+            let (masterData, _) = try await URLSession.shared.data(for: masterRequest)
             if let masterString = String(data: masterData, encoding: .utf8) {
                 let lines = masterString.components(separatedBy: .newlines)
-                var foundQuality = false
+                var pendingVariantURL = false
                 for line in lines {
-                    if line.contains("GROUP-ID=\"\(mappedQuality)\"") || line.contains("VIDEO=\"\(mappedQuality)\"") {
-                        foundQuality = true
+                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    // #EXT-X-STREAM-INF is followed by a variant URL on the next line.
+                    if trimmed.hasPrefix("#EXT-X-STREAM-INF:") {
+                        pendingVariantURL = trimmed.contains("VIDEO=\"\(mappedQuality)\"")
+                                         || trimmed.contains("GROUP-ID=\"\(mappedQuality)\"")
                         continue
                     }
-                    
-                    if foundQuality && !line.hasPrefix("#") && !line.isEmpty {
-                        if let variantUrl = URL(string: line) {
+
+                    // #EXT-X-MEDIA (e.g. audio-only) carries its URI in-band.
+                    // Do NOT set pendingVariantURL — there is no following URL line.
+                    if trimmed.hasPrefix("#EXT-X-MEDIA:"),
+                       trimmed.contains("GROUP-ID=\"\(mappedQuality)\"") {
+                        if let start = trimmed.range(of: "URI=\"")?.upperBound,
+                           let end = trimmed[start...].range(of: "\"")?.lowerBound {
+                            let uri = String(trimmed[start..<end])
+                            if let variantUrl = URL(string: uri) {
+                                return variantUrl
+                            }
+                        }
+                        continue
+                    }
+
+                    // URL line following a matched #EXT-X-STREAM-INF.
+                    if pendingVariantURL, !trimmed.hasPrefix("#"), !trimmed.isEmpty {
+                        if let variantUrl = URL(string: trimmed) {
                             return variantUrl
                         }
                     }
+                    pendingVariantURL = false
                 }
             }
         } catch {
-            print("Failed to parse live master playlist for specific quality, falling back to auto.")
+            AppLogger.shared.log("Failed to parse live master playlist for specific quality, falling back to auto.")
         }
-        
+
         return masterUrl
     }
     
@@ -114,6 +154,34 @@ final class TwitchHLSManager {
         case "Audio Only": return "audio_only"
         default: return quality
         }
+    }
+
+    /// Normalizes the user-configured TTV proxy base URL.
+    ///
+    /// Accepts values with or without a scheme ("api.ttv.lol",
+    /// "https://api.ttv.lol/", "https://my-proxy.example.com/ttv") and returns a
+    /// clean base URL (scheme + host + optional path prefix, no query/fragment,
+    /// no trailing slash). Returns `nil` for empty or malformed input — callers
+    /// then use the real usher endpoint.
+    static func normalizeTTVProxyURL(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Without a scheme, URL parsing treats the host as a path and the
+        // resulting master URL is unusable — add one.
+        let withScheme = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard let url = URL(string: withScheme),
+              let host = url.host, !host.isEmpty else { return nil }
+
+        // Preserve scheme, host, AND path prefix so that custom proxy
+        // deployments (e.g. https://my-proxy.example.com/ttv) work.
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.query = nil
+        components?.fragment = nil
+        guard var base = components?.string, !base.isEmpty else { return nil }
+        while base.hasSuffix("/") { base.removeLast() }
+        return base
     }
     
     private func fetchVODPlaylistURL(videoID: String, quality: String? = nil) async throws -> URL {

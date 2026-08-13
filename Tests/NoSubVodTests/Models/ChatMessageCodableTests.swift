@@ -36,7 +36,8 @@ final class ChatMessageCodableTests: XCTestCase {
         let commenter = ChatCommenter(
             displayName: "NoColor",
             login: "nocolor",
-            profileImageURL: URL(string: "https://example.com/pic.jpg")
+            profileImageURL: URL(string: "https://example.com/pic.jpg"),
+            colorHex: nil
         )
 
         let data = try JSONEncoder().encode(commenter)

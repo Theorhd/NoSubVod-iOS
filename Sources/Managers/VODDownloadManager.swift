@@ -153,7 +153,7 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
                     self.activeChunkTasks[vodId] = []
                 }
 
-                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let documentsPath = FileManager.documentsDirectory
                 let vodDirectory = documentsPath
                     .appendingPathComponent("downloads")
                     .appendingPathComponent(vodId)
@@ -199,7 +199,7 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
         guard var pending = pendingChunks[vodId] else { return }
         guard activeChunkTasks[vodId] != nil else { return }
 
-        while activeChunkTasks[vodId]!.count < maxConcurrentChunksPerVOD, !pending.isEmpty {
+        while (activeChunkTasks[vodId] ?? []).count < maxConcurrentChunksPerVOD, !pending.isEmpty {
             let nextChunk = pending.removeFirst()
             let task = urlSession.downloadTask(with: nextChunk.remoteURL)
             // Store vodId in taskDescription — a read-only property accessible from any thread,
@@ -291,7 +291,7 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
               let sourceURL = downloadTask.originalRequest?.url else { return }
 
         let filename = sourceURL.lastPathComponent
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let documentsPath = FileManager.documentsDirectory
         let destinationURL = documentsPath
             .appendingPathComponent("downloads")
             .appendingPathComponent(vodId)
@@ -308,7 +308,7 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
             fileHandle.closeFile()
             if let headerStr = String(data: headerData, encoding: .utf8), headerStr.hasPrefix("<?xml") {
                 AppLogger.shared.log("🚨 FATAL ERROR: Downloaded chunk \(filename) is an XML error page (AccessDenied?) - not a video file!")
-                let fullError = try? String(contentsOf: destinationURL, encoding: .utf8)
+                let fullError = try? String(contentsOf: destinationURL, encoding: .utf8) // Lecture best-effort de la page d'erreur, "Unknown" prévu en cas d'échec
                 AppLogger.shared.log("🚨 Cloudfront Error: \(fullError ?? "Unknown")")
             }
         } catch {
@@ -389,8 +389,14 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
         let descriptor = FetchDescriptor<VODDownload>(
             predicate: #Predicate { $0.stateRaw == "downloading" }
         )
-        guard let interruptedDownloads = try? modelContext.fetch(descriptor),
-              !interruptedDownloads.isEmpty else { return }
+        let interruptedDownloads: [VODDownload]
+        do {
+            interruptedDownloads = try modelContext.fetch(descriptor)
+        } catch {
+            AppLogger.shared.log("VODDownloadManager: failed to fetch interrupted downloads — \(error)")
+            return
+        }
+        guard !interruptedDownloads.isEmpty else { return }
 
         for download in interruptedDownloads {
             let vodId = download.vodId
@@ -425,7 +431,7 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
                     let firstMapFilename = parseResult.firstMapFilename
                     let initSegmentURLs = parseResult.initSegmentURLs
 
-                    let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                    let documentsPath = FileManager.documentsDirectory
                     let vodDirectory = documentsPath
                         .appendingPathComponent("downloads")
                         .appendingPathComponent(vodId)
@@ -541,13 +547,13 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
         lastProgressUpdate.removeValue(forKey: vodId)
         lastProgressValue.removeValue(forKey: vodId)
 
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let documentsPath = FileManager.documentsDirectory
         let vodDirectory = documentsPath
             .appendingPathComponent("downloads")
             .appendingPathComponent(vodId)
 
         if FileManager.default.fileExists(atPath: vodDirectory.path) {
-            try? FileManager.default.removeItem(at: vodDirectory)
+            FileManager.default.removeItemIfExists(at: vodDirectory)
         }
 
         if downloadActor == nil {
@@ -571,7 +577,7 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
         }
 
         let firstMap = firstMapFilenames[vodId]
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let documentsPath = FileManager.documentsDirectory
         let vodDirectory = documentsPath.appendingPathComponent("downloads").appendingPathComponent(vodId)
 
         Task {
@@ -579,7 +585,7 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
                 let isFragmentedMP4 = (firstMap != nil)
 
                 if isFragmentedMP4 {
-                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.mp4"))
+                    FileManager.default.removeItemIfExists(at: vodDirectory.appendingPathComponent("video.mp4"))
 
                     let (playlistPath, totalDuration) = try DownloadPlaylistBuilder.writeFMP4Playlist(
                         chunks: chunks,
@@ -591,9 +597,9 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
                     await downloadActor?.completeDownload(vodId: vodId, playlistPath: playlistPath, durationSeconds: totalDuration)
 
                 } else {
-                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.ts"))
-                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.mp4"))
-                    try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent("video.duration"))
+                    FileManager.default.removeItemIfExists(at: vodDirectory.appendingPathComponent("video.ts"))
+                    FileManager.default.removeItemIfExists(at: vodDirectory.appendingPathComponent("video.mp4"))
+                    FileManager.default.removeItemIfExists(at: vodDirectory.appendingPathComponent("video.duration"))
 
                     let (allSegmentMetadatas, missingCount) = try DownloadFileMerger.mergeChunks(
                         chunks: chunks,
@@ -604,10 +610,11 @@ final class VODDownloadManager: NSObject, ObservableObject, URLSessionDownloadDe
                         AppLogger.shared.log("❌ TS finalize aborted: no valid chunks for VOD \(vodId)")
                         let fileCount = (chunks.count / 10) + 1
                         for i in 0..<fileCount {
-                            try? FileManager.default.removeItem(at: vodDirectory.appendingPathComponent(
+                            FileManager.default.removeItemIfExists(at: vodDirectory.appendingPathComponent(
                                 String(format: "video_%03d.ts", i)))
                         }
-                        await setDownloadStateFailed(vodId: vodId); return
+                        await setDownloadStateFailed(vodId: vodId)
+                        return
                     }
 
                     let totalDuration = chunks.reduce(0.0) { $0 + $1.duration }

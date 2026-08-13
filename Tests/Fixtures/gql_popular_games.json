@@ -1,0 +1,29 @@
+{
+  "data": {
+    "games": {
+      "edges": [
+        {
+          "node": {
+            "id": "509658",
+            "name": "Just Chatting",
+            "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-110x147.jpg"
+          }
+        },
+        {
+          "node": {
+            "id": "32399",
+            "name": "Counter-Strike",
+            "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/32399-110x147.jpg"
+          }
+        },
+        {
+          "node": {
+            "id": "27471",
+            "name": "Minecraft",
+            "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/27471_IGDB-110x147.jpg"
+          }
+        }
+      ]
+    }
+  }
+}

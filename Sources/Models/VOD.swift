@@ -6,6 +6,14 @@ struct TwitchUser: Codable, Identifiable, Hashable {
     let displayName: String
     let profileImageURL: URL?
     let createdAt: Date?
+
+    // Helix renvoie du snake_case — les CodingKeys sont requis pour le décodage.
+    enum CodingKeys: String, CodingKey {
+        case id, login
+        case displayName = "display_name"
+        case profileImageURL = "profile_image_url"
+        case createdAt = "created_at"
+    }
 }
 
 struct VODOwner: Codable, Hashable {
